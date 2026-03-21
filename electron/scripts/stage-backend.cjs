@@ -9,6 +9,7 @@ const {
   resolveBundledPythonExecutable,
   writeRuntimeManifest
 } = require("./bundled-python.cjs");
+const { materializeSymlinks } = require("./materialize-symlinks.cjs");
 
 const electronRoot = path.resolve(__dirname, "..");
 const repoRoot = path.resolve(electronRoot, "..");
@@ -99,6 +100,9 @@ function stageBundledPythonRuntime() {
     recursive: true,
     dereference: true
   });
+  // uv's standalone runtimes can still leave link-shaped seams behind on some
+  // platforms, so normalize the staged tree before packaging it as resources.
+  materializeSymlinks(path.join(backendRoot, "python"));
   return resolveBundledPythonExecutable(backendRoot);
 }
 

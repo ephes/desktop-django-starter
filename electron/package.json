@@ -9,9 +9,12 @@
     "test": "node --test ./scripts/*.test.cjs",
     "stage-backend": "node ./scripts/stage-backend.cjs",
     "start:packaged": "npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged",
-    "smoke:packaged": "npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged --smoke-test"
+    "smoke:packaged": "npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged --smoke-test",
+    "dist": "npm run stage-backend && electron-builder --publish never --config ./electron-builder.config.cjs",
+    "dist:dir": "npm run stage-backend && electron-builder --dir --config ./electron-builder.config.cjs"
   },
   "devDependencies": {
-    "electron": "40.0.0"
+    "electron": "40.0.0",
+    "electron-builder": "26.8.1"
   }
 }

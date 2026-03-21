@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Status: intended implementation shape, with the first runnable development slice now in place
+Status: intended implementation shape, with the runnable development slice, staged bundled-runtime contract, and plain-GitHub packaging workflow now in place
 
 ## Runtime Model
 

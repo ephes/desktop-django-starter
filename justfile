@@ -45,6 +45,37 @@ packaged-start:
 packaged-smoke:
     npm --prefix electron run smoke:packaged
 
+package-dist TARGET="--mac dmg":
+    npm --prefix electron run dist -- {{TARGET}}
+
+package-dist-dir TARGET="--mac":
+    npm --prefix electron run dist:dir -- {{TARGET}}
+
+github-package BRANCH="":
+    branch="{{BRANCH}}"; \
+    if [ -z "$branch" ]; then branch="$$(git symbolic-ref --short -q HEAD)"; fi; \
+    [ -n "$branch" ] || { echo "Unable to determine a branch. Pass the branch name as the first argument."; exit 1; }; \
+    gh workflow run desktop-packages.yml --ref "$branch"
+
+github-package-download RUN_ID:
+    set -eu; \
+    run_dir="dist/github-actions/{{RUN_ID}}"; \
+    rm -rf "$run_dir"; \
+    mkdir -p "$run_dir"; \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-macos --dir "$run_dir/macos" && \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-windows --dir "$run_dir/windows" && \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-linux --dir "$run_dir/linux" && \
+    echo "Downloaded workflow artifacts to $run_dir"
+
+github-package-download-latest BRANCH="":
+    set -eu; \
+    branch="{{BRANCH}}"; \
+    if [ -z "$branch" ]; then branch="$$(git symbolic-ref --short -q HEAD)"; fi; \
+    [ -n "$branch" ] || { echo "Unable to determine a branch. Pass the branch name as the first argument."; exit 1; }; \
+    run_id="$$(gh run list --workflow desktop-packages.yml --branch "$branch" --status success --limit 1 --json databaseId --jq '.[0].databaseId')"; \
+    [ -n "$run_id" ] && [ "$run_id" != "null" ] || { echo "No successful desktop-packages.yml run found for branch $branch."; exit 1; }; \
+    just github-package-download "$run_id"
+
 dev:
     just electron-start
 
@@ -69,4 +100,4 @@ loc:
     @sloccount --details . 2>/dev/null | awk '/^[0-9]/ && $2=="python" {sums[$3]+=$1} END{for(d in sums) printf "%8d  %s\n", sums[d], d}' | sort -rn
 
 clean:
-    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 electron/node_modules electron/.stage
+    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 electron/dist electron/node_modules electron/.stage

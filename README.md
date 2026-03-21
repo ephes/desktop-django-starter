@@ -2,7 +2,7 @@
 
 Minimal, attendee-facing starter for shipping a Django app inside Electron with a bundled Python runtime.
 
-This repository now includes a runnable development slice and a staged packaged-backend slice of that idea: a tiny Django app served locally and supervised by Electron, with a bundled Python runtime staged under `electron/.stage/backend/python/`.
+This repository now includes a runnable development slice, a staged packaged-backend slice, and a plain-GitHub packaging slice: a tiny Django app served locally and supervised by Electron, with a bundled Python runtime staged under `electron/.stage/backend/python/` and packaged desktop artifacts built in GitHub Actions.
 
 ## Intent
 
@@ -22,8 +22,9 @@ Runnable starter slices:
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `electron/.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally
+- on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts and `just` helpers for triggering and fetching them
 
-Installers, signing, notarization, auto-update, and true packaged desktop artifacts are still deferred.
+Signing, notarization, auto-update, and public-release hardening are still deferred.
 
 ## Docs
 
@@ -50,6 +51,11 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 - `just packaged-stage`: build the staged packaged-backend bundle under `electron/.stage/backend`, including the bundled Python runtime
 - `just packaged-start`: rebuild the staged bundle and launch Electron in packaged-like mode against the staged bundled runtime
 - `just packaged-smoke`: rebuild the staged bundle and run a packaged-like Electron smoke launch that auto-exits after load
+- `just package-dist`: build a local desktop package for the current host target (defaults to `--mac dmg`)
+- `just package-dist-dir`: build an unpacked local desktop app for the current host target
+- `just github-package`: trigger the GitHub Actions cross-platform packaging workflow for the current branch
+- `just github-package-download <run-id>`: download a specific packaging workflow run into `dist/github-actions/<run-id>/`
+- `just github-package-download-latest`: download the latest successful packaging workflow run for the current branch
 - `just dev`: same as `just electron-start`
 - `just docs`: build the docs and open the generated site
 - `just docs-serve`: run a live-reloading local docs server
@@ -66,6 +72,10 @@ For backend-only work, use `just backend-dev`.
 
 For the packaged-mode staging slice, use `just packaged-start`.
 The `electron/.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
+
+For GitHub-built install artifacts, use `just github-package` and then `just github-package-download-latest` once the workflow succeeds. The download helpers require the GitHub CLI plus an authenticated `gh` session and place per-platform artifacts under `dist/github-actions/<run-id>/`.
+Pass a different branch as the first argument when needed, for example `just github-package my-branch`.
+The current workflow builds one architecture per platform: macOS arm64 on `macos-latest`, plus Windows x64 and Linux x64 on the hosted runners.
 
 ## Staged Bundled Runtime Contract
 
@@ -97,3 +107,4 @@ Packaged mode still sets a small runtime environment at launch time:
 - A tiny example Django app that still feels real
 - Clear extension points for replacing the example with your own Django project
 - Cross-platform packaging guidance with Windows as a required proof point
+- Plain GitHub Actions packaging and artifact download flow for macOS, Windows, and Linux

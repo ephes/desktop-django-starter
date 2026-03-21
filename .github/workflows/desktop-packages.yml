@@ -1,0 +1,72 @@
+name: Desktop Packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: package (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            build_flag: --mac
+            build_target: dmg
+            artifact_name: desktop-django-starter-macos
+            artifact_glob: electron/dist/*.dmg
+          - os: windows-latest
+            platform: windows
+            build_flag: --win
+            build_target: nsis
+            artifact_name: desktop-django-starter-windows
+            artifact_glob: electron/dist/*.exe
+          - os: ubuntu-latest
+            platform: linux
+            build_flag: --linux
+            build_target: AppImage
+            artifact_name: desktop-django-starter-linux
+            artifact_glob: electron/dist/*.AppImage
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: electron/package-lock.json
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          # Packaging uses the staged bundled runtime, while validation CI
+          # continues to run on 3.13.
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Sync Python dependencies
+        run: uv sync --locked
+
+      - name: Install Electron dependencies
+        run: npm --prefix electron ci
+
+      - name: Build packaged desktop artifact
+        run: npm --prefix electron run dist -- ${{ matrix.build_flag }} ${{ matrix.build_target }}
+
+      - name: Upload packaged desktop artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
