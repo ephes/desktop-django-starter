@@ -2,7 +2,7 @@
 
 Minimal, attendee-facing starter for shipping a Django app inside Electron with a bundled Python runtime.
 
-This repository is intentionally starting as a specification-first project. The goal is to define the smallest credible "desktop Django" example before any real app, packaging, or build code lands.
+This repository now includes the first runnable development slice of that idea: a tiny Django app served locally and supervised by Electron.
 
 ## Intent
 
@@ -13,7 +13,15 @@ This repository is intentionally starting as a specification-first project. The 
 
 ## Current Status
 
-Documentation and scope definition only. No application implementation is included yet.
+Runnable development starter:
+
+- Django 6.0.3 project under `src/desktop_django_starter/`
+- tiny server-rendered CRUD demo app under `src/example_app/`
+- Electron 40 shell under `electron/`
+- random-port localhost startup with `/health/` readiness polling
+- minimal preload bridge for opening the app-data folder
+
+Packaging, signing, notarization, auto-update, and bundled Python for packaged builds are still deferred.
 
 ## Docs
 
@@ -33,10 +41,23 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 ## Development
 
 - `just install`: install the local environment with `uv`
+- `just migrate`: apply the local SQLite migrations
+- `just backend-dev`: run the Django app directly on `127.0.0.1:8000`
+- `just electron-install`: install Electron dependencies
+- `just electron-start`: start the Electron shell, which launches Django on a random localhost port
+- `just dev`: same as `just electron-start`
 - `just docs`: build the docs and open the generated site
 - `just docs-serve`: run a live-reloading local docs server
-- `just test`: run the smoke-test suite
+- `just test`: run the Django and docs test suite
 - `just build`: build the Python package metadata scaffold
+
+## Quickstart
+
+1. `just install`
+2. `just electron-install`
+3. `just dev`
+
+For backend-only work, use `just backend-dev`.
 
 ## What This Repo Should Eventually Provide
 

@@ -5,13 +5,15 @@ build-backend = "hatchling.build"
 [project]
 name = "desktop-django-starter"
 version = "0.1.0"
-description = "Specification-first starter for packaging Django inside Electron."
+description = "Minimal starter for packaging Django inside Electron."
 readme = "README.md"
 requires-python = ">=3.12"
 authors = [
     { name = "Jochen Wersdoerfer" },
 ]
-dependencies = []
+dependencies = [
+    "Django==6.0.3",
+]
 
 [project.urls]
 Documentation = "https://desktop-django-starter.readthedocs.io/en/latest/"
@@ -21,6 +23,7 @@ dev = [
     "furo>=2024.8.6",
     "myst-parser>=4.0.0",
     "pytest>=8.3",
+    "pytest-django>=4.11.1",
     "ruff>=0.11.0",
     "sphinx>=8.2.0",
     "sphinx-autobuild>=2024.10.3",
@@ -28,9 +31,11 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/desktop_django_starter"]
+packages = ["src/desktop_django_starter", "src/example_app"]
 
 [tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "desktop_django_starter.settings.local"
+pythonpath = ["src"]
 testpaths = ["tests"]
 
 [tool.ruff]

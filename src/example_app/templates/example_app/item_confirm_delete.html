@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Item | Desktop Django Starter{% endblock %}
+{% block heading %}Delete Item{% endblock %}
+
+{% block content %}
+<p>Delete <strong>{{ object.title }}</strong>?</p>
+<form method="post">
+    {% csrf_token %}
+    <div class="actions">
+        <button type="submit">Delete Item</button>
+        <a class="button secondary" href="{% url 'example_app:item-list' %}">Keep It</a>
+    </div>
+</form>
+{% endblock %}

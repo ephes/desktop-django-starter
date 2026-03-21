@@ -1,6 +1,6 @@
 # Desktop Django Starter
 
-> Minimal, spec-first reference for packaging a Django app inside Electron with a bundled Python runtime. This repository is designed for both human readers and coding agents.
+> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today and bundled-runtime work deferred. This repository is designed for both human readers and coding agents.
 
 Use this repository when you need the smallest credible architecture for running Django as a local desktop app, or when you need a reusable workflow for wrapping an existing Django project in Electron without importing a product-sized codebase.
 
@@ -27,3 +27,5 @@ Important constraints:
 
 - [.github/workflows/ci.yml](.github/workflows/ci.yml): Current cross-platform CI scaffold using GitHub-hosted runners.
 - [tests/test_docs.py](tests/test_docs.py): Minimal smoke tests for the documentation scaffold.
+- [tests/test_example_app.py](tests/test_example_app.py): Backend behavior checks for the demo CRUD slice.
+- [tests/test_health.py](tests/test_health.py): Readiness endpoint coverage.

@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block title %}Items | Desktop Django Starter{% endblock %}
+{% block heading %}Items{% endblock %}
+
+{% block content %}
+<div class="actions">
+    <a class="button" href="{% url 'example_app:item-create' %}">Create Item</a>
+</div>
+
+{% if items %}
+    <table>
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Status</th>
+                <th>Notes</th>
+                <th>Updated</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in items %}
+                <tr>
+                    <td>{{ item.title }}</td>
+                    <td>{{ item.get_status_display }}</td>
+                    <td>{{ item.notes|default:"No notes yet." }}</td>
+                    <td>{{ item.updated_at|date:"Y-m-d H:i" }}</td>
+                    <td class="row-actions">
+                        <a href="{% url 'example_app:item-update' item.pk %}">Edit</a>
+                        <a href="{% url 'example_app:item-delete' item.pk %}">Delete</a>
+                    </td>
+                </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p class="empty">No items yet. Create one to prove the local desktop loop works.</p>
+{% endif %}
+{% endblock %}

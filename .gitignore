@@ -7,3 +7,5 @@ build/
 dist/
 docs/_build/
 __pycache__/
+db.sqlite3
+electron/node_modules/

@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+
+{% block title %}{% if object %}Edit Item{% else %}Create Item{% endif %} | Desktop Django Starter{% endblock %}
+{% block heading %}{% if object %}Edit Item{% else %}Create Item{% endif %}{% endblock %}
+
+{% block content %}
+<form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <div class="actions">
+        <button type="submit">{% if object %}Save Changes{% else %}Create Item{% endif %}</button>
+        <a class="button secondary" href="{% url 'example_app:item-list' %}">Cancel</a>
+    </div>
+</form>
+{% endblock %}

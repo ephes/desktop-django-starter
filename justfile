@@ -23,6 +23,22 @@ check:
     just test
     just docs-build
 
+migrate:
+    uv run python manage.py migrate --noinput
+
+backend-dev:
+    just migrate
+    uv run python manage.py runserver 127.0.0.1:8000
+
+electron-install:
+    npm --prefix electron install
+
+electron-start:
+    npm --prefix electron start
+
+dev:
+    just electron-start
+
 docs-build:
     uv run sphinx-build -M html docs docs/_build
 
@@ -44,4 +60,4 @@ loc:
     @sloccount --details . 2>/dev/null | awk '/^[0-9]/ && $2=="python" {sums[$3]+=$1} END{for(d in sums) printf "%8d  %s\n", sums[d], d}' | sort -rn
 
 clean:
-    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info
+    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 electron/node_modules

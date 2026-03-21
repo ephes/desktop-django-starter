@@ -1,4 +1,4 @@
-"""Project metadata package for tooling and documentation scaffolding."""
+"""Desktop Django starter project package."""
 
 from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as package_version

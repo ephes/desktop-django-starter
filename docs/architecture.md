@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Status: intended implementation shape, not yet built
+Status: intended implementation shape, with the first runnable development slice now in place
 
 ## Runtime Model
 
@@ -43,13 +43,11 @@ desktop-django-starter/
 ├── electron/
 │   ├── main.js
 │   ├── preload.cjs
-│   ├── package.json
-│   └── build-backend.js
+│   └── package.json
 ├── manage.py
 ├── pyproject.toml
 ├── src/
-│   ├── desktop_django_starter/   # current metadata package
-│   ├── starter_project/
+│   ├── desktop_django_starter/   # Django project package
 │   └── example_app/
 └── tests/
 ```
@@ -57,7 +55,7 @@ desktop-django-starter/
 Notes:
 
 - script names are illustrative; the startup and packaging behavior matters more than exact filenames
-- `build-backend.js` stands for the future packaging script that assembles the bundled Python runtime, Django project files, and collected static assets for Electron
+- packaged-build helper scripts are intentionally not present yet in the first runnable slice
 - `src/` is preferred over a flatter package layout because it maps cleanly to packaging and later app replacement
 - `src/` layout means the launcher and packaging scripts must set import paths deliberately rather than relying on the current working directory
 - the starter should keep Electron and Django code visibly separate

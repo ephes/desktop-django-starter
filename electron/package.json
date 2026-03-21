@@ -1,0 +1,13 @@
+{
+  "name": "desktop-django-starter-electron",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Electron shell for the desktop Django starter.",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "40.0.0"
+  }
+}
