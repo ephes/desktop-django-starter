@@ -36,6 +36,15 @@ electron-install:
 electron-start:
     npm --prefix electron start
 
+packaged-stage:
+    npm --prefix electron run stage-backend
+
+packaged-start:
+    npm --prefix electron run start:packaged
+
+packaged-smoke:
+    npm --prefix electron run smoke:packaged
+
 dev:
     just electron-start
 
@@ -60,4 +69,4 @@ loc:
     @sloccount --details . 2>/dev/null | awk '/^[0-9]/ && $2=="python" {sums[$3]+=$1} END{for(d in sums) printf "%8d  %s\n", sums[d], d}' | sort -rn
 
 clean:
-    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 electron/node_modules
+    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 electron/node_modules electron/.stage

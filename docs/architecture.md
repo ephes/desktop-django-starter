@@ -55,7 +55,7 @@ desktop-django-starter/
 Notes:
 
 - script names are illustrative; the startup and packaging behavior matters more than exact filenames
-- packaged-build helper scripts are intentionally not present yet in the first runnable slice
+- staged packaged-backend helper scripts now live under `electron/scripts/`
 - `src/` is preferred over a flatter package layout because it maps cleanly to packaging and later app replacement
 - `src/` layout means the launcher and packaging scripts must set import paths deliberately rather than relying on the current working directory
 - the starter should keep Electron and Django code visibly separate
@@ -103,6 +103,7 @@ Expected persistence rules:
 Current expected direction:
 
 - use Django-side static file serving in the simplest acceptable form for v1, rather than introducing an additional asset-serving layer in Electron unless it proves necessary
+- the staged local bundle should mirror the future packaged layout by keeping the backend payload together and leaving `backend/python/` as the seam for a later bundled interpreter
 
 ## Release and Update Model
 

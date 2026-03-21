@@ -1,7 +1,7 @@
 # Desktop Django Starter Specification
 
 Status: Draft 0.2  
-Scope: specification for the starter, with the first runnable development slice now implemented and packaged builds still deferred
+Scope: specification for the starter, with the runnable development slice and a staged packaged-backend slice now implemented, while true packaged builds remain deferred
 
 ## 1. Project Summary
 

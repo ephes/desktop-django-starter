@@ -1,6 +1,6 @@
 # Desktop Django Starter
 
-> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today and bundled-runtime work deferred. This repository is designed for both human readers and coding agents.
+> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, plus a staged packaged-backend slice that exercises packaged settings and collected static assets locally. A true bundled Python runtime is still deferred. This repository is designed for both human readers and coding agents.
 
 Use this documentation when you need the smallest credible architecture for running Django as a local desktop app, or when you need a reusable workflow for wrapping an existing Django project in Electron without importing a product-sized codebase.
 

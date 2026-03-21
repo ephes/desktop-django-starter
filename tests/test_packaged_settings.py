@@ -24,13 +24,15 @@ def test_packaged_settings_require_secret_key(monkeypatch, tmp_path: Path) -> No
 
 
 def test_packaged_settings_use_app_data_dir(monkeypatch, tmp_path: Path) -> None:
+    bundle_dir = tmp_path / "bundle"
     monkeypatch.setenv("DJANGO_SECRET_KEY", "packaged-test-secret")
     monkeypatch.setenv("DESKTOP_DJANGO_APP_DATA_DIR", str(tmp_path))
+    monkeypatch.setenv("DESKTOP_DJANGO_BUNDLE_DIR", str(bundle_dir))
     unload_packaged_settings()
 
     settings = importlib.import_module(MODULE)
 
     assert settings.DATABASES["default"]["NAME"] == tmp_path / "app.sqlite3"
-    assert settings.STATIC_ROOT == tmp_path / "staticfiles"
+    assert settings.STATIC_ROOT == bundle_dir / "staticfiles"
 
     unload_packaged_settings()

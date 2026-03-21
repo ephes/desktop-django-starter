@@ -1,4 +1,4 @@
-"""Settings for a future packaged desktop runtime."""
+"""Settings for the packaged desktop runtime."""
 
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from .base import *  # noqa: F403
 
 DEBUG = False
 
+bundle_dir = Path(os.environ.get("DESKTOP_DJANGO_BUNDLE_DIR", BASE_DIR))  # noqa: F405
 app_data_dir = Path(os.environ.get("DESKTOP_DJANGO_APP_DATA_DIR", BASE_DIR / "var"))  # noqa: F405
 app_data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -27,4 +28,4 @@ DATABASES = {  # noqa: F405
         "NAME": app_data_dir / "app.sqlite3",
     },
 }
-STATIC_ROOT = app_data_dir / "staticfiles"  # noqa: F405
+STATIC_ROOT = bundle_dir / "staticfiles"  # noqa: F405

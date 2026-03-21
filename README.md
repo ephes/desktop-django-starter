@@ -2,7 +2,7 @@
 
 Minimal, attendee-facing starter for shipping a Django app inside Electron with a bundled Python runtime.
 
-This repository now includes the first runnable development slice of that idea: a tiny Django app served locally and supervised by Electron.
+This repository now includes a runnable development slice and a staged packaged-backend slice of that idea: a tiny Django app served locally and supervised by Electron.
 
 ## Intent
 
@@ -13,15 +13,17 @@ This repository now includes the first runnable development slice of that idea: 
 
 ## Current Status
 
-Runnable development starter:
+Runnable starter slices:
 
 - Django 6.0.3 project under `src/desktop_django_starter/`
 - tiny server-rendered CRUD demo app under `src/example_app/`
 - Electron 40 shell under `electron/`
 - random-port localhost startup with `/health/` readiness polling
 - minimal preload bridge for opening the app-data folder
+- staged packaged-backend flow under `electron/.stage/backend/` with collected static assets and `desktop_django_starter.settings.packaged`
+- packaged-like Electron launcher that exercises the staged backend contract locally
 
-Packaging, signing, notarization, auto-update, and bundled Python for packaged builds are still deferred.
+Installers, signing, notarization, auto-update, and a true bundled Python runtime for packaged builds are still deferred.
 
 ## Docs
 
@@ -45,6 +47,9 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 - `just backend-dev`: run the Django app directly on `127.0.0.1:8000`
 - `just electron-install`: install Electron dependencies
 - `just electron-start`: start the Electron shell, which launches Django on a random localhost port
+- `just packaged-stage`: build the staged packaged-backend bundle under `electron/.stage/backend`
+- `just packaged-start`: rebuild the staged bundle and launch Electron in packaged-like mode
+- `just packaged-smoke`: rebuild the staged bundle and run a packaged-like Electron smoke launch that auto-exits after load
 - `just dev`: same as `just electron-start`
 - `just docs`: build the docs and open the generated site
 - `just docs-serve`: run a live-reloading local docs server
@@ -58,6 +63,9 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 3. `just dev`
 
 For backend-only work, use `just backend-dev`.
+
+For the packaged-mode staging slice, use `just packaged-start`.
+The `electron/.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
 
 ## What This Repo Should Eventually Provide
 

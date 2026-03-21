@@ -1,5 +1,6 @@
 const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
 const { spawn } = require("node:child_process");
+const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
@@ -7,12 +8,51 @@ const path = require("node:path");
 const HOST = "127.0.0.1";
 const STARTUP_TIMEOUT_MS = 15000;
 const POLL_INTERVAL_MS = 250;
+// Local packaged-like runs still need a Django secret key, but we do not want
+// this teaching slice to require end-user env setup before Electron can boot.
+const PACKAGED_RUNTIME_SECRET_KEY = "desktop-django-starter-packaged-runtime-secret";
 
 const repoRoot = path.resolve(__dirname, "..");
 
 let djangoProcess = null;
 let quitting = false;
 let currentAppUrl = null;
+
+function getRuntimeMode() {
+  if (process.env.DESKTOP_DJANGO_RUNTIME_MODE === "packaged") {
+    return "packaged";
+  }
+
+  return app.isPackaged ? "packaged" : "development";
+}
+
+function getBackendRoot(runtimeMode) {
+  if (process.env.DESKTOP_DJANGO_BACKEND_ROOT) {
+    return path.resolve(process.env.DESKTOP_DJANGO_BACKEND_ROOT);
+  }
+
+  if (runtimeMode === "packaged") {
+    return app.isPackaged
+      ? path.join(process.resourcesPath, "backend")
+      : path.join(__dirname, ".stage", "backend");
+  }
+
+  return repoRoot;
+}
+
+function getBundledPythonCandidates(backendRoot) {
+  if (process.platform === "win32") {
+    return [
+      path.join(backendRoot, "python", "python.exe"),
+      path.join(backendRoot, "python", "Scripts", "python.exe")
+    ];
+  }
+
+  return [
+    path.join(backendRoot, "python", "bin", "python3"),
+    path.join(backendRoot, "python", "bin", "python")
+  ];
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -75,38 +115,104 @@ async function waitForDjango(url, timeoutMs = STARTUP_TIMEOUT_MS) {
   throw new Error(`Django did not become ready within ${timeoutMs}ms.`);
 }
 
-function getDjangoEnvironment(port) {
-  return {
+function getDjangoEnvironment(port, runtimeMode, backendRoot) {
+  const settingsModule = runtimeMode === "packaged"
+    ? "desktop_django_starter.settings.packaged"
+    : process.env.DJANGO_SETTINGS_MODULE || "desktop_django_starter.settings.local";
+
+  const environment = {
     ...process.env,
-    DJANGO_SETTINGS_MODULE: process.env.DJANGO_SETTINGS_MODULE || "desktop_django_starter.settings.local",
+    DJANGO_SETTINGS_MODULE: settingsModule,
     DESKTOP_DJANGO_APP_DATA_DIR: app.getPath("userData"),
+    DESKTOP_DJANGO_BUNDLE_DIR: backendRoot,
     DESKTOP_DJANGO_HOST: HOST,
     DESKTOP_DJANGO_PORT: String(port),
     PYTHONUNBUFFERED: "1"
   };
-}
 
-function getPythonCommand() {
-  if (process.env.DESKTOP_DJANGO_PYTHON) {
-    return process.env.DESKTOP_DJANGO_PYTHON;
+  if (runtimeMode === "packaged" && !environment.DJANGO_SECRET_KEY) {
+    environment.DJANGO_SECRET_KEY = PACKAGED_RUNTIME_SECRET_KEY;
   }
 
-  if (app.isPackaged) {
+  return environment;
+}
+
+function getPythonLaunchSpec(runtimeMode, backendRoot) {
+  if (process.env.DESKTOP_DJANGO_PYTHON) {
+    return {
+      command: process.env.DESKTOP_DJANGO_PYTHON,
+      prefixArgs: []
+    };
+  }
+
+  if (runtimeMode === "packaged") {
+    if (!app.isPackaged) {
+      return {
+        command: process.platform === "win32" ? "uv.exe" : "uv",
+        // The staged packaged-like flow still uses the repo's uv environment.
+        // A true packaged build should satisfy this contract via backend/python/.
+        prefixArgs: ["run", "--project", repoRoot, "--no-sync", "python"]
+      };
+    }
+
+    const bundledPython = getBundledPythonCandidates(backendRoot).find((candidate) => fs.existsSync(candidate));
+    if (bundledPython) {
+      return {
+        command: bundledPython,
+        prefixArgs: []
+      };
+    }
+
     throw new Error(
-      "Packaged Python runtime launching is not implemented yet. Use the development workflow for this slice."
+      `No bundled Python runtime found under ${path.join(backendRoot, "python")}.`
     );
   }
 
-  return process.platform === "win32" ? "uv.exe" : "uv";
+  return {
+    command: process.platform === "win32" ? "uv.exe" : "uv",
+    prefixArgs: ["run", "python"]
+  };
 }
 
-function runManageCommand(args, port) {
-  const command = getPythonCommand();
+function buildManageInvocation(runtimeMode, backendRoot, manageArgs) {
+  const { command, prefixArgs } = getPythonLaunchSpec(runtimeMode, backendRoot);
+
+  return {
+    command,
+    cwd: backendRoot,
+    args: [...prefixArgs, "manage.py", ...manageArgs]
+  };
+}
+
+function validatePackagedBackendRoot(backendRoot) {
+  const requiredPaths = [
+    path.join(backendRoot, "manage.py"),
+    path.join(backendRoot, "src", "desktop_django_starter"),
+    path.join(backendRoot, "src", "example_app"),
+    path.join(backendRoot, "staticfiles")
+  ];
+
+  const missingPaths = requiredPaths.filter((requiredPath) => !fs.existsSync(requiredPath));
+  if (missingPaths.length === 0) {
+    return;
+  }
+
+  const hint = app.isPackaged
+    ? "Expected packaged resources are missing."
+    : "Run `npm --prefix electron run stage-backend` first.";
+
+  throw new Error(
+    `Packaged backend bundle is incomplete at ${backendRoot}.\nMissing:\n${missingPaths.join("\n")}\n\n${hint}`
+  );
+}
+
+function runManageCommand(args, port, runtimeMode, backendRoot) {
+  const invocation = buildManageInvocation(runtimeMode, backendRoot, args);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(command, ["run", "python", "manage.py", ...args], {
-      cwd: repoRoot,
-      env: getDjangoEnvironment(port),
+    const child = spawn(invocation.command, invocation.args, {
+      cwd: invocation.cwd,
+      env: getDjangoEnvironment(port, runtimeMode, backendRoot),
       stdio: ["ignore", "pipe", "pipe"]
     });
 
@@ -132,21 +238,21 @@ function runManageCommand(args, port) {
   });
 }
 
-function startDjangoServer(port) {
-  const command = getPythonCommand();
+function startDjangoServer(port, runtimeMode, backendRoot) {
+  const invocation = buildManageInvocation(
+    runtimeMode,
+    backendRoot,
+    ["runserver", `${HOST}:${port}`, "--noreload"]
+  );
 
   return new Promise((resolve, reject) => {
     let spawnFailed = false;
 
-    djangoProcess = spawn(
-      command,
-      ["run", "python", "manage.py", "runserver", `${HOST}:${port}`, "--noreload"],
-      {
-        cwd: repoRoot,
-        env: getDjangoEnvironment(port),
-        stdio: ["ignore", "pipe", "pipe"]
-      }
-    );
+    djangoProcess = spawn(invocation.command, invocation.args, {
+      cwd: invocation.cwd,
+      env: getDjangoEnvironment(port, runtimeMode, backendRoot),
+      stdio: ["ignore", "pipe", "pipe"]
+    });
 
     djangoProcess.stdout.on("data", (chunk) => {
       process.stdout.write(`[django] ${chunk}`);
@@ -198,6 +304,12 @@ function createWindow(url) {
     win.show();
   });
 
+  win.webContents.once("did-finish-load", () => {
+    if (process.env.DESKTOP_DJANGO_SMOKE_TEST === "1") {
+      setTimeout(() => app.quit(), 750);
+    }
+  });
+
   win.loadURL(url);
 }
 
@@ -242,11 +354,17 @@ async function stopDjango() {
 }
 
 async function bootstrap() {
+  const runtimeMode = getRuntimeMode();
+  const backendRoot = getBackendRoot(runtimeMode);
   const port = await getOpenPort();
   const baseUrl = `http://${HOST}:${port}`;
 
-  await runManageCommand(["migrate", "--noinput"], port);
-  await startDjangoServer(port);
+  if (runtimeMode === "packaged") {
+    validatePackagedBackendRoot(backendRoot);
+  }
+
+  await runManageCommand(["migrate", "--noinput"], port, runtimeMode, backendRoot);
+  await startDjangoServer(port, runtimeMode, backendRoot);
   await waitForDjango(baseUrl);
   createWindow(baseUrl);
 }
