@@ -5,6 +5,11 @@ const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
 
+const {
+  getRuntimeManifestPath,
+  resolveBundledPythonExecutable
+} = require("./scripts/bundled-python.cjs");
+
 const HOST = "127.0.0.1";
 const STARTUP_TIMEOUT_MS = 15000;
 const POLL_INTERVAL_MS = 250;
@@ -38,20 +43,6 @@ function getBackendRoot(runtimeMode) {
   }
 
   return repoRoot;
-}
-
-function getBundledPythonCandidates(backendRoot) {
-  if (process.platform === "win32") {
-    return [
-      path.join(backendRoot, "python", "python.exe"),
-      path.join(backendRoot, "python", "Scripts", "python.exe")
-    ];
-  }
-
-  return [
-    path.join(backendRoot, "python", "bin", "python3"),
-    path.join(backendRoot, "python", "bin", "python")
-  ];
 }
 
 function sleep(ms) {
@@ -146,26 +137,10 @@ function getPythonLaunchSpec(runtimeMode, backendRoot) {
   }
 
   if (runtimeMode === "packaged") {
-    if (!app.isPackaged) {
-      return {
-        command: process.platform === "win32" ? "uv.exe" : "uv",
-        // The staged packaged-like flow still uses the repo's uv environment.
-        // A true packaged build should satisfy this contract via backend/python/.
-        prefixArgs: ["run", "--project", repoRoot, "--no-sync", "python"]
-      };
-    }
-
-    const bundledPython = getBundledPythonCandidates(backendRoot).find((candidate) => fs.existsSync(candidate));
-    if (bundledPython) {
-      return {
-        command: bundledPython,
-        prefixArgs: []
-      };
-    }
-
-    throw new Error(
-      `No bundled Python runtime found under ${path.join(backendRoot, "python")}.`
-    );
+    return {
+      command: resolveBundledPythonExecutable(backendRoot),
+      prefixArgs: []
+    };
   }
 
   return {
@@ -189,7 +164,9 @@ function validatePackagedBackendRoot(backendRoot) {
     path.join(backendRoot, "manage.py"),
     path.join(backendRoot, "src", "desktop_django_starter"),
     path.join(backendRoot, "src", "example_app"),
-    path.join(backendRoot, "staticfiles")
+    path.join(backendRoot, "staticfiles"),
+    path.join(backendRoot, "python"),
+    getRuntimeManifestPath(backendRoot)
   ];
 
   const missingPaths = requiredPaths.filter((requiredPath) => !fs.existsSync(requiredPath));

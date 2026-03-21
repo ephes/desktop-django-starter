@@ -6,6 +6,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "test": "node --test ./scripts/*.test.cjs",
     "stage-backend": "node ./scripts/stage-backend.cjs",
     "start:packaged": "npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged",
     "smoke:packaged": "npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged --smoke-test"

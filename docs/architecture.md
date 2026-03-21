@@ -103,7 +103,21 @@ Expected persistence rules:
 Current expected direction:
 
 - use Django-side static file serving in the simplest acceptable form for v1, rather than introducing an additional asset-serving layer in Electron unless it proves necessary
-- the staged local bundle should mirror the future packaged layout by keeping the backend payload together and leaving `backend/python/` as the seam for a later bundled interpreter
+- the staged local bundle now mirrors the future packaged layout by keeping the backend payload together and staging the interpreter under `backend/python/`
+
+Current staged backend contract:
+
+- `backend/manage.py` stays at the bundle root
+- `backend/src/` keeps the normal source layout
+- `backend/python/` contains the bundled interpreter and installed dependencies
+- `backend/staticfiles/` contains collected assets for `DEBUG=False`
+- `backend/runtime-manifest.json` records the interpreter path and launcher metadata
+
+Current launcher contract:
+
+- Electron packaged mode resolves the interpreter from `backend/runtime-manifest.json`
+- Electron then runs `manage.py` from `backend/`
+- packaged settings still rely on runtime environment variables for writable app data, bundle dir, localhost host/port, secret key, and unbuffered Python output
 
 ## Release and Update Model
 
