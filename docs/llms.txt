@@ -1,0 +1,24 @@
+# Desktop Django Starter
+
+> Minimal, spec-first reference for packaging a Django app inside Electron with a bundled Python runtime. This repository is designed for both human readers and coding agents.
+
+Use this documentation when you need the smallest credible architecture for running Django as a local desktop app, or when you need a reusable workflow for wrapping an existing Django project in Electron without importing a product-sized codebase.
+
+Important constraints:
+
+- Keep the example generic, minimal, and server-rendered.
+- Treat `djdesk` as reference material for packaging and lifecycle patterns only.
+- Windows support matters.
+- The update story must include air-gapped/manual installs, not only connected environments.
+
+## Docs
+
+- [Documentation index](index.html): Starting point for the published docs.
+- [Specification](specification.html): Main product and technical specification for the starter.
+- [Architecture](architecture.html): Runtime contract, repo shape, startup model, shutdown notes, and release/update direction.
+- [Decisions](decisions.html): Scope and tradeoff decisions captured locally for this repo.
+- [Agent use](agent-use.html): Guidance for coding agents consuming this repo.
+
+## Optional
+
+- [Project home](index.html): Top-level docs landing page.

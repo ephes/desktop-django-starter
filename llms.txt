@@ -1,0 +1,29 @@
+# Desktop Django Starter
+
+> Minimal, spec-first reference for packaging a Django app inside Electron with a bundled Python runtime. This repository is designed for both human readers and coding agents.
+
+Use this repository when you need the smallest credible architecture for running Django as a local desktop app, or when you need a reusable workflow for wrapping an existing Django project in Electron without importing a product-sized codebase.
+
+Important constraints:
+
+- Keep the example generic, minimal, and server-rendered.
+- Treat `djdesk` as reference material for packaging and lifecycle patterns only.
+- Windows support matters.
+- The update story must include air-gapped/manual installs, not only connected environments.
+
+## Docs
+
+- [README.md](README.md): Top-level repo intent and available docs.
+- [docs/specification.md](docs/specification.md): Main product and technical specification for the starter.
+- [docs/architecture.md](docs/architecture.md): Runtime contract, repo shape, startup model, shutdown notes, and release/update direction.
+- [docs/decisions.md](docs/decisions.md): Scope and tradeoff decisions captured locally for this repo.
+- [docs/agent-use.md](docs/agent-use.md): Guidance for coding agents consuming this repo.
+
+## Skills
+
+- [skills/wrap-existing-django-in-electron/SKILL.md](skills/wrap-existing-django-in-electron/SKILL.md): Reusable workflow for adapting an existing Django project to run inside an Electron shell.
+
+## Optional
+
+- [.github/workflows/ci.yml](.github/workflows/ci.yml): Current cross-platform CI scaffold using GitHub-hosted runners.
+- [tests/test_docs.py](tests/test_docs.py): Minimal smoke tests for the documentation scaffold.
