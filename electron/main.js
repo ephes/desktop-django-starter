@@ -23,6 +23,19 @@ let djangoProcess = null;
 let quitting = false;
 let currentAppUrl = null;
 
+function focusExistingWindow() {
+  const existingWindow = BrowserWindow.getAllWindows()[0];
+  if (!existingWindow) {
+    return;
+  }
+
+  if (existingWindow.isMinimized()) {
+    existingWindow.restore();
+  }
+
+  existingWindow.focus();
+}
+
 function getRuntimeMode() {
   if (process.env.DESKTOP_DJANGO_RUNTIME_MODE === "packaged") {
     return "packaged";
@@ -350,6 +363,17 @@ ipcMain.handle("desktop:open-app-data-directory", async () => {
   const folderPath = app.getPath("userData");
   await shell.openPath(folderPath);
   return { path: folderPath };
+});
+
+// Keep the packaged desktop shell single-instance so a second launch does not
+// race the backend bootstrap path and run migrations against the same SQLite DB.
+const gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  app.quit();
+}
+
+app.on("second-instance", () => {
+  focusExistingWindow();
 });
 
 app.on("before-quit", () => {

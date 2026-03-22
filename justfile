@@ -53,7 +53,7 @@ package-dist-dir TARGET="--mac":
 
 github-package BRANCH="":
     branch="{{BRANCH}}"; \
-    if [ -z "$branch" ]; then branch="$$(git symbolic-ref --short -q HEAD)"; fi; \
+    if [ -z "$branch" ]; then branch="$(git symbolic-ref --short -q HEAD)"; fi; \
     [ -n "$branch" ] || { echo "Unable to determine a branch. Pass the branch name as the first argument."; exit 1; }; \
     gh workflow run desktop-packages.yml --ref "$branch"
 
@@ -70,9 +70,9 @@ github-package-download RUN_ID:
 github-package-download-latest BRANCH="":
     set -eu; \
     branch="{{BRANCH}}"; \
-    if [ -z "$branch" ]; then branch="$$(git symbolic-ref --short -q HEAD)"; fi; \
+    if [ -z "$branch" ]; then branch="$(git symbolic-ref --short -q HEAD)"; fi; \
     [ -n "$branch" ] || { echo "Unable to determine a branch. Pass the branch name as the first argument."; exit 1; }; \
-    run_id="$$(gh run list --workflow desktop-packages.yml --branch "$branch" --status success --limit 1 --json databaseId --jq '.[0].databaseId')"; \
+    run_id="$(gh run list --workflow desktop-packages.yml --branch "$branch" --status success --limit 1 --json databaseId --jq '.[0].databaseId')"; \
     [ -n "$run_id" ] && [ "$run_id" != "null" ] || { echo "No successful desktop-packages.yml run found for branch $branch."; exit 1; }; \
     just github-package-download "$run_id"
 

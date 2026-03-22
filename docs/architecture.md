@@ -71,6 +71,12 @@ The eventual implementation should follow this sequence:
 5. Electron loads the app window only after Django is ready.
 6. Closing the desktop app shuts down the Django child process cleanly.
 
+Single-instance expectation:
+
+- packaged mode should behave as a single-instance desktop app
+- a second launch should focus the existing window instead of starting a second backend bootstrap path
+- this avoids concurrent startup work against the same per-user SQLite database, including migration races during app launch
+
 Health endpoint expectation:
 
 - use a dedicated route such as `/health/`
