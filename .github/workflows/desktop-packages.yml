@@ -79,6 +79,7 @@ jobs:
           echo "APPLE_API_KEY=$key_path" >> "$GITHUB_ENV"
 
       - name: Build packaged desktop artifact
+        shell: bash
         env:
           CSC_LINK: ${{ secrets.CSC_LINK }}
           CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
@@ -97,7 +98,32 @@ jobs:
           WIN_SIGN_CERT_SHA1: ${{ secrets.WIN_SIGN_CERT_SHA1 }}
           WIN_SIGN_TIMESTAMP_URL: ${{ secrets.WIN_SIGN_TIMESTAMP_URL }}
           WIN_SIGN_TIMESTAMP_RFC3161_URL: ${{ secrets.WIN_SIGN_TIMESTAMP_RFC3161_URL }}
-        run: npm --prefix electron run dist -- ${{ matrix.build_flag }} ${{ matrix.build_target }}
+        run: |
+          for name in \
+            CSC_LINK \
+            CSC_KEY_PASSWORD \
+            CSC_NAME \
+            APPLE_API_KEY \
+            APPLE_API_KEY_ID \
+            APPLE_API_ISSUER \
+            APPLE_ID \
+            APPLE_APP_SPECIFIC_PASSWORD \
+            APPLE_TEAM_ID \
+            APPLE_KEYCHAIN \
+            APPLE_KEYCHAIN_PROFILE \
+            WIN_CSC_LINK \
+            WIN_CSC_KEY_PASSWORD \
+            WINDOWS_SIGNING_PUBLISHER \
+            WIN_SIGN_CERT_SUBJECT_NAME \
+            WIN_SIGN_CERT_SHA1 \
+            WIN_SIGN_TIMESTAMP_URL \
+            WIN_SIGN_TIMESTAMP_RFC3161_URL
+          do
+            if [ -z "${!name:-}" ]; then
+              unset "$name"
+            fi
+          done
+          npm --prefix electron run dist -- ${{ matrix.build_flag }} ${{ matrix.build_target }}
 
       - name: Generate artifact checksums
         run: python electron/scripts/write-checksums.py --glob "${{ matrix.artifact_glob }}" --output "${{ matrix.checksum_path }}"
