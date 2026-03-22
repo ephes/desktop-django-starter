@@ -48,6 +48,15 @@ test("electron-builder config keeps per-platform artifact names explicit", () =>
   );
 });
 
+test("electron-builder config does not expose test helpers as enumerable keys", () => {
+  const config = require("../electron-builder.config.cjs");
+
+  assert.equal(Object.keys(config).includes("buildConfig"), false);
+  assert.equal(Object.keys(config).includes("getEnvList"), false);
+  assert.equal(Object.keys(config).includes("getWindowsSigntoolOptions"), false);
+  assert.equal(Object.keys(config).includes("hasMacosNotarizationCredentials"), false);
+});
+
 test("electron-builder enables macOS notarization when Apple credentials are present", () => {
   const env = {
     APPLE_API_KEY: "/tmp/AuthKey_ABCD1234.p8",

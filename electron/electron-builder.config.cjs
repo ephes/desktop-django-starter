@@ -130,7 +130,17 @@ function buildConfig(env = process.env) {
 const config = buildConfig();
 
 module.exports = config;
-module.exports.buildConfig = buildConfig;
-module.exports.getEnvList = getEnvList;
-module.exports.getWindowsSigntoolOptions = getWindowsSigntoolOptions;
-module.exports.hasMacosNotarizationCredentials = hasMacosNotarizationCredentials;
+Object.defineProperties(module.exports, {
+  buildConfig: {
+    value: buildConfig
+  },
+  getEnvList: {
+    value: getEnvList
+  },
+  getWindowsSigntoolOptions: {
+    value: getWindowsSigntoolOptions
+  },
+  hasMacosNotarizationCredentials: {
+    value: hasMacosNotarizationCredentials
+  }
+});
