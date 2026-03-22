@@ -55,6 +55,8 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 - `just package-dist-dir`: build an unpacked local desktop app for the current host target
 - `just github-package`: trigger the GitHub Actions cross-platform packaging workflow for the current branch
 - `just github-package-download <run-id>`: download a specific packaging workflow run into `dist/github-actions/<run-id>/`
+- `just github-package-latest-run`: print the latest successful packaging workflow run id for the current branch
+- `just github-package-latest-path`: print the local path for the last `github-package-download-latest` download
 - `just github-package-download-latest`: download the latest successful packaging workflow run for the current branch
 - `just dev`: same as `just electron-start`
 - `just docs`: build the docs and open the generated site
@@ -73,7 +75,7 @@ For backend-only work, use `just backend-dev`.
 For the packaged-mode staging slice, use `just packaged-start`.
 The `electron/.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
 
-For GitHub-built install artifacts, use `just github-package` and then `just github-package-download-latest` once the workflow succeeds. The download helpers require the GitHub CLI plus an authenticated `gh` session and place per-platform artifacts under `dist/github-actions/<run-id>/`.
+For GitHub-built install artifacts, use `just github-package` and then `just github-package-download-latest` once the workflow succeeds. The download helpers require the GitHub CLI plus an authenticated `gh` session and place per-platform artifacts under `dist/github-actions/<run-id>/`. `just github-package-latest-run` prints the current latest run id, `just github-package-download-latest` prints the downloaded paths and records the run id in `dist/github-actions/latest-run.txt`, and `just github-package-latest-path` prints the local directory for that latest downloaded run.
 Pass a different branch as the first argument when needed, for example `just github-package my-branch`.
 The current workflow builds one architecture per platform: macOS arm64 on `macos-latest`, plus Windows x64 and Linux x64 on the hosted runners.
 

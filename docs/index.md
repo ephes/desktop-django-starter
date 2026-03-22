@@ -27,6 +27,8 @@ agent-use
 - `just package-dist-dir` builds an unpacked local desktop app for the current host target
 - `just github-package` triggers the cross-platform GitHub Actions packaging workflow for the current branch
 - `just github-package-download <run-id>` downloads one packaging workflow run into `dist/github-actions/<run-id>/`
+- `just github-package-latest-run` prints the latest successful packaging workflow run id for the current branch
+- `just github-package-latest-path` prints the local path for the last `github-package-download-latest` download
 - `just github-package-download-latest` downloads the latest successful packaging workflow run for the current branch
 - `just docs` builds the documentation and opens it locally
 - `just docs-serve` starts a live-reloading docs server
@@ -45,4 +47,4 @@ The packaged-like staging flow now writes a concrete backend payload under `elec
 
 Electron packaged mode uses that manifest to resolve the interpreter from the staged backend instead of falling back to the repo's `uv` environment.
 
-The GitHub packaging helpers use the GitHub CLI locally, require an authenticated `gh` session, and accept an optional first argument to target a different branch when the current checkout is not the branch you want to build or query. The current workflow builds macOS arm64 plus Windows x64 and Linux x64 artifacts.
+The GitHub packaging helpers use the GitHub CLI locally, require an authenticated `gh` session, and accept an optional first argument to target a different branch when the current checkout is not the branch you want to build or query. `just github-package-latest-run` prints the current latest successful run id, `just github-package-download-latest` prints the downloaded artifact paths and records the run id in `dist/github-actions/latest-run.txt`, and `just github-package-latest-path` prints the local directory for that latest downloaded run. The current workflow builds macOS arm64 plus Windows x64 and Linux x64 artifacts.
