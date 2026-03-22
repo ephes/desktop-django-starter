@@ -19,6 +19,12 @@ Current output artifacts:
 - Windows: NSIS installer (`desktop-django-starter-windows-<version>-<arch>.exe`)
 - Linux: AppImage (`desktop-django-starter-linux-<version>-<arch>.AppImage`)
 
+Current checksum artifacts:
+
+- macOS: `desktop-django-starter-macos-sha256.txt`, containing SHA-256 lines for the DMG upload set
+- Windows: `desktop-django-starter-windows-sha256.txt`, containing SHA-256 lines for the NSIS `.exe` upload set
+- Linux: `desktop-django-starter-linux-sha256.txt`, containing SHA-256 lines for the AppImage upload set
+
 Linux output remains available for parity, but Linux signing and Linux verification are not baseline requirements in this slice.
 
 ## macOS Signing and Notarization Inputs
@@ -66,6 +72,35 @@ Optional metadata or certificate-selection inputs that the starter now passes th
 
 This is enough for a typical starter-level secret-driven signing path without committing the repo to a specific EV-token workflow, self-hosted runner setup, or enterprise release pipeline.
 
+## Checksum Files and Minimal Release Promotion
+
+The packaging workflow now stops at two explicit artifact uploads per platform:
+
+- the installer artifact upload (`desktop-django-starter-macos`, `desktop-django-starter-windows`, or `desktop-django-starter-linux`)
+- the matching checksum upload (`desktop-django-starter-macos-checksums`, `desktop-django-starter-windows-checksums`, or `desktop-django-starter-linux-checksums`)
+
+Each checksum file is a plain-text SHA-256 manifest with one line per packaged installer file:
+
+```text
+<sha256>  <artifact filename>
+```
+
+That format is intentional: it is easy to move through email, ticketing systems, internal package portals, or offline media without introducing starter-specific tooling.
+
+For connected promotion, the minimal operator flow is:
+
+1. download the installer artifact and the matching `*-sha256.txt` artifact from the successful GitHub Actions run
+2. verify the downloaded installer against the checksum file before publishing it onward
+3. promote both files together into the next release channel, such as a GitHub Release draft, internal package portal, or shared download location
+4. tell users or administrators to install from that promoted location
+
+Simple verification commands:
+
+- macOS: `shasum -a 256 desktop-django-starter-macos-<version>-<arch>.dmg`
+- Windows PowerShell: `Get-FileHash .\desktop-django-starter-windows-<version>-<arch>.exe -Algorithm SHA256`
+
+Compare the resulting digest with the line in the matching `*-sha256.txt` file. The repo does not automate release publication; the promotion step is still a human-admin action by design.
+
 ## Connected Release and Update Story
 
 This repository still does not include auto-update infrastructure.
@@ -73,8 +108,9 @@ This repository still does not include auto-update infrastructure.
 For connected environments, the expected v1 flow is manual installation of a newer signed artifact:
 
 1. build the installer in GitHub Actions or locally on the target platform
-2. promote the resulting DMG or `.exe` into your normal release channel
-3. have the user or administrator download and run the newer installer manually
+2. verify the installer against the matching workflow checksum file
+3. promote the resulting DMG or `.exe` plus its `*-sha256.txt` file into your normal release channel
+4. have the user or administrator download, verify, and run the newer installer manually
 
 The current repo only automates the build-and-artifact step. Promoting those artifacts to GitHub Releases, an internal package portal, or another distribution system is still follow-on work.
 
@@ -82,7 +118,7 @@ The current repo only automates the build-and-artifact step. Promoting those art
 
 For air-gapped or tightly controlled environments, the update model is still manual:
 
-- transfer the installer artifact through the approved offline channel
+- transfer the installer artifact and its matching `*-sha256.txt` file through the approved offline channel
 - verify version and integrity before installation
 - run the installer on the destination machine
 
@@ -90,6 +126,18 @@ The artifact to transfer is the same installer a connected user would install:
 
 - macOS: the DMG
 - Windows: the NSIS `.exe`
+
+The checksum file should travel with that installer:
+
+- macOS: `desktop-django-starter-macos-sha256.txt`
+- Windows: `desktop-django-starter-windows-sha256.txt`
+
+Suggested offline/manual flow:
+
+1. copy the installer and checksum file from the successful packaging run onto the approved transfer media
+2. move both files through the offline approval path
+3. on the receiving side, run the same checksum command used for connected promotion and compare it to the transferred checksum file
+4. install only after the digest matches and the version is the one you intend to promote
 
 The starter does not currently build a separate offline-update mechanism, delta updater, or background service. Manual installer replacement is the baseline path by design.
 
@@ -116,7 +164,7 @@ Local state is only lost if the user or administrator explicitly removes the app
 This slice is intentionally incomplete in a few areas:
 
 - no auto-update feed or release manifest
-- no checksum publication or signed-release publication automation
+- no GitHub Release publication automation, signed-release publication automation, or in-app promotion workflow
 - no Linux signing baseline and no Linux verification expectation for this slice
 - no opinionated Windows EV-token or self-hosted-runner guidance
-- no release promotion workflow beyond uploading GitHub Actions artifacts
+- no release promotion workflow beyond uploading GitHub Actions artifacts and their checksum manifests

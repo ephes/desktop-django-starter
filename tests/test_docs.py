@@ -39,16 +39,25 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     release = (ROOT / "docs" / "release.md").read_text()
 
     assert "docs/release.md" in readme
+    assert "SHA-256" in readme
     assert "APPLE_API_KEY_ID" in release
     assert "WIN_CSC_LINK" in release
     assert "air-gapped" in release
     assert "app.sqlite3" in release
     assert "auto-update" in release
+    assert "desktop-django-starter-macos-sha256.txt" in release
+    assert "desktop-django-starter-windows-sha256.txt" in release
+    assert "promote both files together" in release
+    assert "Linux verification" in release
 
 
-def test_packaging_workflow_mentions_optional_signing_inputs() -> None:
+def test_packaging_workflow_mentions_signing_and_checksum_steps() -> None:
     workflow = (ROOT / ".github" / "workflows" / "desktop-packages.yml").read_text()
 
     assert "Prepare macOS notarization API key" in workflow
     assert "APPLE_API_KEY_ID" in workflow
     assert "WIN_CSC_LINK" in workflow
+    assert "Generate artifact checksums" in workflow
+    assert "write-checksums.py" in workflow
+    assert "Upload packaged desktop artifact checksums" in workflow
+    assert "desktop-django-starter-macos-sha256.txt" in workflow

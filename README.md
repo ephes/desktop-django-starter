@@ -22,7 +22,7 @@ Runnable starter slices:
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `electron/.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally
-- on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
+- on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
 
 Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
 
@@ -99,10 +99,18 @@ Primary installer artifacts in this starter:
 - Windows: NSIS `.exe` installer, optionally signed
 - Linux: AppImage output remains available, but Linux signing and verification are still out of scope for this slice
 
+GitHub Actions packaging also writes one SHA-256 manifest per platform artifact set:
+
+- macOS: `desktop-django-starter-macos-sha256.txt` for the DMG artifact upload
+- Windows: `desktop-django-starter-windows-sha256.txt` for the NSIS `.exe` artifact upload
+- Linux: `desktop-django-starter-linux-sha256.txt` for the AppImage artifact upload
+
+Those checksum files are uploaded as separate workflow artifacts so an admin can verify the downloaded installer before promoting it into a connected release channel or transferring it through an offline/manual flow.
+
 Manual update model for this repo:
 
-- connected installs: download and run a newer installer from GitHub Actions artifacts, a GitHub Release, or your internal release channel
-- air-gapped installs: transfer the DMG or `.exe` through the approved offline channel, verify version and integrity, then run the installer manually
+- connected installs: download the installer plus its matching SHA-256 file from GitHub Actions artifacts, a GitHub Release, or your internal release channel, verify the checksum, then run the installer manually
+- air-gapped installs: transfer the DMG or `.exe` plus its matching SHA-256 file through the approved offline channel, verify version and integrity, then run the installer manually
 - local writable state survives reinstall/update because packaged mode keeps it under Electron's per-user app-data directory, with the SQLite database stored as `app.sqlite3`
 
 ## Staged Bundled Runtime Contract
@@ -140,6 +148,6 @@ Packaged mode still sets a small runtime environment at launch time:
 ## Production Gaps
 
 - No auto-update feed, update server, or in-app updater is included.
-- No GitHub Release publishing or checksum publication automation is wired yet.
+- No GitHub Release publishing automation is wired yet; checksum generation exists, but promotion remains manual.
 - Linux packaging still exists, but Linux signing and verification are not a baseline in this slice.
 - Windows public-distribution hardening beyond optional signing inputs is still follow-on work.

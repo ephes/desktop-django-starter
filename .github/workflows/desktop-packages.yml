@@ -20,18 +20,24 @@ jobs:
             build_target: dmg
             artifact_name: desktop-django-starter-macos
             artifact_glob: electron/dist/*.dmg
+            checksum_artifact_name: desktop-django-starter-macos-checksums
+            checksum_path: electron/dist/desktop-django-starter-macos-sha256.txt
           - os: windows-latest
             platform: windows
             build_flag: --win
             build_target: nsis
             artifact_name: desktop-django-starter-windows
             artifact_glob: electron/dist/*.exe
+            checksum_artifact_name: desktop-django-starter-windows-checksums
+            checksum_path: electron/dist/desktop-django-starter-windows-sha256.txt
           - os: ubuntu-latest
             platform: linux
             build_flag: --linux
             build_target: AppImage
             artifact_name: desktop-django-starter-linux
             artifact_glob: electron/dist/*.AppImage
+            checksum_artifact_name: desktop-django-starter-linux-checksums
+            checksum_path: electron/dist/desktop-django-starter-linux-sha256.txt
 
     steps:
       - uses: actions/checkout@v6
@@ -93,9 +99,19 @@ jobs:
           WIN_SIGN_TIMESTAMP_RFC3161_URL: ${{ secrets.WIN_SIGN_TIMESTAMP_RFC3161_URL }}
         run: npm --prefix electron run dist -- ${{ matrix.build_flag }} ${{ matrix.build_target }}
 
+      - name: Generate artifact checksums
+        run: python electron/scripts/write-checksums.py --glob "${{ matrix.artifact_glob }}" --output "${{ matrix.checksum_path }}"
+
       - name: Upload packaged desktop artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+
+      - name: Upload packaged desktop artifact checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.checksum_artifact_name }}
+          path: ${{ matrix.checksum_path }}
           if-no-files-found: error
