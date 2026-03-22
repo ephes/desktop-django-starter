@@ -123,10 +123,10 @@ build:
 
 # Count lines of code in the repository (by language + by top-level folder)
 loc:
-    cloc --vcs=git .
+    cloc --vcs=git --exclude-lang=JSON,Markdown .
     @echo ""
     @echo "--- Python SLOC by folder ---"
-    @sloccount --details . 2>/dev/null | awk '/^[0-9]/ && $2=="python" {sums[$3]+=$1} END{for(d in sums) printf "%8d  %s\n", sums[d], d}' | sort -rn
+    @cloc --vcs=git --include-lang=Python --by-file --csv --quiet . | awk -F, '$1=="Python"{file=$2; if (index(file, "./") == 1) file=substr(file, 3); n=split(file,parts,"/"); if(n==1) bucket="."; else if(parts[1]=="src" && n>=2) bucket=parts[1] "/" parts[2]; else bucket=parts[1]; sums[bucket]+=$5} END{for(bucket in sums) printf "%8d  %s\n", sums[bucket], bucket}' | sort -rn
 
 clean:
     rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 electron/dist electron/node_modules electron/.stage
