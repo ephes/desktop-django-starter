@@ -1,8 +1,8 @@
 # Desktop Django Starter
 
-Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, and a plain-GitHub packaging slice in place.
+Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, and a sign/notarization-aware GitHub packaging slice in place.
 
-The current implementation includes a local Django app, an Electron shell that supervises it over localhost, a `/health/` readiness check, a tiny CRUD demo, a packaged-like staging flow with a bundled Python runtime plus collected static assets, and an on-demand GitHub Actions workflow that builds desktop artifacts for macOS, Windows, and Linux. Signing, notarization, and auto-update are still deferred.
+The current implementation includes a local Django app, an Electron shell that supervises it over localhost, a `/health/` readiness check, a tiny CRUD demo, a packaged-like staging flow with a bundled Python runtime plus collected static assets, and an on-demand GitHub Actions workflow that builds desktop artifacts for macOS, Windows, and Linux. macOS signing/notarization scaffolding and optional Windows signing inputs are now documented and wired into packaging; auto-update is still deferred.
 
 ```{toctree}
 :maxdepth: 2
@@ -11,6 +11,7 @@ The current implementation includes a local Django app, an Electron shell that s
 specification
 architecture
 decisions
+release
 agent-use
 ```
 
@@ -48,3 +49,5 @@ The packaged-like staging flow now writes a concrete backend payload under `elec
 Electron packaged mode uses that manifest to resolve the interpreter from the staged backend instead of falling back to the repo's `uv` environment.
 
 The GitHub packaging helpers use the GitHub CLI locally, require an authenticated `gh` session, and accept an optional first argument to target a different branch when the current checkout is not the branch you want to build or query. `just github-package-latest-run` prints the current latest successful run id, `just github-package-download-latest` prints the downloaded artifact paths and records the run id in `dist/github-actions/latest-run.txt`, and `just github-package-latest-path` prints the local directory for that latest downloaded run. The current workflow builds macOS arm64 plus Windows x64 and Linux x64 artifacts.
+
+See [release](release.md) for the signing secrets, installer/update guidance, and production gaps for this slice.

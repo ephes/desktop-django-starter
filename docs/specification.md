@@ -1,7 +1,7 @@
 # Desktop Django Starter Specification
 
 Status: Draft 0.2  
-Scope: specification for the starter, with the runnable development slice, staged packaged-backend slice, and plain-GitHub packaged-build slice now implemented, while signing, notarization, and auto-update remain deferred
+Scope: specification for the starter, with the runnable development slice, staged packaged-backend slice, and sign/notarization-aware packaged-build slice now implemented, while auto-update remains deferred
 
 ## 1. Project Summary
 
@@ -220,11 +220,13 @@ Minimum update story to document:
 - air-gapped installs: transfer a signed installer or zip through the approved offline channel and verify version/integrity before installation
 - the repo should describe where release artifacts live and what a user or admin must replace during an offline update
 
-Implementation direction to note:
+Current implementation direction:
 
-- the macOS notarization/signing path will likely follow the `electron-builder` plus `afterSign` notarization-hook pattern, with signing credentials provided through CI secrets on a macOS runner
+- macOS packaging uses `electron-builder` with hardened runtime, explicit entitlements, and env-driven notarization inputs
+- the GitHub Actions packaging workflow is ready to consume signing/notarization secrets on platform-native runners without making local unsigned builds mandatory
+- Windows signing remains optional and secret-driven rather than mandatory release automation
 
-The repo should document these expectations clearly, but the first implementation does not need to automate the entire release process.
+The repo should document these expectations clearly, but it still does not need to automate the entire release process.
 
 ## 14. Continuous Integration Expectations
 
@@ -310,7 +312,7 @@ Implement later:
 - bundled Python build step
 - installer configuration
 - sample app
-- platform-specific signing scripts
+- release promotion and checksum publication automation
 - optional post-v1 background-task example
 
 ## 19. Acceptance Criteria
@@ -342,7 +344,7 @@ The implementation phase is complete when:
 - the repo explains how to swap the demo app for an existing Django project
 - the repo includes a short "production gaps" section so users know what is intentionally omitted
 - GitHub Actions validates docs/tests on Linux, macOS, and Windows
-- the repo documents signing/notarization expectations clearly enough for a follow-on implementation slice
+- the repo documents signing/notarization requirements and manual updates clearly enough for follow-on release hardening
 
 ## 20. Guiding Principle
 

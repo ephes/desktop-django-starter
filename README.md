@@ -2,7 +2,7 @@
 
 Minimal, attendee-facing starter for shipping a Django app inside Electron with a bundled Python runtime.
 
-This repository now includes a runnable development slice, a staged packaged-backend slice, and a plain-GitHub packaging slice: a tiny Django app served locally and supervised by Electron, with a bundled Python runtime staged under `electron/.stage/backend/python/` and packaged desktop artifacts built in GitHub Actions.
+This repository now includes a runnable development slice, a staged packaged-backend slice, and a sign/notarization-aware GitHub packaging slice: a tiny Django app served locally and supervised by Electron, with a bundled Python runtime staged under `electron/.stage/backend/python/` and packaged desktop artifacts built in GitHub Actions.
 
 ## Intent
 
@@ -22,15 +22,16 @@ Runnable starter slices:
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `electron/.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally
-- on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts and `just` helpers for triggering and fetching them
+- on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
 
-Signing, notarization, auto-update, and public-release hardening are still deferred.
+Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
 
 ## Docs
 
 - [`docs/specification.md`](docs/specification.md): main product and technical specification
 - [`docs/architecture.md`](docs/architecture.md): intended runtime model and draft repo shape
 - [`docs/decisions.md`](docs/decisions.md): repo-local decisions captured from the initial planning pass
+- [`docs/release.md`](docs/release.md): packaging secrets, installer artifacts, and connected/offline manual update guidance
 - [`docs/agent-use.md`](docs/agent-use.md): how coding agents should consume this repo and reuse its skill
 
 The docs are built with Sphinx over the Markdown sources in `docs/` and are intended to be publishable on Read the Docs.
@@ -79,6 +80,31 @@ For GitHub-built install artifacts, use `just github-package` and then `just git
 Pass a different branch as the first argument when needed, for example `just github-package my-branch`.
 The current workflow builds one architecture per platform: macOS arm64 on `macos-latest`, plus Windows x64 and Linux x64 on the hosted runners.
 
+## Packaging, Signing, and Manual Updates
+
+Local packaging remains usable without any signing secrets:
+
+- `just package-dist` builds a host-native installer artifact for the current machine
+- `just package-dist-dir` builds an unpacked app directory for local inspection
+
+When signing credentials are present, `electron-builder` now uses them directly:
+
+- macOS signing uses the normal `CSC_LINK` or `CSC_NAME` inputs plus `CSC_KEY_PASSWORD` when needed
+- macOS notarization is enabled only when a complete Apple credential set is present; the recommended path is `APPLE_API_KEY` plus `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`
+- Windows signing is optional and secret-driven; `WIN_CSC_LINK` plus `WIN_CSC_KEY_PASSWORD` is the baseline path, with optional publisher/timestamp inputs documented in [`docs/release.md`](docs/release.md)
+
+Primary installer artifacts in this starter:
+
+- macOS: signed/notarized DMG when secrets are configured, otherwise an unsigned DMG
+- Windows: NSIS `.exe` installer, optionally signed
+- Linux: AppImage output remains available, but Linux signing and verification are still out of scope for this slice
+
+Manual update model for this repo:
+
+- connected installs: download and run a newer installer from GitHub Actions artifacts, a GitHub Release, or your internal release channel
+- air-gapped installs: transfer the DMG or `.exe` through the approved offline channel, verify version and integrity, then run the installer manually
+- local writable state survives reinstall/update because packaged mode keeps it under Electron's per-user app-data directory, with the SQLite database stored as `app.sqlite3`
+
 ## Staged Bundled Runtime Contract
 
 The staged packaged-backend layout is now explicit enough to mirror a later packaged app:
@@ -109,4 +135,11 @@ Packaged mode still sets a small runtime environment at launch time:
 - A tiny example Django app that still feels real
 - Clear extension points for replacing the example with your own Django project
 - Cross-platform packaging guidance with Windows as a required proof point
-- Plain GitHub Actions packaging and artifact download flow for macOS, Windows, and Linux
+- Plain GitHub Actions packaging and artifact download flow for macOS, Windows, and Linux, including env-driven signing/notarization scaffolding
+
+## Production Gaps
+
+- No auto-update feed, update server, or in-app updater is included.
+- No GitHub Release publishing or checksum publication automation is wired yet.
+- Linux packaging still exists, but Linux signing and verification are not a baseline in this slice.
+- Windows public-distribution hardening beyond optional signing inputs is still follow-on work.

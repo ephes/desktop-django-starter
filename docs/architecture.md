@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Status: intended implementation shape, with the runnable development slice, staged bundled-runtime contract, and plain-GitHub packaging workflow now in place
+Status: intended implementation shape, with the runnable development slice, staged bundled-runtime contract, and sign/notarization-aware packaging workflow now in place
 
 ## Runtime Model
 
@@ -132,6 +132,8 @@ The first implementation does not need a full auto-update system, but it does ne
 - connected environments should be able to replace the app using signed release artifacts from a normal release channel
 - air-gapped environments should be able to move signed artifacts through an approved offline transfer path and install them manually
 - update docs should describe what artifact an operator moves, how they verify it, and what local state should survive the reinstall
+- local packaging should still work without release credentials, producing unsigned artifacts for teaching and local validation
+- the GitHub Actions packaging workflow should consume signing credentials only when they are present, rather than making secrets a baseline requirement for every build
 
 For connected auto-update work after v1, the expected direction is an Electron-compatible update feed. For air-gapped environments, the baseline is manual signed artifact replacement rather than background update services.
 

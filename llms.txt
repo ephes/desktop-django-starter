@@ -1,6 +1,6 @@
 # Desktop Django Starter
 
-> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, a staged packaged-backend slice for bundled-runtime validation, and a plain-GitHub packaging slice for GitHub Actions desktop artifacts. This repository is designed for both human readers and coding agents.
+> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, a staged packaged-backend slice for bundled-runtime validation, and a sign/notarization-aware GitHub packaging slice for desktop artifacts. This repository is designed for both human readers and coding agents.
 
 Use this repository when you need the smallest credible architecture for running Django as a local desktop app, or when you need a reusable workflow for wrapping an existing Django project in Electron without importing a product-sized codebase.
 
@@ -17,6 +17,7 @@ Important constraints:
 - [docs/specification.md](docs/specification.md): Main product and technical specification for the starter.
 - [docs/architecture.md](docs/architecture.md): Runtime contract, repo shape, startup model, shutdown notes, and release/update direction.
 - [docs/decisions.md](docs/decisions.md): Scope and tradeoff decisions captured locally for this repo.
+- [docs/release.md](docs/release.md): Packaging secrets, installer artifacts, and manual update guidance.
 - [docs/agent-use.md](docs/agent-use.md): Guidance for coding agents consuming this repo.
 
 ## Skills
@@ -26,7 +27,7 @@ Important constraints:
 ## Optional
 
 - [.github/workflows/ci.yml](.github/workflows/ci.yml): Current cross-platform CI scaffold using GitHub-hosted runners.
-- [.github/workflows/desktop-packages.yml](.github/workflows/desktop-packages.yml): On-demand GitHub Actions packaging workflow for macOS, Windows, and Linux artifacts.
+- [.github/workflows/desktop-packages.yml](.github/workflows/desktop-packages.yml): On-demand GitHub Actions packaging workflow for macOS, Windows, and Linux artifacts, with optional signing inputs.
 - [tests/test_docs.py](tests/test_docs.py): Minimal smoke tests for the documentation scaffold.
 - [tests/test_example_app.py](tests/test_example_app.py): Backend behavior checks for the demo CRUD slice.
 - [tests/test_health.py](tests/test_health.py): Readiness endpoint coverage.

@@ -10,3 +10,6 @@ __pycache__/
 db.sqlite3
 electron/node_modules/
 electron/.stage/
+*.p8
+*.p12
+*.pfx

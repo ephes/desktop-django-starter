@@ -9,8 +9,9 @@ Recommended order:
 1. [`llms.txt`](llms.txt)
 2. [`specification.md`](specification.md)
 3. [`architecture.md`](architecture.md)
-4. [`decisions.md`](decisions.md)
-5. repo-local skill at `skills/wrap-existing-django-in-electron/SKILL.md`
+4. [`release.md`](release.md) for packaging/release tasks
+5. [`decisions.md`](decisions.md)
+6. repo-local skill at `skills/wrap-existing-django-in-electron/SKILL.md`
 
 ## What This Repo Should Help An Agent Do
 
@@ -34,4 +35,5 @@ Recommended order:
 - `llms.txt` provides a concise entry point
 - the specification defines the product and technical boundaries
 - the architecture notes define the expected runtime contract
+- the release guide defines signing inputs, installer artifacts, and the manual update model
 - the skill provides a reusable workflow for adapting another Django repo
