@@ -57,6 +57,9 @@ def test_packaging_workflow_mentions_signing_and_checksum_steps() -> None:
     assert "Prepare macOS notarization API key" in workflow
     assert "APPLE_API_KEY_ID" in workflow
     assert "WIN_CSC_LINK" in workflow
+    assert "APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}" in workflow
+    assert "env.APPLE_API_KEY_CONTENT != ''" in workflow
+    assert "secrets.APPLE_API_KEY != ''" not in workflow
     assert "Generate artifact checksums" in workflow
     assert "write-checksums.py" in workflow
     assert "Upload packaged desktop artifact checksums" in workflow

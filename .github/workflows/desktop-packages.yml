@@ -10,6 +10,8 @@ jobs:
   package:
     name: package (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
+    env:
+      APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
     strategy:
       fail-fast: false
       matrix:
@@ -68,10 +70,8 @@ jobs:
         run: npm --prefix electron ci
 
       - name: Prepare macOS notarization API key
-        if: matrix.platform == 'macos' && secrets.APPLE_API_KEY != ''
+        if: matrix.platform == 'macos' && env.APPLE_API_KEY_CONTENT != ''
         shell: bash
-        env:
-          APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}
         run: |
           key_path="$RUNNER_TEMP/app-store-connect-api-key.p8"
           printf '%s' "$APPLE_API_KEY_CONTENT" > "$key_path"
