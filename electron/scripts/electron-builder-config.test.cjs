@@ -6,7 +6,7 @@ const {
   getEnvList,
   getWindowsSigntoolOptions,
   hasMacosNotarizationCredentials
-} = require("../electron-builder.config.cjs");
+} = require("./electron-builder-config.cjs");
 
 test("electron-builder config ships the staged backend as a packaged resource", () => {
   const config = buildConfig({});
@@ -51,10 +51,10 @@ test("electron-builder config keeps per-platform artifact names explicit", () =>
 test("electron-builder config does not expose test helpers as enumerable keys", () => {
   const config = require("../electron-builder.config.cjs");
 
-  assert.equal(Object.keys(config).includes("buildConfig"), false);
-  assert.equal(Object.keys(config).includes("getEnvList"), false);
-  assert.equal(Object.keys(config).includes("getWindowsSigntoolOptions"), false);
-  assert.equal(Object.keys(config).includes("hasMacosNotarizationCredentials"), false);
+  assert.equal(Object.getOwnPropertyNames(config).includes("buildConfig"), false);
+  assert.equal(Object.getOwnPropertyNames(config).includes("getEnvList"), false);
+  assert.equal(Object.getOwnPropertyNames(config).includes("getWindowsSigntoolOptions"), false);
+  assert.equal(Object.getOwnPropertyNames(config).includes("hasMacosNotarizationCredentials"), false);
 });
 
 test("electron-builder enables macOS notarization when Apple credentials are present", () => {
