@@ -2,6 +2,8 @@
 
 Minimal, attendee-facing starter for shipping a Django app inside Electron with a bundled Python runtime.
 
+**Documentation: [desktop-django-starter.readthedocs.io](https://desktop-django-starter.readthedocs.io/en/latest/)**
+
 This repository now includes a runnable development slice, a staged packaged-backend slice, and a sign/notarization-aware GitHub packaging slice: a tiny Django app served locally and supervised by Electron, with a bundled Python runtime staged under `electron/.stage/backend/python/` and packaged desktop artifacts built in GitHub Actions.
 
 ## Intent
