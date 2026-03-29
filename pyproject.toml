@@ -15,6 +15,9 @@ dependencies = [
     "Django==6.0.3",
 ]
 
+[project.scripts]
+count-lines-of-code = "desktop_django_starter.devtools:count_lines_of_code"
+
 [project.urls]
 Documentation = "https://desktop-django-starter.readthedocs.io/en/latest/"
 
@@ -24,6 +27,7 @@ dev = [
     "myst-parser>=4.0.0",
     "pytest>=8.3",
     "pytest-django>=4.11.1",
+    "rich>=14.2.0",
     "ruff>=0.11.0",
     "sphinx>=8.2.0",
     "sphinx-autobuild>=2024.10.3",

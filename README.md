@@ -64,6 +64,7 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 - `just dev`: same as `just electron-start`
 - `just docs`: build the docs and open the generated site
 - `just docs-serve`: run a live-reloading local docs server
+- `just loc`: print a `cloc` summary plus a per-directory code breakdown, with a Python fallback when `cloc` is absent
 - `just test`: run the Django and docs test suite
 - `just build`: build the Python package metadata scaffold
 

@@ -121,12 +121,9 @@ docs-serve:
 build:
     uv build
 
-# Count lines of code in the repository (by language + by top-level folder)
+# Count lines of code in the repository with an overall summary and folder breakdown
 loc:
-    cloc --vcs=git --exclude-lang=JSON,Markdown .
-    @echo ""
-    @echo "--- Python SLOC by folder ---"
-    @cloc --vcs=git --include-lang=Python --by-file --csv --quiet . | awk -F, '$1=="Python"{file=$2; if (index(file, "./") == 1) file=substr(file, 3); n=split(file,parts,"/"); if(n==1) bucket="."; else if(parts[1]=="src" && n>=2) bucket=parts[1] "/" parts[2]; else bucket=parts[1]; sums[bucket]+=$5} END{for(bucket in sums) printf "%8d  %s\n", sums[bucket], bucket}' | sort -rn
+    uv run count-lines-of-code
 
 clean:
     rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 electron/dist electron/node_modules electron/.stage
