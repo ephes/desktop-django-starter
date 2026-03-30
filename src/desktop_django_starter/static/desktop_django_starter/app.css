@@ -1,50 +1,106 @@
+/* ── Palette & tokens ────────────────────────────────── */
 :root {
     color-scheme: light;
-    font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", serif;
-    line-height: 1.5;
+
+    --teal-deep:   #108D82;
+    --teal-bright: #4FC0BC;
+    --teal-glow:   #0CC3BC;
+    --dark:        #222121;
+    --dark-navy:   #1C2D50;
+    --gray-light:  #E6E6E6;
+    --white:       #FFFFFF;
+
+    --bg-page:     #F2F4F3;
+    --bg-card:     #FFFFFF;
+    --text-primary:#222121;
+    --text-muted:  #5A6B6A;
+    --border:      #D4DDDB;
+    --shadow:      rgba(16, 141, 130, 0.08);
+
+    font-family: "Play", "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.6;
 }
+
+/* ── Reset & base ────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
 
 body {
     margin: 0;
-    background: linear-gradient(180deg, #f5f0e7 0%, #fffaf4 100%);
-    color: #1f1a17;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    min-height: 100vh;
 }
 
+/* ── Masthead ────────────────────────────────────────── */
+.masthead {
+    background: var(--dark);
+    color: var(--white);
+    padding: 2rem 1.25rem 2.5rem;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Diagonal accent stripe */
+.masthead::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(
+        90deg,
+        var(--teal-deep) 0%,
+        var(--teal-bright) 50%,
+        var(--teal-glow) 100%
+    );
+}
+
+.masthead-inner {
+    max-width: 56rem;
+    margin: 0 auto;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+}
+
+.masthead .brand {
+    font-size: 0.85rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--teal-bright);
+    margin: 0 0 0.25rem;
+}
+
+.masthead h1 {
+    margin: 0;
+    font-size: clamp(1.75rem, 4.5vw, 2.5rem);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+}
+
+/* ── Main shell ──────────────────────────────────────── */
 .shell {
     max-width: 56rem;
     margin: 0 auto;
     padding: 2rem 1.25rem 4rem;
 }
 
-.masthead {
-    display: flex;
-    justify-content: space-between;
-    gap: 1rem;
-    align-items: center;
-    margin-bottom: 2rem;
-}
-
-.masthead h1 {
-    margin: 0;
-    font-size: clamp(2rem, 5vw, 3rem);
-}
-
+/* ── Card panel ──────────────────────────────────────── */
 .panel {
-    background: rgba(255, 255, 255, 0.85);
-    border: 1px solid #decdbf;
-    border-radius: 1rem;
-    padding: 1.5rem;
-    box-shadow: 0 18px 40px rgba(80, 52, 32, 0.08);
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+    padding: 1.75rem;
+    box-shadow:
+        0 1px 3px var(--shadow),
+        0 12px 28px var(--shadow);
 }
 
-.actions,
-.row-actions {
-    display: flex;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    align-items: center;
-}
-
+/* ── Buttons ─────────────────────────────────────────── */
 a,
 button {
     color: inherit;
@@ -55,64 +111,199 @@ button {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    border: 1px solid #8b5e3c;
-    border-radius: 999px;
-    background: #8b5e3c;
-    color: #fffaf4;
-    padding: 0.6rem 1rem;
+    gap: 0.4rem;
+    border: 2px solid var(--teal-deep);
+    border-radius: 0.5rem;
+    background: var(--teal-deep);
+    color: var(--white);
+    padding: 0.6rem 1.25rem;
     font: inherit;
+    font-weight: 700;
+    font-size: 0.9rem;
+    letter-spacing: 0.02em;
     text-decoration: none;
     cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, transform 0.1s;
+}
+
+.button:hover,
+button:hover {
+    background: var(--teal-bright);
+    border-color: var(--teal-bright);
+}
+
+.button:active,
+button:active {
+    transform: scale(0.97);
 }
 
 .button.secondary,
 button.secondary {
     background: transparent;
-    color: #8b5e3c;
+    color: var(--teal-deep);
 }
 
+.button.secondary:hover,
+button.secondary:hover {
+    background: var(--teal-deep);
+    color: var(--white);
+}
+
+/* Danger variant for delete actions */
+.button.danger,
+button[type="submit"].danger {
+    background: #C0392B;
+    border-color: #C0392B;
+}
+
+.button.danger:hover,
+button[type="submit"].danger:hover {
+    background: #E74C3C;
+    border-color: #E74C3C;
+}
+
+/* ── Actions bar ─────────────────────────────────────── */
+.actions,
+.row-actions {
+    display: flex;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* ── Table ────────────────────────────────────────────── */
 table {
     width: 100%;
     border-collapse: collapse;
-    margin-top: 1.5rem;
+    margin-top: 1.25rem;
 }
 
-th,
-td {
-    padding: 0.75rem 0;
-    border-bottom: 1px solid #eaded3;
+thead th {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding: 0 0 0.75rem;
+    border-bottom: 2px solid var(--teal-deep);
     text-align: left;
+}
+
+td {
+    padding: 0.85rem 0.5rem 0.85rem 0;
+    border-bottom: 1px solid var(--border);
     vertical-align: top;
 }
 
+tbody tr {
+    transition: background 0.15s;
+}
+
+tbody tr:hover {
+    background: rgba(79, 192, 188, 0.06);
+}
+
+.row-actions a {
+    font-size: 0.85rem;
+    font-weight: 700;
+    color: var(--teal-deep);
+    text-decoration: none;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.3rem;
+    transition: background 0.15s, color 0.15s;
+}
+
+.row-actions a:hover {
+    background: var(--teal-deep);
+    color: var(--white);
+}
+
+/* ── Forms ────────────────────────────────────────────── */
 form {
     display: grid;
-    gap: 1rem;
+    gap: 1.25rem;
+}
+
+form p {
+    margin: 0;
+    display: grid;
+    gap: 0.35rem;
+}
+
+form label {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: var(--text-muted);
 }
 
 input,
 textarea,
 select {
     width: 100%;
-    border: 1px solid #cdb7a3;
-    border-radius: 0.75rem;
-    padding: 0.75rem;
+    border: 2px solid var(--border);
+    border-radius: 0.5rem;
+    padding: 0.7rem 0.85rem;
     font: inherit;
+    font-size: 0.95rem;
     box-sizing: border-box;
-    background: #fffdf9;
+    background: var(--bg-page);
+    color: var(--text-primary);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+    outline: none;
+    border-color: var(--teal-bright);
+    box-shadow: 0 0 0 3px rgba(79, 192, 188, 0.2);
 }
 
 textarea {
     min-height: 8rem;
+    resize: vertical;
 }
 
+/* Django renders help text and error lists inside form p tags */
+.helptext {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.errorlist {
+    list-style: none;
+    padding: 0;
+    margin: 0.25rem 0 0;
+    font-size: 0.85rem;
+    color: #C0392B;
+    font-weight: 700;
+}
+
+/* ── Status & empty state ────────────────────────────── */
 .status {
-    font-size: 0.95rem;
-    color: #6e5745;
+    font-size: 0.9rem;
+    color: var(--text-muted);
     min-height: 1.2rem;
+    margin-top: 1rem;
 }
 
 .empty {
-    padding: 1rem 0;
-    color: #6e5745;
+    padding: 2.5rem 1rem;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 1.05rem;
+}
+
+/* ── Delete confirmation ─────────────────────────────── */
+.confirm-delete p {
+    font-size: 1.05rem;
+    margin: 0 0 1.5rem;
+    line-height: 1.5;
+}
+
+/* ── Utility ─────────────────────────────────────────── */
+::selection {
+    background: var(--teal-bright);
+    color: var(--white);
 }

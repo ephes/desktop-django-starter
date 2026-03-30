@@ -5,19 +5,24 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>{% block title %}Desktop Django Starter{% endblock %}</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Play:wght@400;700&display=swap">
     <link rel="stylesheet" href="{% static 'desktop_django_starter/app.css' %}">
 </head>
 <body>
-    <main class="shell">
-        <header class="masthead">
+    <header class="masthead">
+        <div class="masthead-inner">
             <div>
-                <p>Desktop Django Starter</p>
+                <p class="brand">Desktop Django Starter</p>
                 <h1>{% block heading %}Items{% endblock %}</h1>
             </div>
             <div class="actions">
                 <button class="secondary" type="button" data-open-app-data hidden>Open App Data Folder</button>
             </div>
-        </header>
+        </div>
+    </header>
+    <main class="shell">
         <section class="panel">
             {% block content %}{% endblock %}
             <p class="status" data-native-status></p>
