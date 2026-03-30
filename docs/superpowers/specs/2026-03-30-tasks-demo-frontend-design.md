@@ -44,7 +44,7 @@ Location: `src/tasks_demo/`
   ```json
   {"id": 5, "label": "Crunching numbers", "status": "PENDING"}
   ```
-  Creates a new `SimulatedTask` in PENDING state with a label randomly chosen from a small hardcoded list (e.g., "Crunching numbers", "Analyzing data", "Generating report", "Processing records"). Starts a background thread via a swappable `_run_task` helper (see Testing section) that:
+  Creates a new `SimulatedTask` in PENDING state with a label randomly chosen from a small hardcoded list (e.g., "Crunching numbers", "Analyzing data", "Generating report", "Processing records"). Launches the worker via `_launch_task(task_id)` (see Testing section), which starts a daemon thread targeting `_run_task_worker(task_id)`. The worker:
   1. Sets status to RUNNING
   2. Sleeps for a random 3–10 seconds
   3. Sets status to DONE (with a result string) or FAILED (~20% chance, with an error message)
@@ -83,6 +83,10 @@ Location: `src/tasks_demo/`
 | `""` | `task-list` | GET | `task_list` |
 | `"run/"` | `task-run` | POST | `task_create` |
 | `"status/"` | `task-status` | GET | `task_status` |
+
+### Startup reconciliation
+
+The `tasks_demo` app's `AppConfig.ready()` marks any PENDING or RUNNING tasks as FAILED with the result string `"Abandoned — app restarted"` and sets `completed_at` to the current time. This prevents stale non-terminal rows from surviving across app restarts, which would otherwise cause the frontend to poll indefinitely and misrepresent task state.
 
 ## Frontend
 
@@ -129,7 +133,10 @@ Add nav links to the masthead in `base.html`:
 
 ### Deterministic testing seam
 
-The background thread is started via a module-level `_run_task(task_id)` function that the view calls. This function handles the sleep, random outcome, and DB updates. Tests can `mock.patch` this function to run synchronously with deterministic duration and outcome, avoiding flaky sleep-based tests.
+Two separate module-level functions provide the testing seam:
+
+- **`_launch_task(task_id)`** — Called by the view. In production, starts a daemon thread targeting `_run_task_worker`. Tests patch this to call `_run_task_worker` synchronously (or to do nothing, when testing only the view/HTTP layer).
+- **`_run_task_worker(task_id)`** — The pure worker body. Performs the PENDING → RUNNING → DONE/FAILED transitions, sleep, and DB updates. Tests call this directly for deterministic state-transition coverage.
 
 The random duration (3–10s) and failure probability (~20%) are drawn from module-level constants `DURATION_RANGE = (3, 10)` and `FAILURE_RATE = 0.2`, also patchable in tests.
 
@@ -142,6 +149,7 @@ The random duration (3–10s) and failure probability (~20%) are drawn from modu
 - Task model status choices are valid
 - Worker function (called directly, not via thread) correctly transitions PENDING → RUNNING → DONE
 - Worker function (called directly, patched to fail) correctly transitions PENDING → RUNNING → FAILED
+- Startup reconciliation marks stale PENDING/RUNNING tasks as FAILED with "Abandoned — app restarted"
 
 ### Validation
 
