@@ -40,12 +40,41 @@ Location: `src/tasks_demo/`
 ### Views
 
 - **`task_list`** — Renders the tasks page (HTML). Lists all tasks ordered by newest first.
-- **`task_create`** — POST only. Creates a new `SimulatedTask` in PENDING state with a label randomly chosen from a small hardcoded list (e.g., "Crunching numbers", "Analyzing data", "Generating report", "Processing records"). Starts a background thread that:
+- **`task_create`** — POST only. Returns `201 Created` with a JSON body:
+  ```json
+  {"id": 5, "label": "Crunching numbers", "status": "PENDING"}
+  ```
+  Creates a new `SimulatedTask` in PENDING state with a label randomly chosen from a small hardcoded list (e.g., "Crunching numbers", "Analyzing data", "Generating report", "Processing records"). Starts a background thread via a swappable `_run_task` helper (see Testing section) that:
   1. Sets status to RUNNING
   2. Sleeps for a random 3–10 seconds
   3. Sets status to DONE (with a result string) or FAILED (~20% chance, with an error message)
   4. Records duration and completed_at
-- **`task_status`** — GET, returns JSON array of all tasks with their current state. Polled by the frontend.
+- **`task_status`** — GET, returns `200 OK` with a JSON body:
+  ```json
+  {
+    "tasks": [
+      {
+        "id": 5,
+        "label": "Crunching numbers",
+        "status": "RUNNING",
+        "result": null,
+        "duration": null,
+        "created_at": "2026-03-30T14:22:01Z",
+        "completed_at": null
+      },
+      {
+        "id": 4,
+        "label": "Data analysis",
+        "status": "DONE",
+        "result": "Processed 42 records, avg score 87.3",
+        "duration": 6.2,
+        "created_at": "2026-03-30T14:20:50Z",
+        "completed_at": "2026-03-30T14:20:56Z"
+      }
+    ]
+  }
+  ```
+  Returns all tasks ordered newest first. The frontend uses `created_at` to compute elapsed time for running tasks and relative completion time for finished tasks.
 
 ### URLs (under `/tasks/`)
 
@@ -86,7 +115,7 @@ Add nav links to the masthead in `base.html`:
 - **Polling**: Calls `/tasks/status/` every 2 seconds while any task is PENDING or RUNNING. Stops when all tasks are terminal.
 - **Run Task**: POSTs to `/tasks/run/` via `fetch`, then starts/resumes polling.
 - **DOM updates**: On each poll, updates indicators, badges, elapsed times, and result rows.
-- **CSRF**: Token read from cookie using the standard Django pattern.
+- **CSRF**: The `task_list` view is decorated with `@ensure_csrf_cookie` so the CSRF cookie is always set on the tasks page, even though there is no rendered `<form>`. The JS reads the token from the cookie and sends it as an `X-CSRFToken` header on the POST.
 
 ### CSS additions to `app.css`
 
@@ -98,13 +127,21 @@ Add nav links to the masthead in `base.html`:
 
 ## Testing
 
+### Deterministic testing seam
+
+The background thread is started via a module-level `_run_task(task_id)` function that the view calls. This function handles the sleep, random outcome, and DB updates. Tests can `mock.patch` this function to run synchronously with deterministic duration and outcome, avoiding flaky sleep-based tests.
+
+The random duration (3–10s) and failure probability (~20%) are drawn from module-level constants `DURATION_RANGE = (3, 10)` and `FAILURE_RATE = 0.2`, also patchable in tests.
+
 ### Backend tests (`tests/test_tasks_demo.py`)
 
-- Task creation via POST returns redirect or appropriate response
-- Status endpoint returns JSON with correct task structure
-- Task model states are valid
+- Task creation via POST returns 201 JSON with `id`, `label`, `status` fields
+- Status endpoint returns 200 JSON matching the documented schema
+- Status endpoint returns `{"tasks": []}` when no tasks exist
 - Task list page renders with 200 and includes the "Run Task" button
-- Status endpoint returns empty list when no tasks exist
+- Task model status choices are valid
+- Worker function (called directly, not via thread) correctly transitions PENDING → RUNNING → DONE
+- Worker function (called directly, patched to fail) correctly transitions PENDING → RUNNING → FAILED
 
 ### Validation
 
@@ -114,15 +151,21 @@ Add nav links to the masthead in `base.html`:
 
 ## Documentation Updates
 
-- `docs/specification.md` section 9: Note tasks demo frontend is implemented, `django.tasks` deferred
-- `docs/decisions.md`: Add D-011 recording that the tasks demo uses stub threading for now
+- `README.md`: Mention the tasks demo in the project description
+- `docs/index.md`: Add tasks demo to the documentation index
+- `docs/specification.md` section 9: Note tasks demo frontend is implemented as an optional post-v1 extension, `django.tasks` deferred
+- `docs/decisions.md`: Add D-011 recording that the tasks demo is an optional post-v1 extension with stub threading
 - `docs/architecture.md`: Update deferred areas section
 - `llms.txt`: Mention the new `tasks_demo` app
+
+## Relationship to v1 Scope
+
+This is an **optional post-v1 extension**, not a change to the starter's core v1 story. The specification (section 9) and decisions log (D-005) established that background tasks are deferred from v1. This demo fulfills the spec's note to "document a future extension path for one local background-task flow only after the minimal starter is stable." The tasks demo app is additive — the core starter remains complete without it.
 
 ## Explicit Non-Scope
 
 - No `django.tasks` integration (deferred to follow-up)
-- No persistent task history / cleanup / pagination
+- Tasks persist in the database for the demo (no ephemeral in-memory store), but no retention policy, cleanup, or pagination is included
 - No task cancellation
 - No WebSocket or SSE
 - No JS build tooling or framework
