@@ -24,5 +24,6 @@ def packaged_static_view(request, path):
 urlpatterns = [
     path("health/", health_view, name="health"),
     path("", include("example_app.urls")),
+    path("tasks/", include("tasks_demo.urls")),
     re_path(r"^static/(?P<path>.*)$", packaged_static_view, name="packaged-static"),
 ]

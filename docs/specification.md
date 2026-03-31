@@ -111,17 +111,23 @@ Not required for v1:
 
 ## 9. Background Task Decision
 
-Background work is not part of the minimum starter slice.
+Background work is not part of the minimum starter slice but an optional post-v1 extension is now included.
 
 Decision for starter v1:
 
-- do not include a worker framework, queue, or `django.tasks` example in the initial implementation
-- document a future extension path for one local background-task flow only after the minimal starter is stable
+- do not include a worker framework, queue, or `django.tasks` example in the core v1 implementation
+- the repo now includes an optional `tasks_demo` app that demonstrates background task visualization using stub threading and animated pulse-ring indicators, fulfilling the extension path noted below
+
+Extension (post-v1):
+
+- `src/tasks_demo/` provides a separate page with a "Run Task" button, animated status indicators, and polling-based live updates
+- the backend uses a simple `threading.Thread` worker with simulated delays; real `django.tasks` integration is deferred to a follow-up
 
 Rationale:
 
 - background task infrastructure is useful in production, but it is not required to prove the desktop Django architecture
-- removing it from v1 keeps the starter smaller, easier to explain, and less likely to drift toward `djdesk`
+- the demo keeps the teaching value by showing async UI patterns without adding queue infrastructure
+- removing the real worker from v1 keeps the starter smaller, easier to explain, and less likely to drift toward `djdesk`
 
 ## 10. Expected Architecture
 

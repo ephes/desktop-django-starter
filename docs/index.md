@@ -2,7 +2,7 @@
 
 Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, and a sign/notarization-aware GitHub packaging slice in place.
 
-The current implementation includes a local Django app, an Electron shell that supervises it over localhost, a `/health/` readiness check, a tiny CRUD demo, a packaged-like staging flow with a bundled Python runtime plus collected static assets, and an on-demand GitHub Actions workflow that builds desktop artifacts for macOS, Windows, and Linux. macOS signing/notarization scaffolding and optional Windows signing inputs are now documented and wired into packaging; auto-update is still deferred.
+The current implementation includes a local Django app, an Electron shell that supervises it over localhost, a `/health/` readiness check, a tiny CRUD demo, a background task visualization demo with animated indicators and live polling, a packaged-like staging flow with a bundled Python runtime plus collected static assets, and an on-demand GitHub Actions workflow that builds desktop artifacts for macOS, Windows, and Linux. macOS signing/notarization scaffolding and optional Windows signing inputs are now documented and wired into packaging; auto-update is still deferred.
 
 ```{toctree}
 :maxdepth: 2

@@ -302,6 +302,216 @@ textarea {
     line-height: 1.5;
 }
 
+/* ── Masthead nav ───────────────────────────────────── */
+.masthead-right {
+    display: flex;
+    align-items: center;
+    gap: 1.25rem;
+}
+
+.masthead-nav {
+    display: flex;
+    gap: 1rem;
+}
+
+.masthead-nav a {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    text-decoration: none;
+    color: rgba(255, 255, 255, 0.45);
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.3rem;
+    transition: color 0.2s, background 0.2s;
+}
+
+.masthead-nav a:hover {
+    color: var(--white);
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.masthead-nav a.active {
+    color: var(--teal-bright);
+}
+
+/* ── Task demo ──────────────────────────────────────── */
+.run-bar {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding-bottom: 1.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.run-bar .hint {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.task-row {
+    display: flex;
+    align-items: center;
+    gap: 0.85rem;
+    padding: 0.75rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.task-row:last-child {
+    border-bottom: none;
+}
+
+.task-name {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.task-badge {
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.task-badge[data-status="RUNNING"] {
+    color: var(--teal-deep);
+    background: rgba(16, 141, 130, 0.1);
+}
+
+.task-badge[data-status="PENDING"] {
+    color: #E6A817;
+    background: rgba(230, 168, 23, 0.1);
+}
+
+.task-badge[data-status="DONE"] {
+    color: var(--text-muted);
+    background: rgba(0, 0, 0, 0.04);
+}
+
+.task-badge[data-status="FAILED"] {
+    color: #C0392B;
+    background: rgba(192, 57, 43, 0.08);
+}
+
+.task-meta {
+    margin-left: auto;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    white-space: nowrap;
+}
+
+.task-result {
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    padding: 0 0 0.5rem 2.6rem;
+}
+
+.task-result-value {
+    font-weight: 600;
+    color: var(--teal-deep);
+}
+
+.task-result-error {
+    font-weight: 600;
+    color: #C0392B;
+}
+
+/* Pulse ring indicator */
+.pulse-indicator {
+    width: 28px;
+    height: 28px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.pulse-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.pulse-ring {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    opacity: 0;
+}
+
+/* Running state */
+.indicator-running .pulse-dot {
+    background: var(--teal-bright);
+}
+
+.indicator-running .pulse-ring {
+    border: 2px solid var(--teal-glow);
+    animation: pulseRing 1.8s ease-out infinite;
+}
+
+.indicator-running .pulse-ring:nth-child(2) {
+    animation-delay: 0.6s;
+}
+
+/* Pending state */
+.indicator-pending .pulse-dot {
+    background: transparent;
+    border: 2px solid #E6A817;
+    width: 8px;
+    height: 8px;
+}
+
+/* Done state */
+.indicator-done .pulse-dot {
+    background: var(--teal-deep);
+}
+
+.indicator-done .pulse-check {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--white);
+    font-size: 0.55rem;
+    font-weight: bold;
+}
+
+/* Failed state */
+.indicator-failed .pulse-dot {
+    background: #C0392B;
+}
+
+.indicator-failed .pulse-x {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--white);
+    font-size: 0.6rem;
+    font-weight: bold;
+}
+
+@keyframes pulseRing {
+    0% {
+        transform: translate(-50%, -50%) scale(0.4);
+        opacity: 0.8;
+    }
+    100% {
+        transform: translate(-50%, -50%) scale(1.2);
+        opacity: 0;
+    }
+}
+
 /* ── Utility ─────────────────────────────────────────── */
 ::selection {
     background: var(--teal-bright);

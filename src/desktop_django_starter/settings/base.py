@@ -21,6 +21,7 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "desktop_django_starter",
     "example_app",
+    "tasks_demo",
 ]
 
 MIDDLEWARE = [

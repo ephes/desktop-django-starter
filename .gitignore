@@ -13,3 +13,5 @@ electron/.stage/
 *.p8
 *.p12
 *.pfx
+.superpowers/
+docs/superpowers/

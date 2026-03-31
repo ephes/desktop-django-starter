@@ -1,0 +1,212 @@
+{% extends "base.html" %}
+
+{% block title %}Background Tasks | Desktop Django Starter{% endblock %}
+{% block heading %}Background Tasks{% endblock %}
+
+{% block content %}
+<div class="run-bar">
+    <button type="button" id="run-task-btn">Run Task</button>
+    <span class="hint">Starts a simulated background task</span>
+</div>
+
+<div id="task-list">
+    {% if tasks %}
+        {% for task in tasks %}
+        <div class="task-row" data-task-id="{{ task.pk }}" data-status="{{ task.status }}">
+            <div class="pulse-indicator indicator-{{ task.status|lower }}">
+                {% if task.status == "RUNNING" %}
+                    <div class="pulse-ring"></div>
+                    <div class="pulse-ring"></div>
+                {% endif %}
+                <div class="pulse-dot"></div>
+                {% if task.status == "DONE" %}
+                    <span class="pulse-check">&#10003;</span>
+                {% elif task.status == "FAILED" %}
+                    <span class="pulse-x">&times;</span>
+                {% endif %}
+            </div>
+            <div class="task-name">{{ task.label }}</div>
+            <div class="task-badge" data-status="{{ task.status }}">{{ task.get_status_display }}</div>
+            <div class="task-meta" data-created="{{ task.created_at|date:'c' }}"
+                 {% if task.completed_at %}data-completed="{{ task.completed_at|date:'c' }}"{% endif %}
+                 {% if task.duration %}data-duration="{{ task.duration }}"{% endif %}>
+                {% if task.status == "PENDING" %}queued{% elif task.status == "RUNNING" %}&hellip;{% elif task.duration %}{{ task.duration }}s{% endif %}
+            </div>
+        </div>
+        {% if task.status == "DONE" and task.result %}
+            <div class="task-result">Result: <span class="task-result-value">{{ task.result }}</span></div>
+        {% elif task.status == "FAILED" and task.result %}
+            <div class="task-result">Error: <span class="task-result-error">{{ task.result }}</span></div>
+        {% endif %}
+        {% endfor %}
+    {% else %}
+        <p class="empty" id="empty-state">No tasks yet. Hit Run Task to start one.</p>
+    {% endif %}
+</div>
+
+<script>
+(function() {
+    const STATUS_URL = "{% url 'tasks_demo:task-status' %}";
+    const RUN_URL = "{% url 'tasks_demo:task-run' %}";
+    const POLL_INTERVAL = 2000;
+
+    let pollTimer = null;
+
+    function getCookie(name) {
+        const match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
+        return match ? decodeURIComponent(match[2]) : null;
+    }
+
+    function relativeTime(isoString) {
+        if (!isoString) return "";
+        const seconds = Math.round((Date.now() - new Date(isoString).getTime()) / 1000);
+        if (seconds < 60) return seconds + "s ago";
+        const minutes = Math.round(seconds / 60);
+        if (minutes < 60) return minutes + "m ago";
+        return Math.round(minutes / 60) + "h ago";
+    }
+
+    function elapsedSince(isoString) {
+        if (!isoString) return "";
+        const seconds = Math.round((Date.now() - new Date(isoString).getTime()) / 1000);
+        return seconds + "s";
+    }
+
+    function indicatorHTML(status) {
+        let inner = "";
+        if (status === "RUNNING") {
+            inner = '<div class="pulse-ring"></div><div class="pulse-ring"></div>';
+        }
+        inner += '<div class="pulse-dot"></div>';
+        if (status === "DONE") {
+            inner += '<span class="pulse-check">&#10003;</span>';
+        } else if (status === "FAILED") {
+            inner += '<span class="pulse-x">&times;</span>';
+        }
+        return '<div class="pulse-indicator indicator-' + status.toLowerCase() + '">' + inner + "</div>";
+    }
+
+    function metaText(task) {
+        if (task.status === "PENDING") return "queued";
+        if (task.status === "RUNNING") return elapsedSince(task.created_at);
+        let text = "";
+        if (task.duration != null) text += task.duration + "s";
+        if (task.completed_at) {
+            if (text) text += " \u00b7 ";
+            text += relativeTime(task.completed_at);
+        }
+        return text;
+    }
+
+    function resultHTML(task) {
+        if (task.status === "DONE" && task.result) {
+            return '<div class="task-result">Result: <span class="task-result-value">' + escapeHTML(task.result) + "</span></div>";
+        }
+        if (task.status === "FAILED" && task.result) {
+            return '<div class="task-result">Error: <span class="task-result-error">' + escapeHTML(task.result) + "</span></div>";
+        }
+        return "";
+    }
+
+    function escapeHTML(str) {
+        const div = document.createElement("div");
+        div.textContent = str;
+        return div.innerHTML;
+    }
+
+    function renderTasks(tasks) {
+        const container = document.getElementById("task-list");
+        if (tasks.length === 0) {
+            container.innerHTML = '<p class="empty" id="empty-state">No tasks yet. Hit Run Task to start one.</p>';
+            return;
+        }
+        let html = "";
+        for (const task of tasks) {
+            html += '<div class="task-row" data-task-id="' + task.id + '" data-status="' + task.status + '">';
+            html += indicatorHTML(task.status);
+            html += '<div class="task-name">' + escapeHTML(task.label) + "</div>";
+            html += '<div class="task-badge" data-status="' + task.status + '">' + task.status.charAt(0) + task.status.slice(1).toLowerCase() + "</div>";
+            html += '<div class="task-meta">' + metaText(task) + "</div>";
+            html += "</div>";
+            html += resultHTML(task);
+        }
+        container.innerHTML = html;
+    }
+
+    function hasActiveTask(tasks) {
+        return tasks.some(function(t) { return t.status === "PENDING" || t.status === "RUNNING"; });
+    }
+
+    function poll() {
+        fetch(STATUS_URL)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                renderTasks(data.tasks);
+                if (hasActiveTask(data.tasks)) {
+                    schedulePoll();
+                } else {
+                    pollTimer = null;
+                }
+            })
+            .catch(function(err) {
+                console.error("Poll error:", err);
+                schedulePoll();
+            });
+    }
+
+    function schedulePoll() {
+        if (pollTimer) return;
+        pollTimer = setTimeout(function() {
+            pollTimer = null;
+            poll();
+        }, POLL_INTERVAL);
+    }
+
+    function startPolling() {
+        if (!pollTimer) poll();
+    }
+
+    document.getElementById("run-task-btn").addEventListener("click", function() {
+        const csrfToken = getCookie("csrftoken");
+        fetch(RUN_URL, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+            },
+        })
+        .then(function(r) { return r.json(); })
+        .then(function() {
+            startPolling();
+        })
+        .catch(function(err) {
+            console.error("Run task error:", err);
+        });
+    });
+
+    // On page load, update server-rendered meta for terminal tasks
+    // (Django templates can't compute relative time client-side)
+    document.querySelectorAll(".task-row").forEach(function(row) {
+        var status = row.getAttribute("data-status");
+        if (status === "DONE" || status === "FAILED") {
+            var meta = row.querySelector(".task-meta");
+            if (!meta) return;
+            var duration = meta.getAttribute("data-duration");
+            var completed = meta.getAttribute("data-completed");
+            var text = "";
+            if (duration) text += duration + "s";
+            if (completed) {
+                if (text) text += " \u00b7 ";
+                text += relativeTime(completed);
+            }
+            if (text) meta.textContent = text;
+        }
+    });
+
+    // Start polling on load if there are active tasks
+    var initialRows = document.querySelectorAll('.task-row[data-status="PENDING"], .task-row[data-status="RUNNING"]');
+    if (initialRows.length > 0) {
+        startPolling();
+    }
+})();
+</script>
+{% endblock %}

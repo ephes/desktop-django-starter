@@ -159,7 +159,7 @@ Shutdown handling must be treated as a cross-platform lifecycle concern, not as 
 
 These are expected later if needed, but not part of the first implementation:
 
-- background-task runner integration
+- `django.tasks` integration for real background work (the `tasks_demo` app currently uses stub threading)
 - connected auto-update automation
 - multiple windows
 - richer native integrations

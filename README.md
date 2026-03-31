@@ -19,6 +19,7 @@ Runnable starter slices:
 
 - Django 6.0.3 project under `src/desktop_django_starter/`
 - tiny server-rendered CRUD demo app under `src/example_app/`
+- background task visualization demo under `src/tasks_demo/` with animated pulse-ring indicators and polling-based live updates
 - Electron 40 shell under `electron/`
 - random-port localhost startup with `/health/` readiness polling
 - minimal preload bridge for opening the app-data folder

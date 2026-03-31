@@ -30,4 +30,6 @@ Important constraints:
 - [.github/workflows/desktop-packages.yml](.github/workflows/desktop-packages.yml): On-demand GitHub Actions packaging workflow for macOS, Windows, and Linux artifacts, checksum manifests, and optional signing inputs.
 - [tests/test_docs.py](tests/test_docs.py): Minimal smoke tests for the documentation scaffold.
 - [tests/test_example_app.py](tests/test_example_app.py): Backend behavior checks for the demo CRUD slice.
+- [tests/test_tasks_demo.py](tests/test_tasks_demo.py): Backend tests for the background task visualization demo.
 - [tests/test_health.py](tests/test_health.py): Readiness endpoint coverage.
+- [src/tasks_demo/](src/tasks_demo/): Background task visualization demo with animated pulse-ring indicators and polling-based live updates (optional post-v1 extension).

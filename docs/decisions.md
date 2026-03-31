@@ -41,3 +41,7 @@ The starter does not need a full auto-updater in v1, but it does need a document
 ## D-010: GitHub Actions is the baseline CI
 
 Cross-platform validation should run on GitHub-hosted Linux, macOS, and Windows runners from the start.
+
+## D-011: Tasks demo uses stub threading, not django.tasks
+
+The `tasks_demo` app is an optional post-v1 extension that demonstrates background task visualization. It uses `threading.Thread` with simulated delays rather than `django.tasks` or any queue framework. Real async worker integration is deferred to a follow-up slice. The frontend (pulse-ring animation, polling, task state display) is the point of this demo.

@@ -17,7 +17,11 @@
                 <p class="brand">Desktop Django Starter</p>
                 <h1>{% block heading %}Items{% endblock %}</h1>
             </div>
-            <div class="actions">
+            <div class="masthead-right">
+                <nav class="masthead-nav">
+                    <a href="{% url 'example_app:item-list' %}" class="{% if request.resolver_match.app_name == 'example_app' %}active{% endif %}">Items</a>
+                    <a href="{% url 'tasks_demo:task-list' %}" class="{% if request.resolver_match.app_name == 'tasks_demo' %}active{% endif %}">Tasks</a>
+                </nav>
                 <button class="secondary" type="button" data-open-app-data hidden>Open App Data Folder</button>
             </div>
         </div>
