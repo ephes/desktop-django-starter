@@ -19,12 +19,12 @@ Runnable starter slices:
 
 - Django 6.0.3 project under `src/desktop_django_starter/`
 - tiny server-rendered CRUD demo app under `src/example_app/`
-- background task visualization demo under `src/tasks_demo/` with animated pulse-ring indicators and polling-based live updates
+- background task visualization demo under `src/tasks_demo/` with animated pulse-ring indicators, polling-based live updates, and real `django_tasks` execution backed by SQLite
 - Electron 40 shell under `electron/`
 - random-port localhost startup with `/health/` readiness polling
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `electron/.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
-- packaged-like Electron launcher that exercises the staged bundled-runtime contract locally
+- packaged-like Electron launcher that exercises the staged bundled-runtime contract locally, including the supervised task worker
 - on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
 
 Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
@@ -50,8 +50,9 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 - `just install`: install the local environment with `uv`
 - `just migrate`: apply the local SQLite migrations
 - `just backend-dev`: run the Django app directly on `127.0.0.1:8000`
+- `just task-worker`: run the single background task worker for `/tasks/` without Electron
 - `just electron-install`: install Electron dependencies
-- `just electron-start`: start the Electron shell, which launches Django on a random localhost port
+- `just electron-start`: start the Electron shell, which launches Django plus one background task worker on a random localhost port
 - `just packaged-stage`: build the staged packaged-backend bundle under `electron/.stage/backend`, including the bundled Python runtime
 - `just packaged-start`: rebuild the staged bundle and launch Electron in packaged-like mode against the staged bundled runtime
 - `just packaged-smoke`: rebuild the staged bundle and run a packaged-like Electron smoke launch that auto-exits after load
@@ -76,6 +77,7 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 3. `just dev`
 
 For backend-only work, use `just backend-dev`.
+When you need the real `/tasks/` demo outside Electron, run `just task-worker` in a second terminal.
 
 For the packaged-mode staging slice, use `just packaged-start`.
 The `electron/.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
@@ -128,6 +130,11 @@ The staged packaged-backend layout is now explicit enough to mirror a later pack
 - `electron/.stage/backend/runtime-manifest.json`: runtime metadata that records the staged interpreter and launcher contract
 
 Electron packaged mode reads `runtime-manifest.json` to locate the bundled interpreter, then invokes `manage.py` from the backend root. The current staged manifest records the interpreter as `python/bin/python3.12` on POSIX and is designed to allow `python.exe` on Windows.
+
+Electron now supervises two backend commands from that staged bundle:
+
+- `manage.py runserver ...` for the local web app
+- `manage.py db_worker --queue-name default ...` for the `/tasks/` demo worker
 
 Dependencies are installed into the staged runtime under `backend/python/lib/python3.12/site-packages` on the current macOS/Linux path. On Windows, the same contract is expected to resolve inside the staged `python/` tree rather than the repo environment.
 

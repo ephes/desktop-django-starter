@@ -20,6 +20,8 @@ Important constraints:
 - [Decisions](decisions.html): Scope and tradeoff decisions captured locally for this repo.
 - [Agent use](agent-use.html): Guidance for coding agents consuming this repo.
 
+The optional `/tasks/` demo now uses the `django_tasks` backport plus `django_tasks_db` with a single supervised worker process instead of an in-process thread stub.
+
 ## Optional
 
 - [Project home](index.html): Top-level docs landing page.

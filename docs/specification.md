@@ -116,18 +116,19 @@ Background work is not part of the minimum starter slice but an optional post-v1
 Decision for starter v1:
 
 - do not include a worker framework, queue, or `django.tasks` example in the core v1 implementation
-- the repo now includes an optional `tasks_demo` app that demonstrates background task visualization using stub threading and animated pulse-ring indicators, fulfilling the extension path noted below
+- the repo now includes an optional `tasks_demo` app that demonstrates background task visualization using `django_tasks`, `django_tasks_db`, and animated pulse-ring indicators
 
 Extension (post-v1):
 
 - `src/tasks_demo/` provides a separate page with a "Run Task" button, animated status indicators, and polling-based live updates
-- the backend uses a simple `threading.Thread` worker with simulated delays; real `django.tasks` integration is deferred to a follow-up
+- the backend enqueues real tasks through the `django_tasks` backport and executes them in a single database-backed `django_tasks_db` worker process supervised by Electron
+- the demo keeps its intentionally fake workload semantics: random duration, random success/failure, and starter-sized status/result reporting
 
 Rationale:
 
 - background task infrastructure is useful in production, but it is not required to prove the desktop Django architecture
-- the demo keeps the teaching value by showing async UI patterns without adding queue infrastructure
-- removing the real worker from v1 keeps the starter smaller, easier to explain, and less likely to drift toward `djdesk`
+- the demo keeps the teaching value by showing async UI patterns and a real worker process without expanding into a production-grade orchestration subsystem
+- keeping the real worker in the optional demo, rather than the core starter flow, keeps the repo smaller, easier to explain, and less likely to drift toward `djdesk`
 
 ## 10. Expected Architecture
 

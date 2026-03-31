@@ -13,6 +13,8 @@ authors = [
 ]
 dependencies = [
     "Django==6.0.3",
+    "django-tasks==0.12.0",
+    "django-tasks-db==0.12.0",
 ]
 
 [project.scripts]
@@ -35,7 +37,7 @@ dev = [
 ]
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/desktop_django_starter", "src/example_app"]
+packages = ["src/desktop_django_starter", "src/example_app", "src/tasks_demo"]
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "desktop_django_starter.settings.local"

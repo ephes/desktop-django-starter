@@ -19,6 +19,8 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.sessions",
     "django.contrib.staticfiles",
+    "django_tasks",
+    "django_tasks_db",
     "desktop_django_starter",
     "example_app",
     "tasks_demo",
@@ -56,6 +58,12 @@ DATABASES = {
     "default": {
         "ENGINE": "django.db.backends.sqlite3",
         "NAME": BASE_DIR / "db.sqlite3",
+    }
+}
+
+TASKS = {
+    "default": {
+        "BACKEND": "django_tasks_db.DatabaseBackend",
     }
 }
 

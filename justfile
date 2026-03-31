@@ -30,6 +30,10 @@ backend-dev:
     just migrate
     uv run python manage.py runserver 127.0.0.1:8000
 
+task-worker:
+    just migrate
+    uv run python manage.py db_worker --queue-name default --worker-id desktop-django-starter
+
 electron-install:
     npm --prefix electron install
 

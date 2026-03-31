@@ -9,6 +9,7 @@ class SimulatedTask(models.Model):
         FAILED = "FAILED", "Failed"
 
     label = models.CharField(max_length=200)
+    backend_task_id = models.CharField(max_length=64, blank=True, default="", db_index=True)
     status = models.CharField(
         max_length=10,
         choices=Status.choices,

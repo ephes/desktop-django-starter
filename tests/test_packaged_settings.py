@@ -34,5 +34,8 @@ def test_packaged_settings_use_app_data_dir(monkeypatch, tmp_path: Path) -> None
 
     assert settings.DATABASES["default"]["NAME"] == tmp_path / "app.sqlite3"
     assert settings.STATIC_ROOT == bundle_dir / "staticfiles"
+    assert "django_tasks" in settings.INSTALLED_APPS
+    assert "django_tasks_db" in settings.INSTALLED_APPS
+    assert settings.TASKS["default"]["BACKEND"] == "django_tasks_db.DatabaseBackend"
 
     unload_packaged_settings()

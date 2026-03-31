@@ -37,9 +37,9 @@ class TasksDemoConfig(AppConfig):
                     ]
                 ).update(
                     status=SimulatedTask.Status.FAILED,
-                    result="Abandoned \u2014 app restarted",
+                    result="Abandoned - app restarted",
                     completed_at=timezone.now(),
                 )
         except (OperationalError, ProgrammingError):
-            # Table does not exist yet — migrations haven't run.
+            # Table does not exist yet - migrations haven't run.
             pass

@@ -42,6 +42,6 @@ The starter does not need a full auto-updater in v1, but it does need a document
 
 Cross-platform validation should run on GitHub-hosted Linux, macOS, and Windows runners from the start.
 
-## D-011: Tasks demo uses stub threading, not django.tasks
+## D-011: Tasks demo uses the original-author task backport with one database-backed worker
 
-The `tasks_demo` app is an optional post-v1 extension that demonstrates background task visualization. It uses `threading.Thread` with simulated delays rather than `django.tasks` or any queue framework. Real async worker integration is deferred to a follow-up slice. The frontend (pulse-ring animation, polling, task state display) is the point of this demo.
+The `tasks_demo` app remains an optional post-v1 extension, but it now uses the `django_tasks` backport together with `django_tasks_db` and one supervised `db_worker` process. The UI contract stays starter-sized: the app keeps its own demo row, the renderer continues to poll, and Electron owns the worker lifecycle. Product-sized worker registries, cancellation flows, and broader orchestration remain out of scope.

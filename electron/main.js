@@ -20,6 +20,7 @@ const PACKAGED_RUNTIME_SECRET_KEY = "desktop-django-starter-packaged-runtime-sec
 const repoRoot = path.resolve(__dirname, "..");
 
 let djangoProcess = null;
+let taskWorkerProcess = null;
 let quitting = false;
 let currentAppUrl = null;
 
@@ -177,6 +178,7 @@ function validatePackagedBackendRoot(backendRoot) {
     path.join(backendRoot, "manage.py"),
     path.join(backendRoot, "src", "desktop_django_starter"),
     path.join(backendRoot, "src", "example_app"),
+    path.join(backendRoot, "src", "tasks_demo"),
     path.join(backendRoot, "staticfiles"),
     path.join(backendRoot, "python"),
     getRuntimeManifestPath(backendRoot)
@@ -229,51 +231,102 @@ function runManageCommand(args, port, runtimeMode, backendRoot) {
 }
 
 function startDjangoServer(port, runtimeMode, backendRoot) {
-  const invocation = buildManageInvocation(
+  return startManagedProcess({
+    processName: "django",
+    port,
     runtimeMode,
     backendRoot,
-    ["runserver", `${HOST}:${port}`, "--noreload"]
-  );
+    manageArgs: ["runserver", `${HOST}:${port}`, "--noreload"],
+    exitTitle: "Django exited",
+    exitMessage: (code, signal) => (
+      "The Django process stopped before the desktop app finished.\n\n"
+      + `Code: ${code}\nSignal: ${signal}`
+    )
+  });
+}
+
+function startTaskWorker(port, runtimeMode, backendRoot) {
+  return startManagedProcess({
+    processName: "worker",
+    port,
+    runtimeMode,
+    backendRoot,
+    manageArgs: ["db_worker", "--queue-name", "default", "--worker-id", "desktop-django-starter"],
+    exitTitle: "Task worker exited",
+    exitMessage: (code, signal) => (
+      "The background task worker stopped before the desktop app finished.\n\n"
+      + `Code: ${code}\nSignal: ${signal}`
+    )
+  });
+}
+
+function startManagedProcess({
+  processName,
+  port,
+  runtimeMode,
+  backendRoot,
+  manageArgs,
+  exitTitle,
+  exitMessage
+}) {
+  const invocation = buildManageInvocation(runtimeMode, backendRoot, manageArgs);
 
   return new Promise((resolve, reject) => {
     let spawnFailed = false;
 
-    djangoProcess = spawn(invocation.command, invocation.args, {
+    const child = spawn(invocation.command, invocation.args, {
       cwd: invocation.cwd,
       env: getDjangoEnvironment(port, runtimeMode, backendRoot),
       stdio: ["ignore", "pipe", "pipe"]
     });
 
-    djangoProcess.stdout.on("data", (chunk) => {
-      process.stdout.write(`[django] ${chunk}`);
+    if (processName === "django") {
+      djangoProcess = child;
+    } else {
+      taskWorkerProcess = child;
+    }
+
+    child.stdout.on("data", (chunk) => {
+      process.stdout.write(`[${processName}] ${chunk}`);
     });
 
-    djangoProcess.stderr.on("data", (chunk) => {
-      process.stderr.write(`[django] ${chunk}`);
+    child.stderr.on("data", (chunk) => {
+      process.stderr.write(`[${processName}] ${chunk}`);
     });
 
-    djangoProcess.once("error", (error) => {
+    child.once("error", (error) => {
       spawnFailed = true;
-      djangoProcess = null;
-      reject(new Error(`Failed to start Django: ${error.message}`));
+      clearManagedProcess(processName, child);
+      reject(new Error(`Failed to start ${processName}: ${error.message}`));
     });
 
-    djangoProcess.once("spawn", () => {
+    child.once("spawn", () => {
       resolve();
     });
 
-    djangoProcess.once("exit", (code, signal) => {
+    child.once("exit", (code, signal) => {
+      clearManagedProcess(processName, child);
       if (quitting || spawnFailed) {
         return;
       }
 
       dialog.showErrorBox(
-        "Django exited",
-        `The Django process stopped before the desktop app finished.\n\nCode: ${code}\nSignal: ${signal}`
+        exitTitle,
+        exitMessage(code, signal)
       );
       app.quit();
     });
   });
+}
+
+function clearManagedProcess(processName, child) {
+  if (processName === "django" && djangoProcess === child) {
+    djangoProcess = null;
+  }
+
+  if (processName === "worker" && taskWorkerProcess === child) {
+    taskWorkerProcess = null;
+  }
 }
 
 function createWindow(url) {
@@ -304,12 +357,21 @@ function createWindow(url) {
 }
 
 async function stopDjango() {
-  if (!djangoProcess || djangoProcess.killed) {
-    return;
-  }
-
   const processToStop = djangoProcess;
   djangoProcess = null;
+  await stopManagedProcess(processToStop);
+}
+
+async function stopTaskWorker() {
+  const processToStop = taskWorkerProcess;
+  taskWorkerProcess = null;
+  await stopManagedProcess(processToStop);
+}
+
+async function stopManagedProcess(processToStop) {
+  if (!processToStop || processToStop.killed) {
+    return;
+  }
 
   if (process.platform === "win32") {
     await new Promise((resolve) => {
@@ -356,6 +418,9 @@ async function bootstrap() {
   await runManageCommand(["migrate", "--noinput"], port, runtimeMode, backendRoot);
   await startDjangoServer(port, runtimeMode, backendRoot);
   await waitForDjango(baseUrl);
+  // Start the worker only after Django is healthy so startup failures are
+  // surfaced against a known-good migrated app database.
+  await startTaskWorker(port, runtimeMode, backendRoot);
   createWindow(baseUrl);
 }
 
@@ -406,6 +471,7 @@ app.whenReady()
 app.on("will-quit", async (event) => {
   event.preventDefault();
   try {
+    await stopTaskWorker();
     await stopDjango();
   } catch (_error) {
     // Continue quitting even if child-process cleanup fails.

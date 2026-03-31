@@ -8,12 +8,12 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from .models import SimulatedTask
-from .worker import TASK_LABELS, _launch_task
+from .tasks import TASK_LABELS, reconcile_task_with_backend, run_simulated_task
 
 
 @ensure_csrf_cookie
 def task_list(request):
-    tasks = SimulatedTask.objects.all()
+    tasks = [reconcile_task_with_backend(task) for task in SimulatedTask.objects.all()]
     return render(request, "tasks_demo/task_list.html", {"tasks": tasks})
 
 
@@ -21,7 +21,9 @@ def task_list(request):
 def task_create(request):
     label = random.choice(TASK_LABELS)
     task = SimulatedTask.objects.create(label=label)
-    _launch_task(task.pk)
+    backend_task = run_simulated_task.enqueue(task.pk)
+    task.backend_task_id = backend_task.id
+    task.save(update_fields=["backend_task_id"])
     return JsonResponse(
         {"id": task.pk, "label": task.label, "status": task.status},
         status=201,
@@ -30,7 +32,7 @@ def task_create(request):
 
 @require_GET
 def task_status(request):
-    tasks = SimulatedTask.objects.all()
+    tasks = [reconcile_task_with_backend(task) for task in SimulatedTask.objects.all()]
     data = {
         "tasks": [
             {

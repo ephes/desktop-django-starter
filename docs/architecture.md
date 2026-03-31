@@ -11,23 +11,26 @@ flowchart TD
     A[Electron main process]
     B[Launcher script]
     C[Django app on 127.0.0.1:<random-port>]
-    D[SQLite in writable app-data path]
-    E[Health endpoint returns 200]
-    F[Electron BrowserWindow loads local URL]
+    D[Task runner process]
+    E[SQLite in writable app-data path]
+    F[Health endpoint returns 200]
+    G[Electron BrowserWindow loads local URL]
 
     A -->|starts bundled Python runtime| B
     B -->|starts Django| C
-    C --> D
+    B -->|starts db_worker| D
     C --> E
-    E -->|readiness confirmed| F
+    D --> E
+    C --> F
+    F -->|readiness confirmed| G
 ```
 
 Key expectations:
 
 - Electron owns process startup and shutdown
-- Django is treated as a local backend, not as a remote service
+- Django and the task worker are treated as local backend processes, not as remote services
 - the renderer loads normal Django pages over localhost
-- SQLite lives in a writable per-user app-data directory
+- SQLite lives in a writable per-user app-data directory and stores both app data and task queue rows
 
 ## Draft Repo Shape
 
@@ -65,11 +68,13 @@ Notes:
 The eventual implementation should follow this sequence:
 
 1. Electron chooses an open localhost port.
-2. Electron starts Django using either the bundled runtime or a local development interpreter.
-3. Django exposes a dedicated health endpoint.
-4. Electron polls that endpoint until it succeeds or times out.
-5. Electron loads the app window only after Django is ready.
-6. Closing the desktop app shuts down the Django child process cleanly.
+2. Electron runs migrations using either the bundled runtime or a local development interpreter.
+3. Electron starts Django.
+4. Django exposes a dedicated health endpoint.
+5. Electron polls that endpoint until it succeeds or times out.
+6. Electron starts the single `db_worker` process only after Django is healthy.
+7. Electron loads the app window only after both backend processes have started cleanly.
+8. Closing the desktop app shuts down both child processes cleanly.
 
 Single-instance expectation:
 
@@ -123,8 +128,9 @@ Current staged backend contract:
 Current launcher contract:
 
 - Electron packaged mode resolves the interpreter from `backend/runtime-manifest.json`
-- Electron then runs `manage.py` from `backend/`
+- Electron then runs `manage.py` from `backend/` for both `runserver` and `db_worker`
 - packaged settings still rely on runtime environment variables for writable app data, bundle dir, localhost host/port, secret key, and unbuffered Python output
+- the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
 
 ## Release and Update Model
 
@@ -150,7 +156,7 @@ The desktop integration should stay narrow:
 
 Shutdown handling must be treated as a cross-platform lifecycle concern, not as a best-effort cleanup step.
 
-- macOS and Linux can usually terminate the child process with normal process signals
+- macOS and Linux can usually terminate the Django and task worker child processes with normal process signals
 - Windows needs explicit handling because process-tree shutdown is less predictable
 - the implementation should document whether shutdown uses child-process tree termination, a dedicated local shutdown path, or another narrow mechanism
 - because Windows is a required proof point, reliable shutdown is part of the starter contract
@@ -159,7 +165,7 @@ Shutdown handling must be treated as a cross-platform lifecycle concern, not as 
 
 These are expected later if needed, but not part of the first implementation:
 
-- `django.tasks` integration for real background work (the `tasks_demo` app currently uses stub threading)
+- production-grade task orchestration beyond the single supervised `db_worker` process used by `tasks_demo`
 - connected auto-update automation
 - multiple windows
 - richer native integrations
