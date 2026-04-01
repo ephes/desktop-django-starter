@@ -20,8 +20,10 @@ use url::Url;
 const HOST: &str = "127.0.0.1";
 const STARTUP_TIMEOUT_MS: u64 = 15_000;
 const POLL_INTERVAL_MS: u64 = 250;
+const MINIMUM_SPLASH_DURATION_MS: u64 = 2_400;
 const PACKAGED_RUNTIME_SECRET_KEY: &str = "desktop-django-starter-packaged-runtime-secret";
 const RUNTIME_MANIFEST_FILENAME: &str = "runtime-manifest.json";
+const SPLASH_WINDOW_LABEL: &str = "splash";
 
 type ManagedChild = Arc<Mutex<Option<Child>>>;
 
@@ -131,6 +133,7 @@ fn show_runtime_error_and_exit(
     }
 
     mark_quitting(&app);
+    close_splash_window(&app);
 
     std::thread::spawn(move || {
         app.dialog()
@@ -452,22 +455,57 @@ window.desktop.openAppDataDirectory = () => window.__TAURI__.core.invoke("open_a
 "#
 }
 
+fn create_splash_window(app: &AppHandle) -> Result<WebviewWindow, String> {
+    if let Some(window) = app.get_webview_window(SPLASH_WINDOW_LABEL) {
+        return Ok(window);
+    }
+
+    WebviewWindowBuilder::new(app, SPLASH_WINDOW_LABEL, WebviewUrl::App("splash.html".into()))
+        .title("Flying Stable")
+        .inner_size(480.0, 560.0)
+        .resizable(false)
+        .maximizable(false)
+        .minimizable(false)
+        .closable(false)
+        .decorations(false)
+        .center()
+        .build()
+        .map_err(|error| error.to_string())
+}
+
+fn close_splash_window(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window(SPLASH_WINDOW_LABEL) {
+        let _ = window.close();
+    }
+}
+
 fn create_main_window(app: &AppHandle, url: &str) -> Result<WebviewWindow, String> {
     let external_url = Url::parse(url).map_err(|error| error.to_string())?;
     let smoke_test = is_smoke_test();
+    let first_page_load = Arc::new(AtomicBool::new(false));
+    let first_page_load_for_handler = first_page_load.clone();
 
     WebviewWindowBuilder::new(app, "main", WebviewUrl::External(external_url))
         .title("Desktop Django Starter")
         .inner_size(1200.0, 840.0)
+        .visible(false)
         .initialization_script(inject_desktop_bridge())
         .on_page_load(move |window, payload| {
-            if smoke_test && matches!(payload.event(), PageLoadEvent::Finished) {
+            if matches!(payload.event(), PageLoadEvent::Finished)
+                && !first_page_load_for_handler.swap(true, Ordering::SeqCst)
+            {
                 let handle = window.app_handle().clone();
-                thread::spawn(move || {
-                    thread::sleep(Duration::from_millis(750));
-                    mark_quitting(&handle);
-                    handle.exit(0);
-                });
+                close_splash_window(&handle);
+                let _ = window.show();
+                let _ = window.set_focus();
+
+                if smoke_test {
+                    thread::spawn(move || {
+                        thread::sleep(Duration::from_millis(750));
+                        mark_quitting(&handle);
+                        handle.exit(0);
+                    });
+                }
             }
         })
         .build()
@@ -499,7 +537,15 @@ fn open_path(path: &Path) -> Result<(), String> {
     }
 }
 
-fn bootstrap(app: &AppHandle) -> Result<(), String> {
+fn wait_for_minimum_splash_duration(shown_at: Instant) {
+    let elapsed = shown_at.elapsed();
+    let minimum = Duration::from_millis(MINIMUM_SPLASH_DURATION_MS);
+    if elapsed < minimum {
+        thread::sleep(minimum - elapsed);
+    }
+}
+
+fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
     let runtime_mode = get_runtime_mode();
     let backend_root = get_backend_root(app, runtime_mode)?;
     let port = get_open_port()?;
@@ -558,7 +604,19 @@ fn bootstrap(app: &AppHandle) -> Result<(), String> {
         worker,
     );
 
-    let _window = create_main_window(app, &base_url)?;
+    wait_for_minimum_splash_duration(splash_shown_at);
+    let app_handle = app.clone();
+    app.run_on_main_thread(move || {
+        if is_quitting(&app_handle) {
+            return;
+        }
+
+        if let Err(error) = create_main_window(&app_handle, &base_url) {
+            show_runtime_error_and_exit(app_handle.clone(), "Startup failed", error, 1);
+        }
+    })
+    .map_err(|error| error.to_string())?;
+
     Ok(())
 }
 
@@ -605,9 +663,20 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![open_app_data_directory])
         .setup(|app| {
-            if let Err(error) = bootstrap(&app.handle()) {
-                show_runtime_error_and_exit(app.handle().clone(), "Startup failed", error, 1);
+            let app_handle = app.handle().clone();
+
+            if let Err(error) = create_splash_window(&app_handle) {
+                show_runtime_error_and_exit(app_handle, "Startup failed", error, 1);
+                return Ok(());
             }
+            let splash_shown_at = Instant::now();
+
+            thread::spawn(move || {
+                if let Err(error) = bootstrap(&app_handle, splash_shown_at) {
+                    show_runtime_error_and_exit(app_handle.clone(), "Startup failed", error, 1);
+                }
+            });
+
             Ok(())
         })
         .build(tauri::generate_context!())

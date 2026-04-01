@@ -27,7 +27,7 @@ Runnable starter slices:
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally, including the supervised task worker
-- experimental packaged-like Tauri launcher plus local host-bundle/macOS DMG build path, without GitHub Actions artifact generation
+- experimental packaged-like Tauri launcher plus local host-bundle build paths, including a prepared but unverified Windows NSIS installer path and a macOS DMG path, without GitHub Actions artifact generation
 - experimental Positron local start/smoke path plus a local macOS build/DMG path through Briefcase, with ad-hoc signing explicitly documented as local-only
 - on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
 
@@ -65,7 +65,7 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 - `just tauri-smoke`: start the Tauri shell and auto-exit after the first page load
 - `just tauri-packaged-start`: rebuild the shared staged backend and launch the Tauri shell against the packaged runtime contract
 - `just tauri-packaged-smoke`: rebuild the shared staged backend, launch the Tauri shell against the packaged runtime contract, and auto-exit after the first page load
-- `just tauri-build`: build a local Tauri host bundle, defaulting to a macOS DMG on macOS
+- `just tauri-build`: build a local Tauri host bundle, defaulting to `dmg` on macOS, `nsis` on Windows, and `appimage` on Linux
 - `just positron-install`: install the Positron shell environment with `uv`
 - `just positron-check`: run Django's system checks from the Positron shell environment
 - `just positron-start`: start the Positron shell, which runs Django plus one background task worker in-process
@@ -104,7 +104,7 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 For backend-only work, use `just backend-dev`.
 When you need the real `/tasks/` demo outside Electron, run `just task-worker` in a second terminal.
 
-For the experimental Tauri shell, use `just tauri-install` once and then `just tauri-start`. The Tauri path keeps the same localhost Django plus `db_worker` subprocess model as Electron, but its packaged build scope is still local-only and intentionally does not add a GitHub Actions artifact lane in this slice.
+For the experimental Tauri shell, use `just tauri-install` once and then `just tauri-start`. The Tauri path keeps the same localhost Django plus `db_worker` subprocess model as Electron, now with a shell-local startup splash while backend bootstrap runs in the background, but its packaged build scope is still local-only and intentionally does not add a GitHub Actions artifact lane in this slice. On Windows, `just tauri-build` now defaults to a local NSIS installer path and prints the generated bundle path, but the installer install/run path remains unverified until a real live Windows test is performed.
 
 For the experimental Positron shell, use `just positron-install` once and then `just positron-start`. The Positron path intentionally keeps a different runtime model: Django and the optional `tasks_demo` worker run in-process on threads, there is no splashscreen-parity requirement on macOS, and packaged builds remain a local-only Briefcase experiment.
 
@@ -121,14 +121,15 @@ Local packaging remains usable without any signing secrets:
 
 - `just package-dist` builds a host-native installer artifact for the current machine
 - `just package-dist-dir` builds an unpacked app directory for local inspection
-- `just tauri-build` builds a local Tauri host bundle; on macOS the default target is a DMG for experiment-only validation
+- `just tauri-build` builds a local Tauri host bundle; the default target is `dmg` on macOS, `nsis` on Windows, and `appimage` on Linux
 
 The Tauri packaging path is explicitly narrower than Electron in this slice:
 
 - it is local-only
 - it reuses `.stage/backend` as bundled resources
 - it does not add GitHub Actions artifact generation
-- it does not imply Windows packaged-build parity yet
+- it now prepares a local Windows NSIS bundle path only
+- installer install/run validation still requires a real live Windows machine and is not part of the GitHub release lane
 
 The Positron packaging path is also explicitly narrower than Electron:
 
@@ -209,5 +210,5 @@ Packaged mode still sets a small runtime environment at launch time:
 - No GitHub Release publishing automation is wired yet; checksum generation exists, but promotion remains manual.
 - Linux packaging still exists, but Linux signing and verification are not a baseline in this slice.
 - Windows public-distribution hardening beyond optional signing inputs is still follow-on work.
-- Tauri remains an experimental local shell path with no GitHub Actions artifact lane and no Windows packaged parity claim in this slice.
+- Tauri remains an experimental local shell path with no GitHub Actions artifact lane and only a prepared, unverified local Windows NSIS path, not release parity.
 - Positron remains an experimental local shell path with no GitHub Actions artifact lane, no splashscreen-parity claim on macOS, and no Windows packaged parity claim in this slice.

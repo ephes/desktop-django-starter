@@ -1,6 +1,6 @@
 # Multi-Shell Separation Plan
 
-Status: layout/staging slice plus the Tauri and Positron ports are implemented on `experiment/multi-shell-separation-plan`
+Status: first multi-shell spike is implemented on `experiment/multi-shell-separation-plan`; the branch is now at the post-spike review and follow-up-planning stage
 
 ## Goal
 
@@ -28,7 +28,7 @@ Explicitly out of scope for the implemented first slice:
 - full signing/notarization parity outside the existing Electron path
 - a fake "one launcher abstraction" that hides genuine shell differences
 - forcing Positron to use the Electron subprocess model
-- Windows packaged-build proof for Tauri or Positron
+- Windows packaged-build proof for Positron, or any Tauri claim stronger than a prepared local bundle path without a real live Windows test
 
 Implemented in this branch so far:
 
@@ -42,6 +42,55 @@ Notes:
 
 - Windows remains a required proof point for the repo baseline, but not for the first Tauri/Positron separation spike.
 - Before any promotion to `main`, Tauri and Positron need an explicit follow-up decision on Windows support level.
+- Follow-on work on this branch now prepares a local Tauri Windows NSIS bundle path, but a real live Windows install/run test is still outstanding.
+
+## Spike Checkpoint Status
+
+Current branch status:
+
+- Phase 0 complete
+- Phase 1 complete
+- Phase 2 complete
+- Phase 3 complete
+- Phase 4 complete
+- Phase 5 complete
+- first-spike acceptance criteria met on this branch
+
+This means the separation spike has reached its planned review checkpoint:
+
+- the three-shell layout now exists under `shells/`
+- the shared Django/backend and shared brand assumptions held
+- Tauri and Positron remain clearly documented as experimental and narrower than Electron
+- no GitHub Actions artifact parity was implied for Tauri or Positron
+
+The remaining work is follow-on work, not unfinished Phase 0-5 work.
+
+## Recommended Next Step
+
+The next concrete implementation step should be a narrow Windows packaged-build proof for Tauri, not Positron.
+
+Why Tauri first:
+
+- Tauri already shares the staged-backend subprocess contract with Electron
+- Tauri is closer to the Electron baseline than Positron is
+- a Windows proof for Tauri reduces uncertainty about whether the multi-shell branch can move beyond macOS-only experiment scope without forcing Positron-specific constraints onto the repo
+
+Recommended follow-on outcome:
+
+- establish whether `shells/tauri/` can honestly claim a local Windows packaged-build path, even if it still does not have a GitHub Actions artifact lane
+
+Recommended follow-on tasks:
+
+- run the existing Tauri packaged-like and bundle flows on Windows
+- fix any Windows-specific path, process-lifecycle, or bundling issues in the Tauri shell only
+- document the resulting Windows support level explicitly in `docs/shells/tauri.md`, `README.md`, and `docs/release.md`
+- keep GitHub artifact generation out of scope unless the Windows proof is stable enough to justify a separate lane later
+
+Why this is the next step instead of Positron-on-Windows:
+
+- Positron is the most runtime-divergent shell
+- Briefcase packaging constraints make Positron a worse candidate for the next cross-platform proof point
+- if Tauri cannot carry a narrow Windows proof, that is important to learn before investing further in Positron parity work
 
 ## Existing Experiment Baseline
 
@@ -428,6 +477,23 @@ Tasks:
 Estimate:
 
 - 1 to 2 days
+
+### Phase 6: Follow-On Windows Proof For Tauri
+
+Outcome:
+
+- the repo has one explicit post-spike answer for a non-Electron Windows packaged-build path
+
+Tasks:
+
+- validate `shells/tauri/` on Windows with local packaged-like and bundle flows
+- fix Tauri-only Windows issues without introducing a fake shared launcher abstraction
+- document the exact resulting support level and gaps
+- decide whether the result is strong enough to justify a later CI/artifact follow-up
+
+Estimate:
+
+- 2 to 4 days
 
 ## First Spike Acceptance Criteria
 

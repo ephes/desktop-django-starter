@@ -28,7 +28,7 @@ multi-shell-plan
 - `just tauri-test` compile-checks the Tauri shell
 - `just tauri-start` starts the Tauri shell, which launches Django on a random localhost port
 - `just tauri-packaged-start` launches the packaged-like Tauri path against `.stage/backend`
-- `just tauri-build` builds a local Tauri host bundle, defaulting to a macOS DMG on macOS
+- `just tauri-build` builds a local Tauri host bundle, defaulting to `dmg` on macOS, `nsis` on Windows, and `appimage` on Linux
 - `just positron-install` installs the Positron shell environment
 - `just positron-check` runs Django checks from the Positron shell environment
 - `just positron-start` starts the Positron shell, which runs Django and the optional task worker in-process

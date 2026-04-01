@@ -19,7 +19,7 @@ The starter should help a Django developer:
 - identify the exact seams where an existing Django app can replace the demo app
 - give coding agents a stable spec and reusable adaptation workflow they can apply in other Django repositories
 
-Electron remains the baseline shell for the starter contract. Tauri and Positron are useful experiment tracks for shell separation and runtime comparison, but they do not yet claim the same distribution maturity.
+Electron remains the baseline shell for the starter contract. Tauri and Positron are useful experiment tracks for shell separation and runtime comparison, but they do not yet claim the same distribution maturity. On this spike branch, Tauri now prepares only a narrower local Windows NSIS bundle path, and a real live Windows test is still required before making a stronger claim.
 
 The repository should optimize for comprehension, teachability, and adaptation speed, not for feature breadth.
 

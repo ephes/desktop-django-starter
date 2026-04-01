@@ -58,7 +58,7 @@ tauri-packaged-start:
 tauri-packaged-smoke:
     npm --prefix shells/tauri run smoke:packaged
 
-tauri-build TARGET="--bundles dmg":
+tauri-build TARGET="":
     npm --prefix shells/tauri run build -- {{TARGET}}
 
 positron-install:

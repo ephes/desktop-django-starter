@@ -159,6 +159,7 @@ Current launcher contract:
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
 - shell-local wrappers such as `shells/electron/scripts/bundled-python.cjs` are allowed to resolve shared helpers from two locations: a packaged-app copy first, then a repo-relative source path for local development
 - the Tauri shell keeps its subprocess supervision in Rust under `shells/tauri/src-tauri/src/lib.rs` instead of forcing a cross-shell launcher abstraction
+- the Tauri shell now also owns its own shell-local splash window under `shells/tauri/src/splash.html`, shown while backend startup runs on a background thread
 - the Positron shell keeps its runtime under `shells/positron/src/desktop_django_starter_positron/`, imports the shared Django code from repo `src/`, and starts the optional task worker in-process instead of using the Electron/Tauri subprocess contract
 - Positron does not claim packaged splashscreen parity on macOS and does not add a GitHub Actions artifact lane in this slice
 

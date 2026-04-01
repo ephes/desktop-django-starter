@@ -53,6 +53,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     readme = (ROOT / "README.md").read_text()
     release = (ROOT / "docs" / "release.md").read_text()
     architecture = (ROOT / "docs" / "architecture.md").read_text()
+    plan = (ROOT / "docs" / "multi-shell-plan.md").read_text()
     llms = (ROOT / "llms.txt").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
 
@@ -66,6 +67,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "kept in the repo" in readme
     assert "just tauri-start" in readme
     assert "just tauri-build" in readme
+    assert "`nsis` on Windows" in readme
+    assert "real live Windows machine" in readme
     assert "just positron-start" in readme
     assert "just positron-package-dmg" in readme
     assert "APPLE_API_KEY_ID" in release
@@ -73,6 +76,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/electron/signing/" in release
     assert "just tauri-build" in release
     assert "no dedicated Tauri GitHub packaging workflow" in release
+    assert "real live Windows machine test" in release
     assert "no dedicated Positron GitHub packaging workflow" in release
     assert "just positron-package-dmg" in release
     assert "air-gapped" in release
@@ -88,10 +92,14 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/tauri/" in architecture
     assert "shells/positron/" in architecture
     assert "packaged-app copy first" in architecture
+    assert "shell-local splash window" in architecture
+    assert "prepared local bundle path without a real live Windows test" in plan
+    assert "real live Windows install/run test is still outstanding" in plan
     assert "shells/electron/" in llms
     assert "shells/tauri/" in llms
     assert "shells/positron/" in llms
     assert "assets/brand/" in llms
+    assert "prepared, unverified local Windows NSIS bundle path" in llms
     assert ".stage/" in gitignore
 
 

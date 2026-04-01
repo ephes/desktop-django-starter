@@ -11,7 +11,7 @@ Two packaging paths are intentionally supported:
 
 The repo now also includes one narrower Tauri-only local packaging command:
 
-- `just tauri-build` for a local host bundle, defaulting to a macOS DMG on macOS
+- `just tauri-build` for a local host bundle, defaulting to `dmg` on macOS, `nsis` on Windows, and `appimage` on Linux
 
 The repo also includes one narrower Positron-only local packaging command:
 
@@ -26,7 +26,7 @@ Tauri is explicitly out of that release lane in this slice:
 - there is no dedicated Tauri GitHub packaging workflow
 - there is no Tauri checksum-artifact lane
 - local Tauri bundles are for experiment validation, not release parity
-- Windows packaged proof for Tauri is still deferred
+- the Windows claim is limited to a prepared local NSIS installer path and a required manual Windows validation path
 
 Positron is explicitly out of that release lane as well:
 
@@ -52,13 +52,14 @@ Linux output remains available for parity, but Linux signing and Linux verificat
 
 ## Tauri Local Bundle Scope
 
-The experimental Tauri shell under `shells/tauri/` can build a local host bundle and, on macOS, a local DMG through `just tauri-build`.
+The experimental Tauri shell under `shells/tauri/` can build a local host bundle through `just tauri-build`. The wrapper now defaults to one host-native experiment target: `dmg` on macOS, `nsis` on Windows, and `appimage` on Linux.
 
 That path intentionally stays narrower than Electron:
 
 - it reuses the shared `.stage/backend` payload as bundled resources
 - it does not participate in `.github/workflows/desktop-packages.yml`
 - it does not add checksum uploads, signing automation, or notarization scaffolding
+- on Windows, the current scope is limited to generating the local NSIS installer path; install/run still needs a real live Windows machine test
 - it should be described as local-only experiment scope until a dedicated release lane exists
 
 ## Positron Local Bundle Scope

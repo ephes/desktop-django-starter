@@ -8,7 +8,7 @@ Important constraints:
 
 - Keep the example generic, minimal, and server-rendered. The current themed presentation layer ("Flying Stable") is a demo; the underlying architecture is what matters.
 - Treat `djdesk` as reference material for packaging and lifecycle patterns only.
-- Windows support matters.
+- Windows support matters. Electron remains the baseline release lane; Tauri now has only a prepared, unverified local Windows NSIS bundle path and still does not claim release parity or a GitHub artifact lane. A real live Windows test is still required before making a stronger claim.
 - The update story must include air-gapped/manual installs, not only connected environments.
 - Electron lives under `shells/electron/`, the experimental Tauri port lives under `shells/tauri/`, and the experimental Positron port lives under `shells/positron/`, while shared icon source art lives under `assets/brand/`; regenerate the Electron PNG and macOS ICNS with `npm --prefix shells/electron run icons`, the Tauri icon set with `npm --prefix shells/tauri run icons`, and the Positron icons with `just positron-icons`.
 

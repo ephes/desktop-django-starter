@@ -17,6 +17,8 @@ def test_tauri_package_scripts_cover_local_runtime_flows() -> None:
     package = json.loads((ROOT / "shells" / "tauri" / "package.json").read_text())
     launcher = (ROOT / "shells" / "tauri" / "scripts" / "launch-tauri.mjs").read_text()
     builder = (ROOT / "shells" / "tauri" / "scripts" / "build-tauri.mjs").read_text()
+    justfile = (ROOT / "justfile").read_text()
+    splash = (ROOT / "shells" / "tauri" / "src" / "splash.html").read_text()
 
     assert "stage-backend" in package["scripts"]
     assert "start" in package["scripts"]
@@ -26,6 +28,14 @@ def test_tauri_package_scripts_cover_local_runtime_flows() -> None:
     assert ".stage\", \"backend" in launcher
     assert "stage-backend" in builder
     assert "\"build\"" in builder
+    assert "--bundles\", \"nsis" in builder
+    assert "--bundles\", \"appimage" in builder
+    assert "--bundles\", shouldSmokeTest ? \"app\" : \"dmg\"" in builder
+    assert "bundle/nsis/" in builder
+    assert "Windows bundle smoke testing is not automated" in builder
+    assert 'tauri-build TARGET=""' in justfile
+    assert "Flying Stable" in splash
+    assert "Saddling up" in splash
 
 
 def test_tauri_runtime_keeps_tasks_demo_subprocess_model() -> None:
@@ -36,3 +46,8 @@ def test_tauri_runtime_keeps_tasks_demo_subprocess_model() -> None:
     assert "wait_for_django" in runtime
     assert "supported" in docs
     assert "GitHub Actions artifact generation remains Electron-only" in docs
+    assert "preparing a local NSIS installer path" in docs
+    assert "installer install/run validation still needs a real live Windows machine" in docs
+    assert "create_splash_window" in runtime
+    assert "MINIMUM_SPLASH_DURATION_MS" in runtime
+    assert "splash window immediately" in docs
