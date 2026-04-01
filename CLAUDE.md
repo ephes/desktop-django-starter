@@ -20,6 +20,8 @@
 - `assets/brand/`: shared brand source-of-truth for shell-generated icons
 - `scripts/`: shared packaging and staged-backend helpers
 - `shells/electron/`: Electron shell, builder config, generated icons, Node-side tests
+- `shells/tauri/`: experimental Tauri shell, Rust-side runtime supervision, local-only bundle helpers
+- `shells/positron/`: experimental Positron shell, Briefcase config, and in-process runtime
 - `docs/`: Sphinx source docs published from Markdown
 - `tests/`: pytest coverage for backend behavior, packaged-runtime contract, static assets, and docs scaffold
 - `skills/`: reusable agent workflows (wrap-existing-django-in-electron)

@@ -19,7 +19,6 @@ def test_core_docs_scaffold_exists() -> None:
         ROOT / "docs" / "decisions.md",
         ROOT / "docs" / "release.md",
         ROOT / "docs" / "agent-use.md",
-        ROOT / "docs" / "multi-shell-plan.md",
         ROOT / "docs" / "shells" / "electron.md",
         ROOT / "docs" / "shells" / "tauri.md",
         ROOT / "docs" / "shells" / "positron.md",
@@ -46,15 +45,19 @@ def test_docs_index_references_main_pages() -> None:
     assert "shells/electron" in index
     assert "shells/tauri" in index
     assert "shells/positron" in index
-    assert "multi-shell-plan" in index
+    assert "multi-shell-plan" not in index
+    assert "branch-integration-plan" not in index
+    assert not (ROOT / "docs" / "multi-shell-plan.md").exists()
+    assert not (ROOT / "docs" / "branch-integration-plan.md").exists()
 
 
 def test_release_docs_cover_signing_and_manual_updates() -> None:
     readme = (ROOT / "README.md").read_text()
     release = (ROOT / "docs" / "release.md").read_text()
     architecture = (ROOT / "docs" / "architecture.md").read_text()
-    plan = (ROOT / "docs" / "multi-shell-plan.md").read_text()
+    specification = (ROOT / "docs" / "specification.md").read_text()
     llms = (ROOT / "llms.txt").read_text()
+    docs_llms = (ROOT / "docs" / "llms.txt").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
 
     assert "docs/release.md" in readme
@@ -93,13 +96,15 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/positron/" in architecture
     assert "packaged-app copy first" in architecture
     assert "shell-local splash window" in architecture
-    assert "prepared local bundle path without a real live Windows test" in plan
-    assert "real live Windows install/run test is still outstanding" in plan
+    assert "comparison paths in this repo" in specification
     assert "shells/electron/" in llms
     assert "shells/tauri/" in llms
     assert "shells/positron/" in llms
     assert "assets/brand/" in llms
     assert "prepared, unverified local Windows NSIS bundle path" in llms
+    assert "shells/electron.html" in docs_llms
+    assert "shells/tauri.html" in docs_llms
+    assert "shells/positron.html" in docs_llms
     assert ".stage/" in gitignore
 
 

@@ -1,6 +1,6 @@
 # Electron Shell
 
-Status: implemented in this slice.
+Status: implemented as the baseline release-oriented shell in this repo.
 
 The current production-grade shell path in this repository is [`shells/electron/`](../../shells/electron/).
 

@@ -28,7 +28,7 @@ Scope boundaries:
 - GitHub Actions artifact generation remains Electron-only
 - Electron remains the most complete shell path
 - the Windows support claim is limited to preparing a local NSIS installer path with `just tauri-build`
-- installer install/run validation still needs a real live Windows machine and is not automated in this branch
+- installer install/run validation still needs a real live Windows machine and is not automated in this repo
 
 `tasks_demo` posture in this slice:
 

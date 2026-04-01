@@ -1,6 +1,6 @@
 # Desktop Django Starter
 
-Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware GitHub packaging slice in place, plus experimental Tauri and Positron shells for local comparison work.
+Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware GitHub packaging slice in place, and experimental Tauri and Positron shells for local comparison work. Electron remains the baseline release-oriented shell and the only GitHub Actions artifact lane in this repo.
 
 The current implementation includes a local Django app, an Electron shell that supervises it over localhost, a `/health/` readiness check, a tiny CRUD demo, a background task visualization demo with animated indicators and live polling, a packaged-like staging flow with a bundled Python runtime plus collected static assets, and an on-demand GitHub Actions workflow that builds desktop artifacts for macOS, Windows, and Linux. macOS signing/notarization scaffolding and optional Windows signing inputs are now documented and wired into packaging; auto-update is still deferred.
 
@@ -16,7 +16,6 @@ agent-use
 shells/electron
 shells/tauri
 shells/positron
-multi-shell-plan
 ```
 
 ## Local Development

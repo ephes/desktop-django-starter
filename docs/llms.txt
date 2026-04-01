@@ -19,6 +19,8 @@ Important constraints:
 - [Release](release.html): Packaging secrets, installer artifacts, and manual update guidance.
 - [Decisions](decisions.html): Scope and tradeoff decisions captured locally for this repo.
 - [Agent use](agent-use.html): Guidance for coding agents consuming this repo.
+- [Electron shell](shells/electron.html): Baseline shell scope and responsibilities.
+- [Tauri shell](shells/tauri.html): Experimental Tauri shell scope, commands, and support boundaries.
 - [Positron shell](shells/positron.html): Experimental Positron shell scope, commands, and support boundaries.
 
 The optional `/tasks/` demo now uses the `django_tasks` backport plus `django_tasks_db` with a single supervised worker process instead of an in-process thread stub.

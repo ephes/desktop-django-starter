@@ -5,7 +5,7 @@ Scope: specification for the starter, with the runnable development slice, stage
 
 ## 1. Project Summary
 
-`desktop-django-starter` is the canonical attendee-facing minimal example for running Django as a desktop application inside Electron, with experimental Tauri and Positron shells retained as comparison paths on this spike branch.
+`desktop-django-starter` is the canonical attendee-facing minimal example for running Django as a desktop application inside Electron, with experimental Tauri and Positron shells retained as comparison paths in this repo.
 
 It exists to answer a practical question: what is the smallest credible setup that lets a Django team package a local desktop app without having to invent the process model, packaging story, and localhost lifecycle from scratch?
 
@@ -19,7 +19,7 @@ The starter should help a Django developer:
 - identify the exact seams where an existing Django app can replace the demo app
 - give coding agents a stable spec and reusable adaptation workflow they can apply in other Django repositories
 
-Electron remains the baseline shell for the starter contract. Tauri and Positron are useful experiment tracks for shell separation and runtime comparison, but they do not yet claim the same distribution maturity. On this spike branch, Tauri now prepares only a narrower local Windows NSIS bundle path, and a real live Windows test is still required before making a stronger claim.
+Electron remains the baseline shell for the starter contract. Tauri and Positron are useful experiment tracks for shell separation and runtime comparison, but they do not yet claim the same distribution maturity. In this repo, Tauri prepares only a narrower local Windows NSIS bundle path, and a real live Windows test is still required before making a stronger claim.
 
 The repository should optimize for comprehension, teachability, and adaptation speed, not for feature breadth.
 
