@@ -5,6 +5,7 @@ const path = require("node:path");
 
 const electronBinary = require("electron");
 const electronRoot = path.resolve(__dirname, "..");
+const repoRoot = path.resolve(electronRoot, "..", "..");
 
 const env = { ...process.env };
 
@@ -24,7 +25,7 @@ for (const argument of process.argv.slice(2)) {
 }
 
 if (env.DESKTOP_DJANGO_RUNTIME_MODE === "packaged" && !env.DESKTOP_DJANGO_BACKEND_ROOT) {
-  env.DESKTOP_DJANGO_BACKEND_ROOT = path.join(electronRoot, ".stage", "backend");
+  env.DESKTOP_DJANGO_BACKEND_ROOT = path.join(repoRoot, ".stage", "backend");
 }
 
 const child = spawn(electronBinary, ["."], {

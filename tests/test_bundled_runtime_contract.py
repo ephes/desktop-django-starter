@@ -36,7 +36,7 @@ process.stdout.write(JSON.stringify({
             "-e",
             script,
             str(backend_root),
-            str(Path("electron/scripts/bundled-python.cjs").resolve()),
+            str(Path("scripts/bundled-python.cjs").resolve()),
         ],
         check=True,
         capture_output=True,

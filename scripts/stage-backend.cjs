@@ -11,9 +11,8 @@ const {
 } = require("./bundled-python.cjs");
 const { materializeSymlinks } = require("./materialize-symlinks.cjs");
 
-const electronRoot = path.resolve(__dirname, "..");
-const repoRoot = path.resolve(electronRoot, "..");
-const stageRoot = path.join(electronRoot, ".stage");
+const repoRoot = path.resolve(__dirname, "..");
+const stageRoot = path.join(repoRoot, ".stage");
 const backendRoot = path.join(stageRoot, "backend");
 const buildRoot = path.join(stageRoot, ".build");
 const pythonInstallRoot = path.join(stageRoot, ".python-downloads");

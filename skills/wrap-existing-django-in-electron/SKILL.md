@@ -96,7 +96,7 @@ At minimum:
 
 When implementing in another repo, aim for these seams:
 
-- `electron/` shell code
+- `shells/electron/` shell code
 - launcher script for Django
 - explicit health endpoint
 - packaged/static-file strategy

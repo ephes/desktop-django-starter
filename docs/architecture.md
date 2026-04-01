@@ -39,15 +39,21 @@ This structure is intentionally small and close to normal Django conventions:
 ```text
 desktop-django-starter/
 ├── README.md
+├── assets/
+│   └── brand/
 ├── docs/
 │   ├── specification.md
 │   ├── architecture.md
 │   └── decisions.md
-├── electron/
-│   ├── assets/icons/
-│   ├── main.js
-│   ├── preload.cjs
-│   └── package.json
+├── scripts/
+│   ├── bundled-python.cjs
+│   └── stage-backend.cjs
+├── shells/
+│   └── electron/
+│       ├── assets/icons/
+│       ├── main.js
+│       ├── preload.cjs
+│       └── package.json
 ├── manage.py
 ├── pyproject.toml
 ├── src/
@@ -59,7 +65,7 @@ desktop-django-starter/
 Notes:
 
 - script names are illustrative; the startup and packaging behavior matters more than exact filenames
-- staged packaged-backend helper scripts now live under `electron/scripts/`
+- staged packaged-backend helper scripts now live under `scripts/`
 - `src/` is preferred over a flatter package layout because it maps cleanly to packaging and later app replacement
 - `src/` layout means the launcher and packaging scripts must set import paths deliberately rather than relying on the current working directory
 - the starter should keep Electron and Django code visibly separate
@@ -117,11 +123,12 @@ Current expected direction:
 
 - use Django-side static file serving in the simplest acceptable form for v1, rather than introducing an additional asset-serving layer in Electron unless it proves necessary
 - the staged local bundle now mirrors the future packaged layout by keeping the backend payload together and staging the interpreter under `backend/python/`
-- Electron app icon sources now live under `electron/assets/icons/`, with a shared SVG source plus generated PNG and macOS ICNS outputs for the packaged shell
+- Electron app icon source-of-truth now lives under `assets/brand/`, with generated PNG and macOS ICNS outputs written into `shells/electron/assets/icons/` for the packaged shell
 - the example app base template loads the Play font from Google Fonts via an external stylesheet link; in packaged or air-gapped mode the request will silently fail and the CSS font stack falls back to Helvetica Neue / Arial / sans-serif
 
 Current staged backend contract:
 
+- the shared staged backend is materialized under `.stage/backend/` at the repo root during local packaged-like builds
 - `backend/manage.py` stays at the bundle root
 - `backend/src/` keeps the normal source layout
 - `backend/python/` contains the bundled interpreter and installed dependencies
@@ -134,6 +141,7 @@ Current launcher contract:
 - Electron then runs `manage.py` from `backend/` for both `runserver` and `db_worker`
 - packaged settings still rely on runtime environment variables for writable app data, bundle dir, localhost host/port, secret key, and unbuffered Python output
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
+- shell-local wrappers such as `shells/electron/scripts/bundled-python.cjs` are allowed to resolve shared helpers from two locations: a packaged-app copy first, then a repo-relative source path for local development
 
 ## Release and Update Model
 

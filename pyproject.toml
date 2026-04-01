@@ -50,8 +50,9 @@ line-length = 100
 target-version = "py312"
 extend-exclude = [
     "docs/_build",
-    "electron/.stage",
-    "electron/node_modules",
+    ".stage",
+    "shells/electron/.stage",
+    "shells/electron/node_modules",
     "positron",
     "tauri",
 ]

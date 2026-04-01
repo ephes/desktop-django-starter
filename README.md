@@ -4,7 +4,7 @@ Minimal, attendee-facing starter for shipping a Django app inside Electron with 
 
 **Documentation: [desktop-django-starter.readthedocs.io](https://desktop-django-starter.readthedocs.io/en/latest/)**
 
-This repository now includes a runnable development slice, a staged packaged-backend slice, and a sign/notarization-aware GitHub packaging slice: a tiny Django app served locally and supervised by Electron, with a bundled Python runtime staged under `electron/.stage/backend/python/` and packaged desktop artifacts built in GitHub Actions.
+This repository now includes a runnable development slice, a staged packaged-backend slice, and a sign/notarization-aware GitHub packaging slice: a tiny Django app served locally and supervised by Electron, with a bundled Python runtime staged under `.stage/backend/python/` and packaged desktop artifacts built in GitHub Actions.
 
 ## Intent
 
@@ -20,16 +20,16 @@ Runnable starter slices:
 - Django 6.0.3 project under `src/desktop_django_starter/`
 - tiny server-rendered CRUD demo app under `src/example_app/`, themed as "My Ponies" in the Flying Stable presentation layer
 - background task visualization demo under `src/tasks_demo/`, themed as "Stable Routines", with animated pulse-ring indicators, polling-based live updates, and real `django_tasks` execution backed by SQLite
-- Electron 40 shell under `electron/`
+- Electron 40 shell under `shells/electron/`
 - random-port localhost startup with `/health/` readiness polling
 - minimal preload bridge for opening the app-data folder
-- staged packaged-backend flow under `electron/.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
+- staged packaged-backend flow under `.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally, including the supervised task worker
 - on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
 
 Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
 
-The example app uses a branded presentation layer called "Flying Stable" (a Pegasus/pony theme) to demonstrate that the starter can carry a real visual identity while remaining a generic teaching scaffold underneath. The theme includes a dark topnav with logo and brand name, teal page headers with background images, a content panel with toolbar, a sticky footer, CSS custom-property design tokens, SVG empty-state illustrations, an in-page delete-confirmation modal, client-side form validation with themed error messages, a splash screen at `/splash/` that Electron now shows during backend startup, and packaged app icons derived from the same pony mark under `electron/assets/icons/`. Item statuses are themed as Grazing (backlog), Galloping (active), and Show Ready (done). Development mode includes `django-browser-reload` for auto-reload.
+The example app uses a branded presentation layer called "Flying Stable" (a Pegasus/pony theme) to demonstrate that the starter can carry a real visual identity while remaining a generic teaching scaffold underneath. The theme includes a dark topnav with logo and brand name, teal page headers with background images, a content panel with toolbar, a sticky footer, CSS custom-property design tokens, SVG empty-state illustrations, an in-page delete-confirmation modal, client-side form validation with themed error messages, a splash screen at `/splash/` that Electron now shows during backend startup, and packaged app icons generated in `shells/electron/assets/icons/` from the shared source art under `assets/brand/`. Item statuses are themed as Grazing (backlog), Galloping (active), and Show Ready (done). Development mode includes `django-browser-reload` for auto-reload.
 
 ## Docs
 
@@ -55,8 +55,10 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 - `just task-worker`: run the single background task worker for `/tasks/` without Electron
 - `just electron-install`: install Electron dependencies
 - `just electron-start`: start the Electron shell, which launches Django plus one background task worker on a random localhost port
-- `npm --prefix electron run icons`: regenerate the packaged app icon PNG and macOS ICNS from `electron/assets/icons/flying-stable-app-icon.svg` (requires `rsvg-convert` from `librsvg`; macOS uses the built-in `iconutil` for ICNS output)
-- `just packaged-stage`: build the staged packaged-backend bundle under `electron/.stage/backend`, including the bundled Python runtime
+- `npm --prefix shells/electron run icons`: regenerate the packaged app icon PNG and macOS ICNS from `assets/brand/flying-stable-app-icon.svg` into `shells/electron/assets/icons/` (requires `rsvg-convert` from `librsvg`; macOS uses the built-in `iconutil` for ICNS output)
+
+The generated Electron icon outputs under `shells/electron/assets/icons/` are kept in the repo so a fresh clone can still run the shell and packaging flow before local icon-tooling is installed.
+- `just packaged-stage`: build the staged packaged-backend bundle under `.stage/backend`, including the bundled Python runtime
 - `just packaged-start`: rebuild the staged bundle and launch Electron in packaged-like mode against the staged bundled runtime
 - `just packaged-smoke`: rebuild the staged bundle and run a packaged-like Electron smoke launch that auto-exits after load
 - `just package-dist`: build a local desktop package for the current host target (defaults to `--mac dmg`)
@@ -83,7 +85,7 @@ For backend-only work, use `just backend-dev`.
 When you need the real `/tasks/` demo outside Electron, run `just task-worker` in a second terminal.
 
 For the packaged-mode staging slice, use `just packaged-start`.
-The `electron/.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
+The `.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
 
 For GitHub-built install artifacts, use `just github-package` and then `just github-package-download-latest` once the workflow succeeds. The download helpers require the GitHub CLI plus an authenticated `gh` session and place per-platform artifacts under `dist/github-actions/<run-id>/`. `just github-package-latest-run` prints the current latest run id, `just github-package-download-latest` prints the downloaded paths and records the run id in `dist/github-actions/latest-run.txt`, and `just github-package-latest-path` prints the local directory for that latest downloaded run.
 Pass a different branch as the first argument when needed, for example `just github-package my-branch`.
@@ -126,13 +128,15 @@ Manual update model for this repo:
 
 The staged packaged-backend layout is now explicit enough to mirror a later packaged app:
 
-- `electron/.stage/backend/manage.py`: Django entrypoint kept at backend root
-- `electron/.stage/backend/src/`: app source tree
-- `electron/.stage/backend/python/`: bundled Python runtime plus installed dependencies
-- `electron/.stage/backend/staticfiles/`: collected static assets for `DEBUG=False`
-- `electron/.stage/backend/runtime-manifest.json`: runtime metadata that records the staged interpreter and launcher contract
+- `.stage/backend/manage.py`: Django entrypoint kept at backend root
+- `.stage/backend/src/`: app source tree
+- `.stage/backend/python/`: bundled Python runtime plus installed dependencies
+- `.stage/backend/staticfiles/`: collected static assets for `DEBUG=False`
+- `.stage/backend/runtime-manifest.json`: runtime metadata that records the staged interpreter and launcher contract
 
 Electron packaged mode reads `runtime-manifest.json` to locate the bundled interpreter, then invokes `manage.py` from the backend root. The current staged manifest records the interpreter as `python/bin/python3.12` on POSIX and is designed to allow `python.exe` on Windows.
+
+The shell-neutral staging build now lives in `scripts/stage-backend.cjs`, which writes the staged backend once at the repo root so later shells can consume the same contract.
 
 Electron now supervises two backend commands from that staged bundle:
 

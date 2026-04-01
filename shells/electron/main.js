@@ -19,7 +19,7 @@ const APP_ICON_PATH = path.join(__dirname, "assets", "icons", "app-icon.png");
 // this teaching slice to require end-user env setup before Electron can boot.
 const PACKAGED_RUNTIME_SECRET_KEY = "desktop-django-starter-packaged-runtime-secret";
 
-const repoRoot = path.resolve(__dirname, "..");
+const repoRoot = path.resolve(__dirname, "..", "..");
 
 let djangoProcess = null;
 let taskWorkerProcess = null;
@@ -58,7 +58,7 @@ function getBackendRoot(runtimeMode) {
   if (runtimeMode === "packaged") {
     return app.isPackaged
       ? path.join(process.resourcesPath, "backend")
-      : path.join(__dirname, ".stage", "backend");
+      : path.join(repoRoot, ".stage", "backend");
   }
 
   return repoRoot;
@@ -221,7 +221,7 @@ function validatePackagedBackendRoot(backendRoot) {
 
   const hint = app.isPackaged
     ? "Expected packaged resources are missing."
-    : "Run `npm --prefix electron run stage-backend` first.";
+    : "Run `npm --prefix shells/electron run stage-backend` first.";
 
   throw new Error(
     `Packaged backend bundle is incomplete at ${backendRoot}.\nMissing:\n${missingPaths.join("\n")}\n\n${hint}`

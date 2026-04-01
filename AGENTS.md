@@ -17,14 +17,16 @@
 ## Repo Map
 - `src/desktop_django_starter/`: Django project, settings modules, base template, static assets
 - `src/example_app/`: minimal server-rendered CRUD demo app
-- `electron/`: Electron shell, packaged-runtime staging scripts, builder config, Node-side tests
+- `assets/brand/`: shared brand source-of-truth for shell-generated icons
+- `scripts/`: shared packaging and staged-backend helpers
+- `shells/electron/`: Electron shell, builder config, generated icons, Node-side tests
 - `docs/`: Sphinx source docs published from Markdown
 - `tests/`: pytest coverage for backend behavior, packaged-runtime contract, static assets, and docs scaffold
 - `skills/`: reusable agent workflows (wrap-existing-django-in-electron)
 
 ## Working Rules
 - Prefer server-rendered Django templates. Do not introduce a SPA or broaden the preload bridge unless the task explicitly requires it.
-- Treat `electron/.stage/`, `docs/_build/`, `build/`, `dist/`, `electron/dist/`, and `electron/node_modules/` as generated outputs, not hand-edited sources.
+- Treat `.stage/`, `docs/_build/`, `build/`, `dist/`, `shells/electron/dist/`, and `shells/electron/node_modules/` as generated outputs, not hand-edited sources.
 - Packaged-mode changes must keep the bundled-runtime contract intact and must not assume `DEBUG=True`.
 - Windows packaging and offline/manual install constraints matter. Do not make macOS-only assumptions in packaging or runtime changes.
 
@@ -37,5 +39,5 @@
 - Full pre-push check: `just check` (lint + test + docs-build)
 - Default validation: `just test`
 - If docs changed: `just docs-build`
-- If Electron code or packaging scripts changed: `npm --prefix electron test`
+- If Electron code or packaging scripts changed: `npm --prefix shells/electron test`
 - If packaged-runtime behavior changed: run `just packaged-smoke` unless the task requires a broader packaged run

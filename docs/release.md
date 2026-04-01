@@ -29,7 +29,7 @@ Linux output remains available for parity, but Linux signing and Linux verificat
 
 ## macOS Signing and Notarization Inputs
 
-The Electron builder config now enables hardened runtime and points at explicit entitlements files under `electron/signing/`.
+The Electron builder config now enables hardened runtime and points at explicit entitlements files under `shells/electron/signing/`.
 
 macOS code-signing inputs:
 

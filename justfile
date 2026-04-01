@@ -35,25 +35,25 @@ task-worker:
     uv run python manage.py db_worker --queue-name default --worker-id desktop-django-starter
 
 electron-install:
-    npm --prefix electron install
+    npm --prefix shells/electron install
 
 electron-start:
-    npm --prefix electron start
+    npm --prefix shells/electron start
 
 packaged-stage:
-    npm --prefix electron run stage-backend
+    npm --prefix shells/electron run stage-backend
 
 packaged-start:
-    npm --prefix electron run start:packaged
+    npm --prefix shells/electron run start:packaged
 
 packaged-smoke:
-    npm --prefix electron run smoke:packaged
+    npm --prefix shells/electron run smoke:packaged
 
 package-dist TARGET="--mac dmg":
-    npm --prefix electron run dist -- {{TARGET}}
+    npm --prefix shells/electron run dist -- {{TARGET}}
 
 package-dist-dir TARGET="--mac":
-    npm --prefix electron run dist:dir -- {{TARGET}}
+    npm --prefix shells/electron run dist:dir -- {{TARGET}}
 
 github-package BRANCH="":
     @branch="{{BRANCH}}"; \
@@ -130,4 +130,4 @@ loc:
     uv run count-lines-of-code
 
 clean:
-    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 electron/dist electron/node_modules electron/.stage
+    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 .stage shells/electron/dist shells/electron/node_modules

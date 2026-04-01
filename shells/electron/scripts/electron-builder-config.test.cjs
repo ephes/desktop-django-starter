@@ -17,11 +17,16 @@ test("electron-builder config ships the staged backend as a packaged resource", 
     "package.json",
     "preload.cjs",
     "scripts/bundled-python.cjs",
-    "assets/icons/app-icon.png"
+    "assets/icons/app-icon.png",
+    {
+      from: "../../scripts",
+      to: "scripts/shared",
+      filter: ["bundled-python.cjs"]
+    }
   ]);
   assert.deepEqual(config.extraResources, [
     {
-      from: ".stage/backend",
+      from: "../../.stage/backend",
       to: "backend",
       filter: ["**/*"]
     }

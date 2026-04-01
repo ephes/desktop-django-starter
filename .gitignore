@@ -8,8 +8,9 @@ dist/
 docs/_build/
 __pycache__/
 db.sqlite3
-electron/node_modules/
-electron/.stage/
+.stage/
+shells/electron/node_modules/
+shells/electron/dist/
 *.p8
 *.p12
 *.pfx

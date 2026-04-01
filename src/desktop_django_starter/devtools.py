@@ -45,8 +45,9 @@ FALLBACK_EXCLUDED_DIRS = {
     "build",
     "dist",
     "docs/_build",
-    "electron/dist",
-    "electron/node_modules",
+    "shells/electron/.stage",
+    "shells/electron/dist",
+    "shells/electron/node_modules",
     "node_modules",
 }
 

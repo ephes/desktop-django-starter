@@ -8,7 +8,7 @@
     "icons": "node ./scripts/generate-icons.cjs",
     "start": "electron .",
     "test": "node --test ./scripts/*.test.cjs",
-    "stage-backend": "node ./scripts/stage-backend.cjs",
+    "stage-backend": "node ../../scripts/stage-backend.cjs",
     "start:packaged": "npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged",
     "smoke:packaged": "npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged --smoke-test",
     "dist": "npm run stage-backend && electron-builder --publish never --config ./electron-builder.config.cjs",

@@ -21,25 +21,25 @@ jobs:
             build_flag: --mac
             build_target: dmg
             artifact_name: desktop-django-starter-macos
-            artifact_glob: electron/dist/*.dmg
+            artifact_glob: shells/electron/dist/*.dmg
             checksum_artifact_name: desktop-django-starter-macos-checksums
-            checksum_path: electron/dist/desktop-django-starter-macos-sha256.txt
+            checksum_path: shells/electron/dist/desktop-django-starter-macos-sha256.txt
           - os: windows-latest
             platform: windows
             build_flag: --win
             build_target: nsis
             artifact_name: desktop-django-starter-windows
-            artifact_glob: electron/dist/*.exe
+            artifact_glob: shells/electron/dist/*.exe
             checksum_artifact_name: desktop-django-starter-windows-checksums
-            checksum_path: electron/dist/desktop-django-starter-windows-sha256.txt
+            checksum_path: shells/electron/dist/desktop-django-starter-windows-sha256.txt
           - os: ubuntu-latest
             platform: linux
             build_flag: --linux
             build_target: AppImage
             artifact_name: desktop-django-starter-linux
-            artifact_glob: electron/dist/*.AppImage
+            artifact_glob: shells/electron/dist/*.AppImage
             checksum_artifact_name: desktop-django-starter-linux-checksums
-            checksum_path: electron/dist/desktop-django-starter-linux-sha256.txt
+            checksum_path: shells/electron/dist/desktop-django-starter-linux-sha256.txt
 
     steps:
       - uses: actions/checkout@v6
@@ -49,7 +49,7 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: electron/package-lock.json
+          cache-dependency-path: shells/electron/package-lock.json
 
       - name: Set up Python
         uses: actions/setup-python@v6
@@ -67,7 +67,7 @@ jobs:
         run: uv sync --locked
 
       - name: Install Electron dependencies
-        run: npm --prefix electron ci
+        run: npm --prefix shells/electron ci
 
       - name: Prepare macOS notarization API key
         if: matrix.platform == 'macos' && env.APPLE_API_KEY_CONTENT != ''
@@ -123,10 +123,10 @@ jobs:
               unset "$name"
             fi
           done
-          npm --prefix electron run dist -- ${{ matrix.build_flag }} ${{ matrix.build_target }}
+          npm --prefix shells/electron run dist -- ${{ matrix.build_flag }} ${{ matrix.build_target }}
 
       - name: Generate artifact checksums
-        run: python electron/scripts/write-checksums.py --glob "${{ matrix.artifact_glob }}" --output "${{ matrix.checksum_path }}"
+        run: python shells/electron/scripts/write-checksums.py --glob "${{ matrix.artifact_glob }}" --output "${{ matrix.checksum_path }}"
 
       - name: Upload packaged desktop artifact
         uses: actions/upload-artifact@v4

@@ -86,11 +86,16 @@ function buildConfig(env = process.env) {
       "package.json",
       "preload.cjs",
       "scripts/bundled-python.cjs",
-      "assets/icons/app-icon.png"
+      "assets/icons/app-icon.png",
+      {
+        from: "../../scripts",
+        to: "scripts/shared",
+        filter: ["bundled-python.cjs"]
+      }
     ],
     extraResources: [
       {
-        from: ".stage/backend",
+        from: "../../.stage/backend",
         to: "backend",
         filter: ["**/*"]
       }

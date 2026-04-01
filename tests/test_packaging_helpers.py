@@ -17,7 +17,7 @@ def test_write_checksums_cli_writes_sha256_manifest(tmp_path: Path) -> None:
     completed = subprocess.run(
         [
             sys.executable,
-            str(ROOT / "electron" / "scripts" / "write-checksums.py"),
+            str(ROOT / "shells" / "electron" / "scripts" / "write-checksums.py"),
             "--glob",
             str(tmp_path / "*.dmg"),
             "--output",

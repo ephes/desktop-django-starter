@@ -10,7 +10,7 @@ Important constraints:
 - Treat `djdesk` as reference material for packaging and lifecycle patterns only.
 - Windows support matters.
 - The update story must include air-gapped/manual installs, not only connected environments.
-- Electron app icon source art lives under `electron/assets/icons/`; regenerate the PNG and macOS ICNS with `npm --prefix electron run icons` (requires `rsvg-convert` from `librsvg`).
+- Electron lives under `shells/electron/`, while shared icon source art lives under `assets/brand/`; regenerate the Electron PNG and macOS ICNS with `npm --prefix shells/electron run icons` (requires `rsvg-convert` from `librsvg`).
 
 ## Docs
 

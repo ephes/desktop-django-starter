@@ -13,6 +13,10 @@ architecture
 decisions
 release
 agent-use
+shells/electron
+shells/tauri
+shells/positron
+multi-shell-plan
 ```
 
 ## Local Development
@@ -21,7 +25,7 @@ agent-use
 - `just electron-install` installs the Electron dependencies
 - `just dev` starts Electron, which launches Django on a random localhost port
 - `just backend-dev` runs Django directly on `127.0.0.1:8000`
-- `just packaged-stage` builds the staged packaged backend under `electron/.stage/backend`
+- `just packaged-stage` builds the staged packaged backend under `.stage/backend`
 - `just packaged-start` launches the packaged-like Electron path against the staged backend and bundled runtime
 - `just packaged-smoke` runs a packaged-like smoke launch and exits automatically after load
 - `just package-dist` builds a local packaged desktop artifact for the current host target
@@ -38,7 +42,7 @@ agent-use
 
 ## Staged Runtime Contract
 
-The packaged-like staging flow now writes a concrete backend payload under `electron/.stage/backend/`:
+The packaged-like staging flow now writes a concrete backend payload under `.stage/backend/`:
 
 - `manage.py` remains at backend root
 - `src/` remains in normal source layout

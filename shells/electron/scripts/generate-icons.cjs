@@ -4,8 +4,10 @@ const os = require("node:os");
 const path = require("node:path");
 
 const electronRoot = path.resolve(__dirname, "..");
+const repoRoot = path.resolve(electronRoot, "..", "..");
+const brandRoot = path.join(repoRoot, "assets", "brand");
 const iconDir = path.join(electronRoot, "assets", "icons");
-const svgPath = path.join(iconDir, "flying-stable-app-icon.svg");
+const svgPath = path.join(brandRoot, "flying-stable-app-icon.svg");
 const pngPath = path.join(iconDir, "app-icon.png");
 const icnsPath = path.join(iconDir, "app-icon.icns");
 
