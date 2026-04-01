@@ -6,7 +6,7 @@ Use this repository when you need the smallest credible architecture for running
 
 Important constraints:
 
-- Keep the example generic, minimal, and server-rendered.
+- Keep the example generic, minimal, and server-rendered. The current themed presentation layer ("Flying Stable") is a demo; the underlying architecture is what matters.
 - Treat `djdesk` as reference material for packaging and lifecycle patterns only.
 - Windows support matters.
 - The update story must include air-gapped/manual installs, not only connected environments.
@@ -29,7 +29,7 @@ Important constraints:
 - [.github/workflows/ci.yml](.github/workflows/ci.yml): Current cross-platform CI scaffold using GitHub-hosted runners.
 - [.github/workflows/desktop-packages.yml](.github/workflows/desktop-packages.yml): On-demand GitHub Actions packaging workflow for macOS, Windows, and Linux artifacts, checksum manifests, and optional signing inputs.
 - [tests/test_docs.py](tests/test_docs.py): Minimal smoke tests for the documentation scaffold.
-- [tests/test_example_app.py](tests/test_example_app.py): Backend behavior checks for the demo CRUD slice.
-- [tests/test_tasks_demo.py](tests/test_tasks_demo.py): Backend tests for the real async task demo, including enqueueing, reconciliation, and status transitions.
+- [tests/test_example_app.py](tests/test_example_app.py): Backend behavior checks for the demo CRUD slice ("My Ponies").
+- [tests/test_tasks_demo.py](tests/test_tasks_demo.py): Backend tests for the real async task demo ("Stable Routines"), including enqueueing, reconciliation, and status transitions.
 - [tests/test_health.py](tests/test_health.py): Readiness endpoint coverage.
-- [src/tasks_demo/](src/tasks_demo/): Optional post-v1 background task visualization demo with animated pulse-ring indicators, polling-based live updates, and a SQLite-backed `django_tasks` plus `django_tasks_db` worker flow.
+- [src/tasks_demo/](src/tasks_demo/): Background task visualization demo ("Stable Routines") with animated pulse-ring indicators, polling-based live updates, and a SQLite-backed `django_tasks` plus `django_tasks_db` worker flow (optional post-v1 extension).

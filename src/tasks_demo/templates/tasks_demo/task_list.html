@@ -1,16 +1,21 @@
 {% extends "base.html" %}
 
-{% block title %}Background Tasks | Desktop Django Starter{% endblock %}
-{% block heading %}Background Tasks{% endblock %}
+{% block title %}Stable Routines | Flying Stable{% endblock %}
+{% block heading %}Stable Routines{% endblock %}
 
 {% block content %}
-<div class="run-bar">
-    <button type="button" id="run-task-btn">Run Task</button>
-    <span class="hint">Starts a simulated background task</span>
+<div class="panel-toolbar">
+    <span class="hint">Starts a simulated stable routine</span>
+    <button type="button" id="run-task-btn" class="primary">Run Routine</button>
 </div>
 
 <div id="task-list">
     {% if tasks %}
+        <div class="task-list-header">
+            <span>Status</span>
+            <span>Task</span>
+            <span class="th-right">Duration</span>
+        </div>
         {% for task in tasks %}
         <div class="task-row" data-task-id="{{ task.pk }}" data-status="{{ task.status }}">
             <div class="pulse-indicator indicator-{{ task.status|lower }}">
@@ -26,7 +31,6 @@
                 {% endif %}
             </div>
             <div class="task-name">{{ task.label }}</div>
-            <div class="task-badge" data-status="{{ task.status }}">{{ task.get_status_display }}</div>
             <div class="task-meta" data-created="{{ task.created_at|date:'c' }}"
                  {% if task.completed_at %}data-completed="{{ task.completed_at|date:'c' }}"{% endif %}
                  {% if task.duration %}data-duration="{{ task.duration }}"{% endif %}>
@@ -34,20 +38,59 @@
             </div>
         </div>
         {% if task.status == "DONE" and task.result %}
-            <div class="task-result">Result: <span class="task-result-value">{{ task.result }}</span></div>
+            <div class="task-result task-result-done">Result: <span class="task-result-value">{{ task.result }}</span></div>
         {% elif task.status == "FAILED" and task.result %}
-            <div class="task-result">Error: <span class="task-result-error">{{ task.result }}</span></div>
+            <div class="task-result task-result-failed">Error: <span class="task-result-error">{{ task.result }}</span></div>
         {% endif %}
         {% endfor %}
     {% else %}
-        <p class="empty" id="empty-state">No tasks yet. Hit Run Task to start one.</p>
+        <div class="empty-state" id="empty-state">
+            <svg class="empty-state-illustration illustration-tasks" viewBox="-20 -10 230 250" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <!-- Large gear: 16 teeth (back) -->
+                <path d="M131.02,66.02l-.3,6.4-7.9,4.5-1.5,6.2,4.8,7.8-2.8,5.7-9,1.2-3.8,5.2,1.5,9-4.8,4.2-8.8-2.3-5.4,3.3-2.1,8.9-6,2.1-7.3-5.5-6.3.9-5.3,7.4-6.4-.3-4.5-7.9-6.2-1.5-7.8,4.8-5.7-2.8-1.2-9-5.2-3.8-9,1.5-4.2-4.8,2.3-8.8-3.3-5.4-8.9-2.1-2.1-6,5.5-7.3-.9-6.3-7.4-5.3.3-6.4,7.9-4.5,1.5-6.2-4.8-7.8,2.8-5.7,9-1.2,3.8-5.2-1.5-9,4.8-4.2,8.8,2.3,5.4-3.3,2.1-8.9,6-2.1,7.3,5.5,6.3-.9,5.3-7.4,6.4.3,4.5,7.9,6.2,1.5,7.8-4.8,5.7,2.8,1.2,9,5.2,3.8,9-1.5,4.2,4.8-2.3,8.8,3.3,5.4,8.9,2.1,2.1,6-5.5,7.3.9,6.3,7.4,5.3Z" stroke="currentColor" stroke-width="2" opacity="0.18"/>
+                <circle cx="66.02" cy="66.02" r="26" stroke="currentColor" stroke-width="2" opacity="0.18"/>
+                <!-- Small gear: 9 teeth (middle, right) -->
+                <path d="M191.79,120.49l-2.2,5.36-7.84.64-3.95,4.25.36,7.99-5.12,2.74-6.45-4.74-5.73.93-4.88,6.17-5.68-1.14-1.97-7.67-4.86-3.09-7.81,1.69-3.6-4.57,3.45-7.18-1.8-5.53-7.01-3.63.26-5.83,7.24-3.25,2.1-5.39-2.98-7.39,3.85-4.28,7.68,2.21,5.12-2.74,2.42-7.61,5.7-.82,4.5,6.58,5.65,1.25,6.73-4.22,5,3.02-.87,7.85,3.6,4.57,7.89,1.12,1.8,5.53-5.74,5.56-.12,5.76,5.29,5.89Z" stroke="currentColor" stroke-width="2" opacity="0.35"/>
+                <circle cx="159.94" cy="110.84" r="13.31" stroke="currentColor" stroke-width="2" opacity="0.35"/>
+                <!-- Medium gear: 12 teeth (front, below) -->
+                <path d="M146.52,164.01l.55,5.48-6.3,4.5-.85,5.35,4.5,6.3-2.27,5.01-7.67.76-3.41,4.26.76,7.67-4.46,3.21-7.05-3.18-5.12,1.94-3.18,7.05-5.48.55-4.5-6.3-5.35-.85-6.3,4.5-5.01-2.27-.76-7.67-4.26-3.41-7.67.76-3.21-4.46,3.18-7.05-1.94-5.12-7.05-3.18-.55-5.48,6.3-4.5.85-5.35-4.5-6.3,2.27-5.01,7.67-.76,3.41-4.26-.76-7.67,4.46-3.21,7.05,3.18,5.12-1.94,3.18-7.05,5.48-.55,4.5,6.3,5.35.85,6.3-4.5,5.01,2.27.76,7.67,4.26,3.41,7.67-.76,3.21,4.46-3.18,7.05,1.94,5.12,7.05,3.18Z" stroke="currentColor" stroke-width="2" opacity="0.6"/>
+                <circle cx="105.1" cy="170.93" r="17" stroke="currentColor" stroke-width="2" opacity="0.6"/>
+                <!-- Play circle -->
+                <circle cx="160.3" cy="195.8" r="36" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+                <path d="M153.3,186.8v18l16-9-16-9Z" fill="currentColor" opacity="0.35"/>
+            </svg>
+            <p class="empty-state-text">No routines yet. Hit Run Routine to start one.</p>
+        </div>
     {% endif %}
 </div>
+
+<template id="empty-state-template">
+    <div class="empty-state" id="empty-state">
+        <svg class="empty-state-illustration illustration-tasks" viewBox="-20 -10 230 250" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M131.02,66.02l-.3,6.4-7.9,4.5-1.5,6.2,4.8,7.8-2.8,5.7-9,1.2-3.8,5.2,1.5,9-4.8,4.2-8.8-2.3-5.4,3.3-2.1,8.9-6,2.1-7.3-5.5-6.3.9-5.3,7.4-6.4-.3-4.5-7.9-6.2-1.5-7.8,4.8-5.7-2.8-1.2-9-5.2-3.8-9,1.5-4.2-4.8,2.3-8.8-3.3-5.4-8.9-2.1-2.1-6,5.5-7.3-.9-6.3-7.4-5.3.3-6.4,7.9-4.5,1.5-6.2-4.8-7.8,2.8-5.7,9-1.2,3.8-5.2-1.5-9,4.8-4.2,8.8,2.3,5.4-3.3,2.1-8.9,6-2.1,7.3,5.5,6.3-.9,5.3-7.4,6.4.3,4.5,7.9,6.2,1.5,7.8-4.8,5.7,2.8,1.2,9,5.2,3.8,9-1.5,4.2,4.8-2.3,8.8,3.3,5.4,8.9,2.1,2.1,6-5.5,7.3.9,6.3,7.4,5.3Z" stroke="currentColor" stroke-width="2" opacity="0.18"/>
+            <circle cx="66.02" cy="66.02" r="26" stroke="currentColor" stroke-width="2" opacity="0.18"/>
+            <path d="M191.79,120.49l-2.2,5.36-7.84.64-3.95,4.25.36,7.99-5.12,2.74-6.45-4.74-5.73.93-4.88,6.17-5.68-1.14-1.97-7.67-4.86-3.09-7.81,1.69-3.6-4.57,3.45-7.18-1.8-5.53-7.01-3.63.26-5.83,7.24-3.25,2.1-5.39-2.98-7.39,3.85-4.28,7.68,2.21,5.12-2.74,2.42-7.61,5.7-.82,4.5,6.58,5.65,1.25,6.73-4.22,5,3.02-.87,7.85,3.6,4.57,7.89,1.12,1.8,5.53-5.74,5.56-.12,5.76,5.29,5.89Z" stroke="currentColor" stroke-width="2" opacity="0.35"/>
+            <circle cx="159.94" cy="110.84" r="13.31" stroke="currentColor" stroke-width="2" opacity="0.35"/>
+            <path d="M146.52,164.01l.55,5.48-6.3,4.5-.85,5.35,4.5,6.3-2.27,5.01-7.67.76-3.41,4.26.76,7.67-4.46,3.21-7.05-3.18-5.12,1.94-3.18,7.05-5.48.55-4.5-6.3-5.35-.85-6.3,4.5-5.01-2.27-.76-7.67-4.26-3.41-7.67.76-3.21-4.46,3.18-7.05-1.94-5.12-7.05-3.18-.55-5.48,6.3-4.5.85-5.35-4.5-6.3,2.27-5.01,7.67-.76,3.41-4.26-.76-7.67,4.46-3.21,7.05,3.18,5.12-1.94,3.18-7.05,5.48-.55,4.5,6.3,5.35.85,6.3-4.5,5.01,2.27.76,7.67,4.26,3.41,7.67-.76,3.21,4.46-3.18,7.05,1.94,5.12,7.05,3.18Z" stroke="currentColor" stroke-width="2" opacity="0.6"/>
+            <circle cx="105.1" cy="170.93" r="17" stroke="currentColor" stroke-width="2" opacity="0.6"/>
+            <circle cx="160.3" cy="195.8" r="36" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+            <path d="M153.3,186.8v18l16-9-16-9Z" fill="currentColor" opacity="0.35"/>
+        </svg>
+        <p class="empty-state-text">No routines yet. Hit Run Routine to start one.</p>
+    </div>
+</template>
+
+{% if tasks %}
+<div class="panel-footer">
+    <button type="button" class="secondary" id="clear-tasks-btn">Clear All Routines</button>
+</div>
+{% endif %}
 
 <script>
 (function() {
     const STATUS_URL = "{% url 'tasks_demo:task-status' %}";
     const RUN_URL = "{% url 'tasks_demo:task-run' %}";
+    const CLEAR_URL = "{% url 'tasks_demo:task-clear' %}";
     const POLL_INTERVAL = 2000;
 
     let pollTimer = null;
@@ -100,10 +143,10 @@
 
     function resultHTML(task) {
         if (task.status === "DONE" && task.result) {
-            return '<div class="task-result">Result: <span class="task-result-value">' + escapeHTML(task.result) + "</span></div>";
+            return '<div class="task-result task-result-done">Result: <span class="task-result-value">' + escapeHTML(task.result) + "</span></div>";
         }
         if (task.status === "FAILED" && task.result) {
-            return '<div class="task-result">Error: <span class="task-result-error">' + escapeHTML(task.result) + "</span></div>";
+            return '<div class="task-result task-result-failed">Error: <span class="task-result-error">' + escapeHTML(task.result) + "</span></div>";
         }
         return "";
     }
@@ -117,15 +160,16 @@
     function renderTasks(tasks) {
         const container = document.getElementById("task-list");
         if (tasks.length === 0) {
-            container.innerHTML = '<p class="empty" id="empty-state">No tasks yet. Hit Run Task to start one.</p>';
+            var tpl = document.getElementById("empty-state-template");
+            container.innerHTML = tpl ? tpl.innerHTML : '<div class="empty-state" id="empty-state"><p class="empty-state-text">No tasks yet. Hit Run Task to start one.</p></div>';
             return;
         }
         let html = "";
+        html += '<div class="task-list-header"><span>Status</span><span>Task</span><span class="th-right">Duration</span></div>';
         for (const task of tasks) {
             html += '<div class="task-row" data-task-id="' + task.id + '" data-status="' + task.status + '">';
             html += indicatorHTML(task.status);
             html += '<div class="task-name">' + escapeHTML(task.label) + "</div>";
-            html += '<div class="task-badge" data-status="' + task.status + '">' + task.status.charAt(0) + task.status.slice(1).toLowerCase() + "</div>";
             html += '<div class="task-meta">' + metaText(task) + "</div>";
             html += "</div>";
             html += resultHTML(task);
@@ -201,6 +245,21 @@
             if (text) meta.textContent = text;
         }
     });
+
+    // Clear all tasks
+    var clearBtn = document.getElementById("clear-tasks-btn");
+    if (clearBtn) {
+        clearBtn.addEventListener("click", function() {
+            fetch(CLEAR_URL, {
+                method: "POST",
+                headers: { "X-CSRFToken": getCookie("csrftoken") }
+            }).then(function() {
+                renderTasks([]);
+                var footer = document.querySelector(".panel-footer");
+                if (footer) footer.remove();
+            });
+        });
+    }
 
     // Start polling on load if there are active tasks
     var initialRows = document.querySelectorAll('.task-row[data-status="PENDING"], .task-row[data-status="RUNNING"]');

@@ -1,15 +1,66 @@
 {% extends "base.html" %}
 
-{% block title %}{% if object %}Edit Item{% else %}Create Item{% endif %} | Desktop Django Starter{% endblock %}
-{% block heading %}{% if object %}Edit Item{% else %}Create Item{% endif %}{% endblock %}
+{% block title %}{% if object %}Edit Pony{% else %}New Pony{% endif %} | Flying Stable{% endblock %}
+{% block heading %}{% if object %}Edit Pony{% else %}New Pony{% endif %}{% endblock %}
 
 {% block content %}
-<form method="post">
+<form method="post" novalidate id="item-form">
     {% csrf_token %}
     {{ form.as_p }}
-    <div class="actions">
-        <button type="submit">{% if object %}Save Changes{% else %}Create Item{% endif %}</button>
+    <div class="actions actions-right">
         <a class="button secondary" href="{% url 'example_app:item-list' %}">Cancel</a>
+        <button type="submit" class="primary">{% if object %}Save Changes{% else %}Save{% endif %}</button>
     </div>
 </form>
+
+<script>
+(function() {
+    var form = document.getElementById("item-form");
+
+    function clearErrors() {
+        form.querySelectorAll(".field-error").forEach(function(el) { el.remove(); });
+        form.querySelectorAll(".has-error").forEach(function(el) { el.classList.remove("has-error"); });
+    }
+
+    function showError(input, message) {
+        input.classList.add("has-error");
+        var tooltip = document.createElement("div");
+        tooltip.className = "field-error";
+        tooltip.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>' + message;
+        input.parentNode.appendChild(tooltip);
+    }
+
+    form.addEventListener("submit", function(e) {
+        clearErrors();
+        var hasError = false;
+
+        var title = form.querySelector("input[name=title]");
+        if (title && title.value.trim() === "") {
+            hasError = true;
+            showError(title, "Your pony needs a name.");
+        }
+
+        var notes = form.querySelector("textarea[name=notes]");
+        if (notes && notes.value.trim() === "") {
+            hasError = true;
+            showError(notes, "Do you know nothing about your pony?");
+        }
+
+        if (hasError) {
+            e.preventDefault();
+            var first = form.querySelector(".has-error");
+            if (first) first.focus();
+        }
+    });
+
+    // Clear error on input
+    form.addEventListener("input", function(e) {
+        if (e.target.classList.contains("has-error")) {
+            e.target.classList.remove("has-error");
+            var err = e.target.parentNode.querySelector(".field-error");
+            if (err) err.remove();
+        }
+    });
+})();
+</script>
 {% endblock %}

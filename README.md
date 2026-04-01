@@ -18,8 +18,8 @@ This repository now includes a runnable development slice, a staged packaged-bac
 Runnable starter slices:
 
 - Django 6.0.3 project under `src/desktop_django_starter/`
-- tiny server-rendered CRUD demo app under `src/example_app/`
-- background task visualization demo under `src/tasks_demo/` with animated pulse-ring indicators, polling-based live updates, and real `django_tasks` execution backed by SQLite
+- tiny server-rendered CRUD demo app under `src/example_app/`, themed as "My Ponies" in the Flying Stable presentation layer
+- background task visualization demo under `src/tasks_demo/`, themed as "Stable Routines", with animated pulse-ring indicators, polling-based live updates, and real `django_tasks` execution backed by SQLite
 - Electron 40 shell under `electron/`
 - random-port localhost startup with `/health/` readiness polling
 - minimal preload bridge for opening the app-data folder
@@ -28,6 +28,8 @@ Runnable starter slices:
 - on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
 
 Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
+
+The example app uses a branded presentation layer called "Flying Stable" (a Pegasus/pony theme) to demonstrate that the starter can carry a real visual identity while remaining a generic teaching scaffold underneath. The theme includes a dark topnav with logo and brand name, teal page headers with background images, a content panel with toolbar, a sticky footer, CSS custom-property design tokens, SVG empty-state illustrations, an in-page delete-confirmation modal, client-side form validation with themed error messages, and a splash screen at `/splash/` suitable for Electron startup. Item statuses are themed as Grazing (backlog), Galloping (active), and Show Ready (done). Development mode includes `django-browser-reload` for auto-reload.
 
 ## Docs
 
@@ -151,7 +153,7 @@ Packaged mode still sets a small runtime environment at launch time:
 
 - A minimal Electron shell that starts Django locally
 - A bundled Python runtime for packaged builds
-- A tiny example Django app that still feels real
+- A tiny example Django app that still feels real, with a themed presentation layer (currently "Flying Stable") that can be replaced
 - Clear extension points for replacing the example with your own Django project
 - Cross-platform packaging guidance with Windows as a required proof point
 - Plain GitHub Actions packaging and artifact download flow for macOS, Windows, and Linux, including env-driven signing/notarization scaffolding

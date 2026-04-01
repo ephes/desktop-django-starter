@@ -10,7 +10,7 @@ def test_item_list_empty_state(client) -> None:
     response = client.get(reverse("example_app:item-list"))
 
     assert response.status_code == 200
-    assert "No items yet." in response.content.decode()
+    assert "No ponies in the stable yet." in response.content.decode()
 
 
 def test_item_crud_flow(client) -> None:

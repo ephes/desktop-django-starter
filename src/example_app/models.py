@@ -3,9 +3,9 @@ from django.db import models
 
 class Item(models.Model):
     class Status(models.TextChoices):
-        BACKLOG = "backlog", "Backlog"
-        ACTIVE = "active", "Active"
-        DONE = "done", "Done"
+        BACKLOG = "backlog", "Grazing"
+        ACTIVE = "active", "Galloping"
+        DONE = "done", "Show Ready"
 
     title = models.CharField(max_length=200)
     notes = models.TextField(blank=True)

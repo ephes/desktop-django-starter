@@ -30,6 +30,12 @@ def task_create(request):
     )
 
 
+@require_POST
+def task_clear(request):
+    SimulatedTask.objects.all().delete()
+    return JsonResponse({"cleared": True})
+
+
 @require_GET
 def task_status(request):
     tasks = [reconcile_task_with_backend(task) for task in SimulatedTask.objects.all()]

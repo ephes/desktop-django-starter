@@ -1,40 +1,151 @@
 {% extends "base.html" %}
 
-{% block title %}Items | Desktop Django Starter{% endblock %}
-{% block heading %}Items{% endblock %}
+{% block title %}My Ponies | Flying Stable{% endblock %}
+{% block heading %}My Ponies{% endblock %}
+{% block header_class %}page-header-ponies{% endblock %}
 
 {% block content %}
-<div class="actions">
-    <a class="button" href="{% url 'example_app:item-create' %}">Create Item</a>
+<div class="panel-toolbar">
+    <span class="hint">Manage your stable of ponies</span>
+    <a class="button primary" href="{% url 'example_app:item-create' %}">Add Pony</a>
 </div>
 
 {% if items %}
     <table>
         <thead>
             <tr>
-                <th>Title</th>
+                <th>Name</th>
                 <th>Status</th>
-                <th>Notes</th>
-                <th>Updated</th>
+                <th>Personality</th>
+                <th class="th-right">Updated</th>
                 <th></th>
             </tr>
         </thead>
         <tbody>
             {% for item in items %}
                 <tr>
-                    <td>{{ item.title }}</td>
-                    <td>{{ item.get_status_display }}</td>
-                    <td>{{ item.notes|default:"No notes yet." }}</td>
-                    <td>{{ item.updated_at|date:"Y-m-d H:i" }}</td>
+                    <td class="cell-title">{{ item.title }}</td>
+                    <td><span class="status-badge status-{{ item.status }}">{{ item.get_status_display }}</span></td>
+                    <td class="cell-notes">{{ item.notes|default:"—"|truncatewords:20 }}</td>
+                    <td class="cell-date">{{ item.updated_at|date:"Y-m-d" }}<br>{{ item.updated_at|date:"H:i" }}</td>
                     <td class="row-actions">
-                        <a href="{% url 'example_app:item-update' item.pk %}">Edit</a>
-                        <a href="{% url 'example_app:item-delete' item.pk %}">Delete</a>
+                        <a href="{% url 'example_app:item-update' item.pk %}" class="action-edit" title="Edit">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
+                        </a>
+                        <a href="{% url 'example_app:item-delete' item.pk %}" class="action-delete" title="Delete">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
+                        </a>
                     </td>
                 </tr>
             {% endfor %}
         </tbody>
     </table>
 {% else %}
-    <p class="empty">No items yet. Create one to prove the local desktop loop works.</p>
+    <div class="empty-state">
+        <svg class="empty-state-illustration" viewBox="0 0 260 200" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="80" y="20" width="120" height="160" rx="8" stroke="currentColor" stroke-width="2" opacity="0.18"/>
+            <rect x="68" y="10" width="120" height="160" rx="8" stroke="currentColor" stroke-width="2" opacity="0.35"/>
+            <rect x="56" y="0" width="120" height="160" rx="8" fill="white" stroke="currentColor" stroke-width="2" opacity="0.6"/>
+            <line x1="76" y1="32" x2="156" y2="32" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.4"/>
+            <line x1="76" y1="50" x2="140" y2="50" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+            <line x1="76" y1="68" x2="148" y2="68" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+            <line x1="76" y1="86" x2="132" y2="86" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+            <circle cx="200" cy="140" r="36" stroke="currentColor" stroke-width="2" opacity="0.2"/>
+            <path d="M191 131 L209 149 M209 131 L191 149" stroke="currentColor" stroke-width="3" stroke-linecap="round" opacity="0.35"/>
+        </svg>
+        <p class="empty-state-text">No ponies in the stable yet. Add one to get started.</p>
+    </div>
 {% endif %}
+
+{% if items %}
+<div class="panel-footer">
+    <button type="button" class="secondary" id="clear-items-btn">Release All Ponies</button>
+</div>
+{% endif %}
+
+{% csrf_token %}
+<div class="modal-overlay" id="delete-modal">
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
+        <p class="modal-text">Delete <strong id="delete-modal-title"></strong>?</p>
+        <div class="actions actions-right">
+            <button type="button" class="secondary" id="delete-cancel">Keep It</button>
+            <button type="button" class="danger" id="delete-confirm">Delete</button>
+        </div>
+    </div>
+</div>
+
+<script>
+(function() {
+    var modal = document.getElementById("delete-modal");
+    var titleEl = document.getElementById("delete-modal-title");
+    var confirmBtn = document.getElementById("delete-confirm");
+    var cancelBtn = document.getElementById("delete-cancel");
+    var deleteUrl = "";
+    var csrfToken = document.querySelector("[name=csrfmiddlewaretoken]");
+    if (!csrfToken) {
+        var m = document.cookie.match(/csrftoken=([^;]+)/);
+        csrfToken = m ? m[1] : "";
+    } else {
+        csrfToken = csrfToken.value;
+    }
+
+    function openModal(title, url) {
+        titleEl.textContent = title;
+        deleteUrl = url;
+        modal.classList.add("is-open");
+        cancelBtn.focus();
+    }
+
+    function closeModal() {
+        modal.classList.remove("is-open");
+    }
+
+    document.addEventListener("keydown", function(e) {
+        if (e.key === "Escape" && modal.classList.contains("is-open")) {
+            closeModal();
+        }
+    });
+
+    document.addEventListener("click", function(e) {
+        var link = e.target.closest(".action-delete");
+        if (!link) return;
+        e.preventDefault();
+        var row = link.closest("tr");
+        var title = row.querySelector(".cell-title").textContent.trim();
+        openModal(title, link.getAttribute("href"));
+    });
+
+    cancelBtn.addEventListener("click", closeModal);
+
+    modal.addEventListener("click", function(e) {
+        if (e.target === modal) closeModal();
+    });
+
+    confirmBtn.addEventListener("click", function() {
+        fetch(deleteUrl, {
+            method: "POST",
+            headers: {
+                "X-CSRFToken": csrfToken,
+                "Content-Type": "application/x-www-form-urlencoded"
+            },
+            body: "csrfmiddlewaretoken=" + encodeURIComponent(csrfToken),
+            redirect: "follow"
+        }).then(function() {
+            window.location.reload();
+        });
+    });
+
+    var clearBtn = document.getElementById("clear-items-btn");
+    if (clearBtn) {
+        clearBtn.addEventListener("click", function() {
+            fetch("{% url 'example_app:item-clear' %}", {
+                method: "POST",
+                headers: { "X-CSRFToken": csrfToken }
+            }).then(function() {
+                window.location.reload();
+            });
+        });
+    }
+})();
+</script>
 {% endblock %}

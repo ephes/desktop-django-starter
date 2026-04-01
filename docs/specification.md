@@ -70,6 +70,27 @@ Recommended v1 shape:
 
 This is enough to demonstrate persistence, forms, templates, static files, and local desktop packaging without dragging in product-specific complexity.
 
+### Current presentation layer
+
+The example app currently uses a themed visual identity called "Flying Stable" (a Pegasus/pony theme). This is a demonstration of how the starter can carry a branded UI. The theme is entirely in the presentation layer (templates, CSS, static assets) and does not change the underlying architecture.
+
+Key elements of the current themed UI:
+
+- "My Ponies" section (CRUD demo) and "Stable Routines" section (background tasks demo)
+- dark topnav with an SVG logo and "Flying Stable" brand name, with section links
+- teal page header with background images (a custom illustration for My Ponies)
+- content panel with a toolbar, sticky footer
+- Item statuses themed as Grazing (backlog), Galloping (active), Show Ready (done)
+- in-page modal for delete confirmations instead of a separate page
+- client-side form validation with themed error messages (tooltip-style with warning icon)
+- SVG empty-state illustrations (stacked documents for My Ponies, interlocking gears for Stable Routines)
+- all colors defined as CSS custom properties (design tokens) in `:root`
+- a splash screen at `/splash/` with animated logo and loading dots, available for Electron startup (not yet wired into Electron)
+- `django-browser-reload` for development auto-reload (local settings only)
+- Play font loaded from Google Fonts, falling back to Helvetica Neue / Arial / sans-serif in offline or packaged mode
+
+The theme is replaceable. When adapting this starter for a different project, the templates, CSS, and static assets are the seams where the visual identity lives.
+
 ## 7. Explicit Non-Goals
 
 The starter must not become a framework or a thin copy of `djdesk`.
