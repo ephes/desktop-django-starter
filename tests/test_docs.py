@@ -58,6 +58,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     specification = (ROOT / "docs" / "specification.md").read_text()
     llms = (ROOT / "llms.txt").read_text()
     docs_llms = (ROOT / "docs" / "llms.txt").read_text()
+    tauri_doc = (ROOT / "docs" / "shells" / "tauri.md").read_text()
+    positron_doc = (ROOT / "docs" / "shells" / "positron.md").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
 
     assert "docs/release.md" in readme
@@ -96,6 +98,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/positron/" in architecture
     assert "packaged-app copy first" in architecture
     assert "shell-local splash window" in architecture
+    assert "fallback `DJANGO_SECRET_KEY` only when the environment does not provide one" in architecture
     assert "comparison paths in this repo" in specification
     assert "shells/electron/" in llms
     assert "shells/tauri/" in llms
@@ -105,6 +108,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/electron.html" in docs_llms
     assert "shells/tauri.html" in docs_llms
     assert "shells/positron.html" in docs_llms
+    assert "app.security.csp" in tauri_doc
+    assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in positron_doc
     assert ".stage/" in gitignore
 
 

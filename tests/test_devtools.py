@@ -16,7 +16,8 @@ def test_bucket_for_path_groups_repo_sections() -> None:
     )
     assert bucket_for_path("tests/test_health.py") == "tests"
     assert bucket_for_path("tests/integration/test_packaged.py") == "tests/integration"
-    assert bucket_for_path("shells/electron/main.js") == "shells"
+    assert bucket_for_path("shells/electron/main.js") == "shells/electron"
+    assert bucket_for_path("shells/tauri/src-tauri/src/lib.rs") == "shells/tauri"
 
 
 def test_aggregate_cloc_csv_sums_by_bucket() -> None:
@@ -32,7 +33,7 @@ SUM,,4,8,65
 
     assert stats == {
         "src/example_app": {"files": 2, "lines": 30},
-        "shells": {"files": 1, "lines": 30},
+        "shells/electron": {"files": 1, "lines": 30},
         "tests": {"files": 1, "lines": 5},
     }
 

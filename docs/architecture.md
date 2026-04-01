@@ -156,6 +156,7 @@ Current launcher contract:
 - Electron and Tauri packaged mode resolve the interpreter from `backend/runtime-manifest.json`
 - Electron and Tauri then run `manage.py` from `backend/` for both `runserver` and `db_worker`
 - packaged settings still rely on runtime environment variables for writable app data, bundle dir, localhost host/port, secret key, and unbuffered Python output
+- Electron, Tauri, and Positron all use the same fallback `DJANGO_SECRET_KEY` only when the environment does not provide one, so local packaged-like startup stays simple without claiming that the fallback value is a release-grade secret
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
 - shell-local wrappers such as `shells/electron/scripts/bundled-python.cjs` are allowed to resolve shared helpers from two locations: a packaged-app copy first, then a repo-relative source path for local development
 - the Tauri shell keeps its subprocess supervision in Rust under `shells/tauri/src-tauri/src/lib.rs` instead of forcing a cross-shell launcher abstraction

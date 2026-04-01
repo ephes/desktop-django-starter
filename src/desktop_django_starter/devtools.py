@@ -249,6 +249,8 @@ def bucket_for_path(path: str | Path) -> str:
         return "."
     if parts[0] == "src" and len(parts) >= 2:
         return f"src/{parts[1]}"
+    if parts[0] == "shells" and len(parts) >= 2:
+        return f"shells/{parts[1]}"
     if parts[0] == "tests":
         return f"tests/{parts[1]}" if len(parts) >= 3 else "tests"
     return parts[0]

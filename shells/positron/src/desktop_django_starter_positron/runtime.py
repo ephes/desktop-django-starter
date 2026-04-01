@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 HOST = "127.0.0.1"
-PACKAGED_RUNTIME_SECRET_KEY = "desktop-django-starter-positron-secret"
+PACKAGED_RUNTIME_SECRET_KEY = "desktop-django-starter-packaged-runtime-secret"
 WORKER_ID = "desktop-django-starter-positron"
 
 
@@ -31,11 +31,30 @@ def shared_brand_icon(module_file: str | Path | None = None) -> Path:
     return development_repo_root(module_file) / "assets" / "brand" / "flying-stable-app-icon.svg"
 
 
+def resolve_django_source_root(module_file: str | Path | None = None) -> Path:
+    expected_packages = ("desktop_django_starter", "example_app", "tasks_demo")
+    candidates = [
+        bundled_django_src(module_file),
+        development_repo_src(module_file),
+    ]
+
+    for candidate in candidates:
+        if not candidate.exists():
+            continue
+        if all((candidate / package).exists() for package in expected_packages):
+            return candidate
+
+    expected_locations = ", ".join(str(candidate) for candidate in candidates)
+    raise RuntimeError(
+        "Could not locate the shared Django source tree. "
+        f"Expected {expected_locations} to contain {', '.join(expected_packages)}."
+    )
+
+
 def ensure_project_imports(module_file: str | Path | None = None) -> None:
     candidates = [
         bundled_app_root(module_file),
-        bundled_django_src(module_file),
-        development_repo_src(module_file),
+        resolve_django_source_root(module_file),
     ]
     for candidate in candidates:
         if candidate.exists() and str(candidate) not in sys.path:

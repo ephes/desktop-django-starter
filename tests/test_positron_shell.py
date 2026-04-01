@@ -33,6 +33,7 @@ def test_positron_docs_and_commands_state_scope_honestly() -> None:
     assert "GitHub Actions artifact generation remains out of scope" in shell_doc
     assert "Windows packaged-build parity is not claimed" in shell_doc
     assert "ad-hoc signing" in shell_doc
+    assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in shell_doc
     assert "no dedicated Positron GitHub packaging workflow" in release
     assert "just positron-package-dmg" in release
     assert "positron-start" in justfile
@@ -86,3 +87,44 @@ def test_positron_runtime_helpers_resolve_repo_paths(tmp_path) -> None:
     assert env["DESKTOP_DJANGO_APP_DATA_DIR"] == str(tmp_path / "data")
     assert env["DESKTOP_DJANGO_BUNDLE_DIR"] == str(tmp_path / "bundle")
     assert env["DESKTOP_DJANGO_PORT"] == "9042"
+    assert env["DJANGO_SECRET_KEY"] == "desktop-django-starter-packaged-runtime-secret"
+
+
+def test_positron_runtime_validation_uses_shared_django_source(tmp_path) -> None:
+    sys.path.insert(0, str(POSITRON_SRC))
+    try:
+        from desktop_django_starter_positron import runtime
+    finally:
+        sys.path.remove(str(POSITRON_SRC))
+
+    module_file = tmp_path / "shells" / "positron" / "src" / "desktop_django_starter_positron" / "runtime.py"
+    module_file.parent.mkdir(parents=True)
+    module_file.write_text("", encoding="utf-8")
+
+    repo_src = tmp_path / "src"
+    for package in ("desktop_django_starter", "example_app", "tasks_demo"):
+        (repo_src / package).mkdir(parents=True)
+
+    assert runtime.resolve_django_source_root(module_file) == repo_src
+
+
+def test_positron_runtime_validation_raises_clear_error_when_src_missing(tmp_path) -> None:
+    sys.path.insert(0, str(POSITRON_SRC))
+    try:
+        from desktop_django_starter_positron import runtime
+    finally:
+        sys.path.remove(str(POSITRON_SRC))
+
+    module_file = tmp_path / "shells" / "positron" / "src" / "desktop_django_starter_positron" / "runtime.py"
+    module_file.parent.mkdir(parents=True)
+    module_file.write_text("", encoding="utf-8")
+
+    try:
+        runtime.resolve_django_source_root(module_file)
+    except RuntimeError as error:
+        message = str(error)
+    else:  # pragma: no cover - defensive failure path
+        raise AssertionError("Expected a clear runtime validation error.")
+
+    assert "Could not locate the shared Django source tree" in message
+    assert "desktop_django_starter" in message

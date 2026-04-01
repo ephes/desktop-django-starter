@@ -27,6 +27,7 @@ Scope boundaries:
 - Tauri is still experimental and local-only in this slice
 - GitHub Actions artifact generation remains Electron-only
 - Electron remains the most complete shell path
+- the current Tauri config keeps `app.security.csp` disabled so the shell can load its local splash and localhost-served Django pages without pretending this is already a hardened release policy
 - the Windows support claim is limited to preparing a local NSIS installer path with `just tauri-build`
 - installer install/run validation still needs a real live Windows machine and is not automated in this repo
 
