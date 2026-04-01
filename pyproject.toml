@@ -51,8 +51,9 @@ target-version = "py312"
 extend-exclude = [
     "docs/_build",
     ".stage",
-    "shells/electron/.stage",
     "shells/electron/node_modules",
+    "shells/tauri/node_modules",
+    "shells/tauri/src-tauri/target",
     "positron",
     "tauri",
 ]

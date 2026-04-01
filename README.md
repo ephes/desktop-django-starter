@@ -1,10 +1,10 @@
 # Desktop Django Starter
 
-Minimal, attendee-facing starter for shipping a Django app inside Electron with a bundled Python runtime.
+Minimal, attendee-facing starter for shipping a Django app inside Electron with a bundled Python runtime, now with an experimental Tauri shell that reuses the same staged backend contract for local validation.
 
 **Documentation: [desktop-django-starter.readthedocs.io](https://desktop-django-starter.readthedocs.io/en/latest/)**
 
-This repository now includes a runnable development slice, a staged packaged-backend slice, and a sign/notarization-aware GitHub packaging slice: a tiny Django app served locally and supervised by Electron, with a bundled Python runtime staged under `.stage/backend/python/` and packaged desktop artifacts built in GitHub Actions.
+This repository now includes a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware GitHub packaging slice, and an experimental Tauri port: a tiny Django app served locally and supervised by Electron or Tauri, with a bundled Python runtime staged under `.stage/backend/python/` and Electron-packaged desktop artifacts built in GitHub Actions.
 
 ## Intent
 
@@ -21,15 +21,17 @@ Runnable starter slices:
 - tiny server-rendered CRUD demo app under `src/example_app/`, themed as "My Ponies" in the Flying Stable presentation layer
 - background task visualization demo under `src/tasks_demo/`, themed as "Stable Routines", with animated pulse-ring indicators, polling-based live updates, and real `django_tasks` execution backed by SQLite
 - Electron 40 shell under `shells/electron/`
+- Tauri 2 shell under `shells/tauri/` for local experiment scope, using the same staged backend contract and child-process worker model
 - random-port localhost startup with `/health/` readiness polling
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally, including the supervised task worker
+- experimental packaged-like Tauri launcher plus local host-bundle/macOS DMG build path, without GitHub Actions artifact generation
 - on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
 
 Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
 
-The example app uses a branded presentation layer called "Flying Stable" (a Pegasus/pony theme) to demonstrate that the starter can carry a real visual identity while remaining a generic teaching scaffold underneath. The theme includes a dark topnav with logo and brand name, teal page headers with background images, a content panel with toolbar, a sticky footer, CSS custom-property design tokens, SVG empty-state illustrations, an in-page delete-confirmation modal, client-side form validation with themed error messages, a splash screen at `/splash/` that Electron now shows during backend startup, and packaged app icons generated in `shells/electron/assets/icons/` from the shared source art under `assets/brand/`. Item statuses are themed as Grazing (backlog), Galloping (active), and Show Ready (done). Development mode includes `django-browser-reload` for auto-reload.
+The example app uses a branded presentation layer called "Flying Stable" (a Pegasus/pony theme) to demonstrate that the starter can carry a real visual identity while remaining a generic teaching scaffold underneath. The theme includes a dark topnav with logo and brand name, teal page headers with background images, a content panel with toolbar, a sticky footer, CSS custom-property design tokens, SVG empty-state illustrations, an in-page delete-confirmation modal, client-side form validation with themed error messages, a splash screen at `/splash/` that Electron now shows during backend startup, and packaged app icons generated in `shells/electron/assets/icons/` and `shells/tauri/src-tauri/icons/` from the shared source art under `assets/brand/`. Item statuses are themed as Grazing (backlog), Galloping (active), and Show Ready (done). Development mode includes `django-browser-reload` for auto-reload.
 
 ## Docs
 
@@ -55,7 +57,15 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 - `just task-worker`: run the single background task worker for `/tasks/` without Electron
 - `just electron-install`: install Electron dependencies
 - `just electron-start`: start the Electron shell, which launches Django plus one background task worker on a random localhost port
+- `just tauri-install`: install Tauri shell dependencies
+- `just tauri-test`: compile-check the Tauri shell with `cargo test`
+- `just tauri-start`: start the Tauri shell, which launches Django plus one background task worker on a random localhost port
+- `just tauri-smoke`: start the Tauri shell and auto-exit after the first page load
+- `just tauri-packaged-start`: rebuild the shared staged backend and launch the Tauri shell against the packaged runtime contract
+- `just tauri-packaged-smoke`: rebuild the shared staged backend, launch the Tauri shell against the packaged runtime contract, and auto-exit after the first page load
+- `just tauri-build`: build a local Tauri host bundle, defaulting to a macOS DMG on macOS
 - `npm --prefix shells/electron run icons`: regenerate the packaged app icon PNG and macOS ICNS from `assets/brand/flying-stable-app-icon.svg` into `shells/electron/assets/icons/` (requires `rsvg-convert` from `librsvg`; macOS uses the built-in `iconutil` for ICNS output)
+- `npm --prefix shells/tauri run icons`: regenerate the Tauri icon set in `shells/tauri/src-tauri/icons/` from the same shared SVG source
 
 The generated Electron icon outputs under `shells/electron/assets/icons/` are kept in the repo so a fresh clone can still run the shell and packaging flow before local icon-tooling is installed.
 - `just packaged-stage`: build the staged packaged-backend bundle under `.stage/backend`, including the bundled Python runtime
@@ -84,6 +94,8 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 For backend-only work, use `just backend-dev`.
 When you need the real `/tasks/` demo outside Electron, run `just task-worker` in a second terminal.
 
+For the experimental Tauri shell, use `just tauri-install` once and then `just tauri-start`. The Tauri path keeps the same localhost Django plus `db_worker` subprocess model as Electron, but its packaged build scope is still local-only and intentionally does not add a GitHub Actions artifact lane in this slice.
+
 For the packaged-mode staging slice, use `just packaged-start`.
 The `.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
 
@@ -97,6 +109,14 @@ Local packaging remains usable without any signing secrets:
 
 - `just package-dist` builds a host-native installer artifact for the current machine
 - `just package-dist-dir` builds an unpacked app directory for local inspection
+- `just tauri-build` builds a local Tauri host bundle; on macOS the default target is a DMG for experiment-only validation
+
+The Tauri packaging path is explicitly narrower than Electron in this slice:
+
+- it is local-only
+- it reuses `.stage/backend` as bundled resources
+- it does not add GitHub Actions artifact generation
+- it does not imply Windows packaged-build parity yet
 
 When signing credentials are present, `electron-builder` now uses them directly:
 
@@ -134,11 +154,11 @@ The staged packaged-backend layout is now explicit enough to mirror a later pack
 - `.stage/backend/staticfiles/`: collected static assets for `DEBUG=False`
 - `.stage/backend/runtime-manifest.json`: runtime metadata that records the staged interpreter and launcher contract
 
-Electron packaged mode reads `runtime-manifest.json` to locate the bundled interpreter, then invokes `manage.py` from the backend root. The current staged manifest records the interpreter as `python/bin/python3.12` on POSIX and is designed to allow `python.exe` on Windows.
+Electron and Tauri packaged mode read `runtime-manifest.json` to locate the bundled interpreter, then invoke `manage.py` from the backend root. The current staged manifest records the interpreter as `python/bin/python3.12` on POSIX and is designed to allow `python.exe` on Windows.
 
 The shell-neutral staging build now lives in `scripts/stage-backend.cjs`, which writes the staged backend once at the repo root so later shells can consume the same contract.
 
-Electron now supervises two backend commands from that staged bundle:
+Electron and Tauri now supervise two backend commands from that staged bundle:
 
 - `manage.py runserver ...` for the local web app
 - `manage.py db_worker --queue-name default ...` for the `/tasks/` demo worker
@@ -169,3 +189,4 @@ Packaged mode still sets a small runtime environment at launch time:
 - No GitHub Release publishing automation is wired yet; checksum generation exists, but promotion remains manual.
 - Linux packaging still exists, but Linux signing and verification are not a baseline in this slice.
 - Windows public-distribution hardening beyond optional signing inputs is still follow-on work.
+- Tauri remains an experimental local shell path with no GitHub Actions artifact lane and no Windows packaged parity claim in this slice.

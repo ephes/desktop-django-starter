@@ -1,5 +1,6 @@
 from desktop_django_starter.devtools import (
     _aggregate_cloc_csv,
+    _is_excluded_dir,
     _parse_cloc_summary_csv,
     bucket_for_path,
 )
@@ -72,3 +73,10 @@ bad,HTML,8,0,107
             },
         ],
     }
+
+
+def test_excluded_dirs_cover_generated_shell_artifacts() -> None:
+    assert _is_excluded_dir("shells/tauri/node_modules")
+    assert _is_excluded_dir("shells/tauri/src-tauri/target")
+    assert _is_excluded_dir("tauri")
+    assert _is_excluded_dir("positron")

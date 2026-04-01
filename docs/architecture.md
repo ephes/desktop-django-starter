@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Status: intended implementation shape, with the runnable development slice, staged bundled-runtime contract, and sign/notarization-aware packaging workflow now in place
+Status: intended implementation shape, with the runnable development slice, staged bundled-runtime contract, sign/notarization-aware Electron packaging workflow, and experimental Tauri shell now in place
 
 ## Runtime Model
 
@@ -49,11 +49,16 @@ desktop-django-starter/
 │   ├── bundled-python.cjs
 │   └── stage-backend.cjs
 ├── shells/
-│   └── electron/
-│       ├── assets/icons/
-│       ├── main.js
-│       ├── preload.cjs
-│       └── package.json
+│   ├── electron/
+│   │   ├── assets/icons/
+│   │   ├── main.js
+│   │   ├── preload.cjs
+│   │   └── package.json
+│   └── tauri/
+│       ├── package.json
+│       ├── scripts/
+│       ├── src/
+│       └── src-tauri/
 ├── manage.py
 ├── pyproject.toml
 ├── src/
@@ -123,7 +128,7 @@ Current expected direction:
 
 - use Django-side static file serving in the simplest acceptable form for v1, rather than introducing an additional asset-serving layer in Electron unless it proves necessary
 - the staged local bundle now mirrors the future packaged layout by keeping the backend payload together and staging the interpreter under `backend/python/`
-- Electron app icon source-of-truth now lives under `assets/brand/`, with generated PNG and macOS ICNS outputs written into `shells/electron/assets/icons/` for the packaged shell
+- app icon source-of-truth now lives under `assets/brand/`, with generated Electron outputs written into `shells/electron/assets/icons/` and generated Tauri outputs written into `shells/tauri/src-tauri/icons/`
 - the example app base template loads the Play font from Google Fonts via an external stylesheet link; in packaged or air-gapped mode the request will silently fail and the CSS font stack falls back to Helvetica Neue / Arial / sans-serif
 
 Current staged backend contract:
@@ -137,11 +142,12 @@ Current staged backend contract:
 
 Current launcher contract:
 
-- Electron packaged mode resolves the interpreter from `backend/runtime-manifest.json`
-- Electron then runs `manage.py` from `backend/` for both `runserver` and `db_worker`
+- Electron and Tauri packaged mode resolve the interpreter from `backend/runtime-manifest.json`
+- Electron and Tauri then run `manage.py` from `backend/` for both `runserver` and `db_worker`
 - packaged settings still rely on runtime environment variables for writable app data, bundle dir, localhost host/port, secret key, and unbuffered Python output
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
 - shell-local wrappers such as `shells/electron/scripts/bundled-python.cjs` are allowed to resolve shared helpers from two locations: a packaged-app copy first, then a repo-relative source path for local development
+- the Tauri shell keeps its subprocess supervision in Rust under `shells/tauri/src-tauri/src/lib.rs` instead of forcing a cross-shell launcher abstraction
 
 ## Release and Update Model
 

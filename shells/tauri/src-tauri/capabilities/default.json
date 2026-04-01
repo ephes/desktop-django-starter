@@ -1,0 +1,8 @@
+{
+  "identifier": "default",
+  "description": "Capability for the experimental localhost Tauri shell",
+  "windows": ["main"],
+  "permissions": [
+    "core:default"
+  ]
+}

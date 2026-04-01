@@ -9,9 +9,20 @@ Two packaging paths are intentionally supported:
 - local packaging with `just package-dist` or `just package-dist-dir`
 - GitHub Actions packaging with `.github/workflows/desktop-packages.yml`
 
+The repo now also includes one narrower Tauri-only local packaging command:
+
+- `just tauri-build` for a local host bundle, defaulting to a macOS DMG on macOS
+
 Local packaging remains usable when no release credentials are configured. In that case, the build should still complete, but the resulting installer is expected to be unsigned and, on macOS, not notarized.
 
 The GitHub Actions workflow uses the same `electron-builder` config and only turns on signing/notarization when the relevant secrets are present. This keeps the starter teachable while still making the public-distribution requirements concrete.
+
+Tauri is explicitly out of that release lane in this slice:
+
+- there is no dedicated Tauri GitHub packaging workflow
+- there is no Tauri checksum-artifact lane
+- local Tauri bundles are for experiment validation, not release parity
+- Windows packaged proof for Tauri is still deferred
 
 Current output artifacts:
 
@@ -26,6 +37,17 @@ Current checksum artifacts:
 - Linux: `desktop-django-starter-linux-sha256.txt`, containing SHA-256 lines for the AppImage upload set
 
 Linux output remains available for parity, but Linux signing and Linux verification are not baseline requirements in this slice.
+
+## Tauri Local Bundle Scope
+
+The experimental Tauri shell under `shells/tauri/` can build a local host bundle and, on macOS, a local DMG through `just tauri-build`.
+
+That path intentionally stays narrower than Electron:
+
+- it reuses the shared `.stage/backend` payload as bundled resources
+- it does not participate in `.github/workflows/desktop-packages.yml`
+- it does not add checksum uploads, signing automation, or notarization scaffolding
+- it should be described as local-only experiment scope until a dedicated release lane exists
 
 ## macOS Signing and Notarization Inputs
 

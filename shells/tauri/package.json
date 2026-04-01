@@ -1,0 +1,22 @@
+{
+  "name": "desktop-django-starter-tauri",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "tauri": "tauri",
+    "icons": "tauri icon ../../assets/brand/flying-stable-app-icon.svg --output src-tauri/icons",
+    "stage-backend": "node ../../scripts/stage-backend.cjs",
+    "start": "node ./scripts/launch-tauri.mjs",
+    "smoke": "node ./scripts/launch-tauri.mjs --smoke-test",
+    "start:packaged": "npm run stage-backend && node ./scripts/launch-tauri.mjs --runtime=packaged",
+    "smoke:packaged": "npm run stage-backend && node ./scripts/launch-tauri.mjs --runtime=packaged --smoke-test",
+    "build": "node ./scripts/build-tauri.mjs",
+    "build:dmg": "npm run build -- --bundles dmg",
+    "smoke:build": "node ./scripts/build-tauri.mjs --debug --smoke-test",
+    "test": "cargo test --manifest-path ./src-tauri/Cargo.toml"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "2.10.1"
+  }
+}

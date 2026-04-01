@@ -45,9 +45,12 @@ FALLBACK_EXCLUDED_DIRS = {
     "build",
     "dist",
     "docs/_build",
-    "shells/electron/.stage",
+    "positron",
     "shells/electron/dist",
     "shells/electron/node_modules",
+    "shells/tauri/node_modules",
+    "shells/tauri/src-tauri/target",
+    "tauri",
     "node_modules",
 }
 

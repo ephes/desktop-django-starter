@@ -40,6 +40,27 @@ electron-install:
 electron-start:
     npm --prefix shells/electron start
 
+tauri-install:
+    npm --prefix shells/tauri install
+
+tauri-test:
+    npm --prefix shells/tauri test
+
+tauri-start:
+    npm --prefix shells/tauri start
+
+tauri-smoke:
+    npm --prefix shells/tauri run smoke
+
+tauri-packaged-start:
+    npm --prefix shells/tauri run start:packaged
+
+tauri-packaged-smoke:
+    npm --prefix shells/tauri run smoke:packaged
+
+tauri-build TARGET="--bundles dmg":
+    npm --prefix shells/tauri run build -- {{TARGET}}
+
 packaged-stage:
     npm --prefix shells/electron run stage-backend
 
@@ -130,4 +151,4 @@ loc:
     uv run count-lines-of-code
 
 clean:
-    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 .stage shells/electron/dist shells/electron/node_modules
+    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 .stage shells/electron/dist shells/electron/node_modules shells/tauri/node_modules shells/tauri/src-tauri/target

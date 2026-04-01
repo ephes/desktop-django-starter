@@ -11,6 +11,8 @@ db.sqlite3
 .stage/
 shells/electron/node_modules/
 shells/electron/dist/
+shells/tauri/node_modules/
+shells/tauri/src-tauri/target/
 *.p8
 *.p12
 *.pfx

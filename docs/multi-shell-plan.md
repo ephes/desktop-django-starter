@@ -1,6 +1,6 @@
 # Multi-Shell Separation Plan
 
-Status: first layout/staging slice implemented on `experiment/multi-shell-separation-plan`; Tauri and Positron ports remain unimplemented
+Status: layout/staging slice and the Tauri port are implemented on `experiment/multi-shell-separation-plan`; Positron remains unimplemented
 
 ## Goal
 
@@ -35,10 +35,10 @@ Implemented in this branch so far:
 - shared brand source-of-truth under `assets/brand/`
 - shell-neutral staged backend output under `.stage/backend/`
 - Electron moved under `shells/electron/`
+- runnable Tauri shell under `shells/tauri/`
 
 Still not implemented in this slice:
 
-- runnable `shells/tauri/`
 - runnable `shells/positron/`
 
 Notes:

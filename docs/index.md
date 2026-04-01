@@ -1,6 +1,6 @@
 # Desktop Django Starter
 
-Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, and a sign/notarization-aware GitHub packaging slice in place.
+Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware GitHub packaging slice in place, and an experimental Tauri shell that reuses the shared staged backend locally.
 
 The current implementation includes a local Django app, an Electron shell that supervises it over localhost, a `/health/` readiness check, a tiny CRUD demo, a background task visualization demo with animated indicators and live polling, a packaged-like staging flow with a bundled Python runtime plus collected static assets, and an on-demand GitHub Actions workflow that builds desktop artifacts for macOS, Windows, and Linux. macOS signing/notarization scaffolding and optional Windows signing inputs are now documented and wired into packaging; auto-update is still deferred.
 
@@ -24,6 +24,11 @@ multi-shell-plan
 - `just install` installs the development environment with `uv`
 - `just electron-install` installs the Electron dependencies
 - `just dev` starts Electron, which launches Django on a random localhost port
+- `just tauri-install` installs the Tauri shell dependencies
+- `just tauri-test` compile-checks the Tauri shell
+- `just tauri-start` starts the Tauri shell, which launches Django on a random localhost port
+- `just tauri-packaged-start` launches the packaged-like Tauri path against `.stage/backend`
+- `just tauri-build` builds a local Tauri host bundle, defaulting to a macOS DMG on macOS
 - `just backend-dev` runs Django directly on `127.0.0.1:8000`
 - `just packaged-stage` builds the staged packaged backend under `.stage/backend`
 - `just packaged-start` launches the packaged-like Electron path against the staged backend and bundled runtime
@@ -50,8 +55,8 @@ The packaged-like staging flow now writes a concrete backend payload under `.sta
 - `staticfiles/` contains collected static assets for packaged settings
 - `runtime-manifest.json` records the staged interpreter path and launcher metadata
 
-Electron packaged mode uses that manifest to resolve the interpreter from the staged backend instead of falling back to the repo's `uv` environment.
+Electron and Tauri packaged mode use that manifest to resolve the interpreter from the staged backend instead of falling back to the repo's `uv` environment.
 
 The GitHub packaging helpers use the GitHub CLI locally, require an authenticated `gh` session, and accept an optional first argument to target a different branch when the current checkout is not the branch you want to build or query. `just github-package-latest-run` prints the current latest successful run id, `just github-package-download-latest` prints the downloaded artifact paths and records the run id in `dist/github-actions/latest-run.txt`, and `just github-package-latest-path` prints the local directory for that latest downloaded run. The current workflow builds macOS arm64 plus Windows x64 and Linux x64 artifacts.
 
-See [release](release.md) for the signing secrets, installer/update guidance, and production gaps for this slice.
+See [release](release.md) for the signing secrets, installer/update guidance, and the explicit boundary that Tauri local bundles do not yet have a GitHub Actions artifact lane.
