@@ -1,6 +1,6 @@
 # Desktop Django Starter
 
-> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, a staged packaged-backend slice for bundled-runtime validation, a sign/notarization-aware GitHub packaging slice for desktop artifacts, and an experimental Tauri shell that reuses the shared staged backend locally. This repository is designed for both human readers and coding agents.
+> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, a staged packaged-backend slice for bundled-runtime validation, a sign/notarization-aware GitHub packaging slice for desktop artifacts, plus experimental Tauri and Positron shells for local comparison work. This repository is designed for both human readers and coding agents.
 
 Use this repository when you need the smallest credible architecture for running Django as a local desktop app, or when you need a reusable workflow for wrapping an existing Django project in Electron without importing a product-sized codebase.
 
@@ -10,7 +10,7 @@ Important constraints:
 - Treat `djdesk` as reference material for packaging and lifecycle patterns only.
 - Windows support matters.
 - The update story must include air-gapped/manual installs, not only connected environments.
-- Electron lives under `shells/electron/` and the experimental Tauri port lives under `shells/tauri/`, while shared icon source art lives under `assets/brand/`; regenerate the Electron PNG and macOS ICNS with `npm --prefix shells/electron run icons` and the Tauri icon set with `npm --prefix shells/tauri run icons`.
+- Electron lives under `shells/electron/`, the experimental Tauri port lives under `shells/tauri/`, and the experimental Positron port lives under `shells/positron/`, while shared icon source art lives under `assets/brand/`; regenerate the Electron PNG and macOS ICNS with `npm --prefix shells/electron run icons`, the Tauri icon set with `npm --prefix shells/tauri run icons`, and the Positron icons with `just positron-icons`.
 
 ## Docs
 

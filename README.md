@@ -1,10 +1,10 @@
 # Desktop Django Starter
 
-Minimal, attendee-facing starter for shipping a Django app inside Electron with a bundled Python runtime, now with an experimental Tauri shell that reuses the same staged backend contract for local validation.
+Minimal, attendee-facing starter for shipping a Django app inside Electron with a bundled Python runtime, now with experimental Tauri and Positron shells for local comparison work.
 
 **Documentation: [desktop-django-starter.readthedocs.io](https://desktop-django-starter.readthedocs.io/en/latest/)**
 
-This repository now includes a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware GitHub packaging slice, and an experimental Tauri port: a tiny Django app served locally and supervised by Electron or Tauri, with a bundled Python runtime staged under `.stage/backend/python/` and Electron-packaged desktop artifacts built in GitHub Actions.
+This repository now includes a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware GitHub packaging slice, plus experimental Tauri and Positron ports: a tiny Django app served locally and supervised by Electron or Tauri, plus an in-process Positron shell that keeps the shared Django core under `src/`. Electron-packaged desktop artifacts are still the only GitHub Actions release lane in this slice.
 
 ## Intent
 
@@ -22,11 +22,13 @@ Runnable starter slices:
 - background task visualization demo under `src/tasks_demo/`, themed as "Stable Routines", with animated pulse-ring indicators, polling-based live updates, and real `django_tasks` execution backed by SQLite
 - Electron 40 shell under `shells/electron/`
 - Tauri 2 shell under `shells/tauri/` for local experiment scope, using the same staged backend contract and child-process worker model
+- Positron shell under `shells/positron/` for local experiment scope, running Django plus the optional task worker in-process inside a Toga web view
 - random-port localhost startup with `/health/` readiness polling
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally, including the supervised task worker
 - experimental packaged-like Tauri launcher plus local host-bundle/macOS DMG build path, without GitHub Actions artifact generation
+- experimental Positron local start/smoke path plus a local macOS build/DMG path through Briefcase, with ad-hoc signing explicitly documented as local-only
 - on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
 
 Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
@@ -64,6 +66,14 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 - `just tauri-packaged-start`: rebuild the shared staged backend and launch the Tauri shell against the packaged runtime contract
 - `just tauri-packaged-smoke`: rebuild the shared staged backend, launch the Tauri shell against the packaged runtime contract, and auto-exit after the first page load
 - `just tauri-build`: build a local Tauri host bundle, defaulting to a macOS DMG on macOS
+- `just positron-install`: install the Positron shell environment with `uv`
+- `just positron-check`: run Django's system checks from the Positron shell environment
+- `just positron-start`: start the Positron shell, which runs Django plus one background task worker in-process
+- `just positron-smoke`: start the Positron shell and auto-exit after the first page load
+- `just positron-icons`: regenerate `shells/positron/resources/app-icon.png` and, on macOS, `app-icon.icns` from `assets/brand/flying-stable-app-icon.svg`
+- `just positron-create`: create the local macOS Briefcase app scaffold for Positron
+- `just positron-build`: build the local macOS Positron app bundle
+- `just positron-package-dmg`: package a local macOS Positron DMG with Briefcase ad-hoc signing
 - `npm --prefix shells/electron run icons`: regenerate the packaged app icon PNG and macOS ICNS from `assets/brand/flying-stable-app-icon.svg` into `shells/electron/assets/icons/` (requires `rsvg-convert` from `librsvg`; macOS uses the built-in `iconutil` for ICNS output)
 - `npm --prefix shells/tauri run icons`: regenerate the Tauri icon set in `shells/tauri/src-tauri/icons/` from the same shared SVG source
 
@@ -96,6 +106,8 @@ When you need the real `/tasks/` demo outside Electron, run `just task-worker` i
 
 For the experimental Tauri shell, use `just tauri-install` once and then `just tauri-start`. The Tauri path keeps the same localhost Django plus `db_worker` subprocess model as Electron, but its packaged build scope is still local-only and intentionally does not add a GitHub Actions artifact lane in this slice.
 
+For the experimental Positron shell, use `just positron-install` once and then `just positron-start`. The Positron path intentionally keeps a different runtime model: Django and the optional `tasks_demo` worker run in-process on threads, there is no splashscreen-parity requirement on macOS, and packaged builds remain a local-only Briefcase experiment.
+
 For the packaged-mode staging slice, use `just packaged-start`.
 The `.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
 
@@ -117,6 +129,14 @@ The Tauri packaging path is explicitly narrower than Electron in this slice:
 - it reuses `.stage/backend` as bundled resources
 - it does not add GitHub Actions artifact generation
 - it does not imply Windows packaged-build parity yet
+
+The Positron packaging path is also explicitly narrower than Electron:
+
+- it is local-only and not part of `.github/workflows/desktop-packages.yml`
+- it uses Briefcase rather than the Electron/Tauri staged-backend subprocess model
+- local macOS DMG packaging currently depends on `briefcase package macOS app --packaging-format dmg --adhoc-sign`
+- the ad-hoc-signed app is suitable only for the local machine that built it and is not a release-grade artifact
+- Windows packaged-build parity is not claimed for Positron in this slice
 
 When signing credentials are present, `electron-builder` now uses them directly:
 
@@ -190,3 +210,4 @@ Packaged mode still sets a small runtime environment at launch time:
 - Linux packaging still exists, but Linux signing and verification are not a baseline in this slice.
 - Windows public-distribution hardening beyond optional signing inputs is still follow-on work.
 - Tauri remains an experimental local shell path with no GitHub Actions artifact lane and no Windows packaged parity claim in this slice.
+- Positron remains an experimental local shell path with no GitHub Actions artifact lane, no splashscreen-parity claim on macOS, and no Windows packaged parity claim in this slice.

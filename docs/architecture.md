@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Status: intended implementation shape, with the runnable development slice, staged bundled-runtime contract, sign/notarization-aware Electron packaging workflow, and experimental Tauri shell now in place
+Status: intended implementation shape, with the runnable development slice, staged bundled-runtime contract, sign/notarization-aware Electron packaging workflow, and experimental Tauri plus Positron shells now in place
 
 ## Runtime Model
 
@@ -32,6 +32,12 @@ Key expectations:
 - the renderer loads normal Django pages over localhost
 - SQLite lives in a writable per-user app-data directory and stores both app data and task queue rows
 
+Current shell split note:
+
+- Electron remains the baseline shell and the only release-oriented packaging lane
+- Tauri keeps the same staged-backend subprocess model locally
+- Positron keeps shell-local ownership of an in-process Django server plus an in-process worker thread
+
 ## Draft Repo Shape
 
 This structure is intentionally small and close to normal Django conventions:
@@ -54,11 +60,16 @@ desktop-django-starter/
 │   │   ├── main.js
 │   │   ├── preload.cjs
 │   │   └── package.json
-│   └── tauri/
-│       ├── package.json
+│   ├── tauri/
+│   │   ├── package.json
+│   │   ├── scripts/
+│   │   ├── src/
+│   │   └── src-tauri/
+│   └── positron/
+│       ├── pyproject.toml
 │       ├── scripts/
-│       ├── src/
-│       └── src-tauri/
+│       ├── resources/
+│       └── src/
 ├── manage.py
 ├── pyproject.toml
 ├── src/
@@ -128,7 +139,7 @@ Current expected direction:
 
 - use Django-side static file serving in the simplest acceptable form for v1, rather than introducing an additional asset-serving layer in Electron unless it proves necessary
 - the staged local bundle now mirrors the future packaged layout by keeping the backend payload together and staging the interpreter under `backend/python/`
-- app icon source-of-truth now lives under `assets/brand/`, with generated Electron outputs written into `shells/electron/assets/icons/` and generated Tauri outputs written into `shells/tauri/src-tauri/icons/`
+- app icon source-of-truth now lives under `assets/brand/`, with generated Electron outputs written into `shells/electron/assets/icons/`, generated Tauri outputs written into `shells/tauri/src-tauri/icons/`, and generated Positron outputs written into `shells/positron/resources/`
 - the example app base template loads the Play font from Google Fonts via an external stylesheet link; in packaged or air-gapped mode the request will silently fail and the CSS font stack falls back to Helvetica Neue / Arial / sans-serif
 
 Current staged backend contract:
@@ -148,6 +159,8 @@ Current launcher contract:
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
 - shell-local wrappers such as `shells/electron/scripts/bundled-python.cjs` are allowed to resolve shared helpers from two locations: a packaged-app copy first, then a repo-relative source path for local development
 - the Tauri shell keeps its subprocess supervision in Rust under `shells/tauri/src-tauri/src/lib.rs` instead of forcing a cross-shell launcher abstraction
+- the Positron shell keeps its runtime under `shells/positron/src/desktop_django_starter_positron/`, imports the shared Django code from repo `src/`, and starts the optional task worker in-process instead of using the Electron/Tauri subprocess contract
+- Positron does not claim packaged splashscreen parity on macOS and does not add a GitHub Actions artifact lane in this slice
 
 ## Release and Update Model
 

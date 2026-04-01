@@ -1,6 +1,6 @@
 # Desktop Django Starter
 
-> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, a staged packaged-backend slice that exercises packaged settings plus a bundled Python runtime locally, and a sign/notarization-aware packaging slice that builds desktop artifacts in GitHub Actions. This repository is designed for both human readers and coding agents.
+> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, a staged packaged-backend slice that exercises packaged settings plus a bundled Python runtime locally, a sign/notarization-aware packaging slice that builds desktop artifacts in GitHub Actions, and experimental Tauri plus Positron shells for local comparison work. This repository is designed for both human readers and coding agents.
 
 Use this documentation when you need the smallest credible architecture for running Django as a local desktop app, or when you need a reusable workflow for wrapping an existing Django project in Electron without importing a product-sized codebase.
 
@@ -19,6 +19,7 @@ Important constraints:
 - [Release](release.html): Packaging secrets, installer artifacts, and manual update guidance.
 - [Decisions](decisions.html): Scope and tradeoff decisions captured locally for this repo.
 - [Agent use](agent-use.html): Guidance for coding agents consuming this repo.
+- [Positron shell](shells/positron.html): Experimental Positron shell scope, commands, and support boundaries.
 
 The optional `/tasks/` demo now uses the `django_tasks` backport plus `django_tasks_db` with a single supervised worker process instead of an in-process thread stub.
 

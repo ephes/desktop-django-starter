@@ -1,0 +1,140 @@
+from __future__ import annotations
+
+import asyncio
+import os
+import socketserver
+from threading import Thread
+from wsgiref.simple_server import WSGIServer
+
+import django
+import toga
+from django.core import management as django_manage
+from django.core.handlers.wsgi import WSGIHandler
+from django.core.servers.basehttp import WSGIRequestHandler
+
+from .runtime import HOST, WORKER_ID, django_environment, ensure_project_imports
+
+SMOKE_EXIT_DELAY_SECONDS = 0.75
+
+
+class ThreadedWSGIServer(socketserver.ThreadingMixIn, WSGIServer):
+    """WSGI server with one thread per request, matching the Positron shell model."""
+
+
+class DesktopDjangoStarterPositron(toga.App):
+    def startup(self) -> None:
+        self._httpd: ThreadedWSGIServer | None = None
+        self._task_worker = None
+        self._task_worker_thread: Thread | None = None
+        self._smoke_exit_scheduled = False
+        self.server_ready: asyncio.Future[int] = asyncio.Future()
+
+        self.web_view = toga.WebView(on_webview_load=self.on_webview_load)
+        self.server_thread = Thread(target=self.web_server, daemon=True)
+        self.server_thread.start()
+
+        self.on_exit = self.cleanup
+        self.main_window = toga.MainWindow(title=self.formal_name)
+        self.main_window.content = self.web_view
+
+    async def on_running(self) -> None:
+        port = await self.server_ready
+        self.start_task_worker()
+        self.web_view.url = f"http://{HOST}:{port}"
+        self.main_window.show()
+
+    def on_webview_load(self, _widget, **_kwargs) -> None:
+        if os.environ.get("DESKTOP_DJANGO_SMOKE_TEST") != "1" or self._smoke_exit_scheduled:
+            return
+
+        self._smoke_exit_scheduled = True
+        self.loop.call_later(SMOKE_EXIT_DELAY_SECONDS, self.finish_smoke_test)
+
+    def finish_smoke_test(self) -> None:
+        self.main_window.close()
+        self.exit()
+
+    def cleanup(self, _app, **_kwargs) -> bool:
+        self.stop_task_worker()
+
+        if self._httpd is not None:
+            self._httpd.shutdown()
+            self._httpd.server_close()
+
+        if self.server_thread.is_alive():
+            self.server_thread.join(timeout=5)
+
+        return True
+
+    def bundle_dir(self):
+        bundle_dir = self.paths.cache / "bundle"
+        bundle_dir.mkdir(parents=True, exist_ok=True)
+        return bundle_dir
+
+    def runtime_environment(self, port: int | None = None) -> dict[str, str]:
+        return django_environment(
+            app_data_dir=self.paths.data,
+            bundle_dir=self.bundle_dir(),
+            port=port,
+        )
+
+    def configure_django(self) -> None:
+        ensure_project_imports()
+        os.environ.update(self.runtime_environment())
+        django.setup(set_prefix=False)
+
+    def prepare_runtime(self) -> None:
+        django_manage.call_command("collectstatic", interactive=False, verbosity=0, clear=True)
+        django_manage.call_command("migrate", interactive=False, verbosity=0)
+
+    def web_server(self) -> None:
+        try:
+            self.configure_django()
+            self.prepare_runtime()
+
+            self._httpd = ThreadedWSGIServer((HOST, 0), WSGIRequestHandler)
+            self._httpd.daemon_threads = True
+            self._httpd.set_app(WSGIHandler())
+
+            _host, port = self._httpd.socket.getsockname()
+            self.loop.call_soon_threadsafe(self.server_ready.set_result, port)
+            self._httpd.serve_forever()
+        except Exception as error:  # pragma: no cover - surfaced during manual shell startup
+            if not self.server_ready.done():
+                self.loop.call_soon_threadsafe(self.server_ready.set_exception, error)
+
+    def start_task_worker(self) -> None:
+        if self._task_worker_thread is not None and self._task_worker_thread.is_alive():
+            return
+
+        from django_tasks import DEFAULT_TASK_BACKEND_ALIAS
+        from django_tasks_db.management.commands.db_worker import Worker
+
+        self._task_worker = Worker(
+            queue_names=["default"],
+            interval=1.0,
+            batch=False,
+            backend_name=DEFAULT_TASK_BACKEND_ALIAS,
+            startup_delay=True,
+            max_tasks=None,
+            worker_id=WORKER_ID,
+        )
+        self._task_worker_thread = Thread(target=self._task_worker.run, daemon=True)
+        self._task_worker_thread.start()
+
+    def stop_task_worker(self) -> None:
+        if self._task_worker is None:
+            return
+
+        self._task_worker.running = False
+        if self._task_worker_thread is not None:
+            self._task_worker_thread.join(timeout=5)
+        self._task_worker = None
+        self._task_worker_thread = None
+
+
+def main() -> DesktopDjangoStarterPositron:
+    return DesktopDjangoStarterPositron(
+        "desktop_django_starter_positron",
+        "io.github.desktopdjangostarter.positron",
+    )

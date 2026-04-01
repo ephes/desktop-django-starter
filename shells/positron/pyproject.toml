@@ -1,0 +1,118 @@
+[build-system]
+requires = ["hatchling>=1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "desktop-django-starter-positron"
+version = "0.1.0"
+description = "Experimental Positron shell for the desktop Django starter."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    { name = "Jochen Wersdoerfer" },
+]
+dependencies = [
+    "Django==6.0.3",
+    "django-browser-reload>=1.21.0",
+    "django-tasks==0.12.0",
+    "django-tasks-db==0.12.0",
+    "toga-cocoa~=0.5.0; sys_platform == 'darwin'",
+    "toga-gtk~=0.5.0; sys_platform == 'linux'",
+    "pygobject<3.52.1; sys_platform == 'linux'",
+    "toga-winforms~=0.5.0; sys_platform == 'win32'",
+]
+
+[project.urls]
+Documentation = "https://desktop-django-starter.readthedocs.io/en/latest/"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/desktop_django_starter_positron"]
+
+[tool.briefcase]
+project_name = "desktop-django-starter-positron"
+bundle = "io.github.desktopdjangostarter"
+version = "0.1.0"
+url = "https://github.com/jochen-wersdoerfer/desktop-django-starter"
+license.text = "BSD-3-Clause"
+author = "Jochen Wersdoerfer"
+author_email = "jochen@wersdoerfer.de"
+
+[tool.briefcase.app.desktop_django_starter_positron]
+formal_name = "Desktop Django Starter Positron"
+description = "Experimental Positron shell for the shared Django starter."
+long_description = """An experimental BeeWare Positron shell that keeps the shared Django code under ../../src and runs Django plus the optional task worker in-process. It is useful for local shell validation and local macOS bundle packaging, but it does not claim release parity with the Electron baseline."""
+sources = [
+    "src/desktop_django_starter_positron",
+    "../../src",
+]
+test_sources = []
+requires = [
+    "Django==6.0.3",
+    "django-tasks==0.12.0",
+    "django-tasks-db==0.12.0",
+]
+test_requires = []
+icon = "resources/app-icon"
+
+[tool.briefcase.app.desktop_django_starter_positron.macOS]
+requires = [
+    "toga-cocoa~=0.5.0",
+    "std-nslog~=1.0.3",
+]
+
+[tool.briefcase.app.desktop_django_starter_positron.linux]
+requires = [
+    "toga-gtk~=0.5.0",
+    "pygobject<3.52.1",
+]
+
+[tool.briefcase.app.desktop_django_starter_positron.linux.system.debian]
+system_requires = [
+    "libcairo2-dev",
+    "libgirepository1.0-dev",
+]
+system_runtime_requires = [
+    "gir1.2-gtk-3.0",
+    "libgirepository-1.0-1",
+    "libcanberra-gtk3-module",
+]
+
+[tool.briefcase.app.desktop_django_starter_positron.linux.system.rhel]
+system_requires = [
+    "cairo-gobject-devel",
+    "gobject-introspection-devel",
+]
+system_runtime_requires = [
+    "gobject-introspection",
+    "gtk3",
+    "libcanberra-gtk3",
+]
+
+[tool.briefcase.app.desktop_django_starter_positron.linux.system.suse]
+system_requires = [
+    "cairo-devel",
+    "gobject-introspection-devel",
+]
+system_runtime_requires = [
+    "gtk3",
+    "gobject-introspection",
+    "libcanberra-gtk3-module",
+]
+
+[tool.briefcase.app.desktop_django_starter_positron.linux.system.arch]
+system_requires = [
+    "cairo",
+    "gobject-introspection",
+    "gtk3",
+    "libcanberra",
+]
+system_runtime_requires = [
+    "gtk3",
+    "gobject-introspection-runtime",
+    "libcanberra",
+]
+
+[tool.briefcase.app.desktop_django_starter_positron.windows]
+requires = [
+    "toga-winforms~=0.5.0",
+]

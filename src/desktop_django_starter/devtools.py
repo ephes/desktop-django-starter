@@ -48,6 +48,14 @@ FALLBACK_EXCLUDED_DIRS = {
     "positron",
     "shells/electron/dist",
     "shells/electron/node_modules",
+    "shells/positron/.briefcase",
+    "shells/positron/.venv",
+    "shells/positron/build",
+    "shells/positron/dist",
+    "shells/positron/linux",
+    "shells/positron/logs",
+    "shells/positron/macOS",
+    "shells/positron/windows",
     "shells/tauri/node_modules",
     "shells/tauri/src-tauri/target",
     "tauri",
@@ -374,8 +382,7 @@ def _render_table(
 ) -> str:
     headers = headers or (first_column, "Files", "Lines")
     widths = [
-        max(len(header), *(len(row[index]) for row in rows))
-        for index, header in enumerate(headers)
+        max(len(header), *(len(row[index]) for row in rows)) for index, header in enumerate(headers)
     ]
 
     border = "+-" + "-+-".join("-" * width for width in widths) + "-+"

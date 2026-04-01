@@ -76,6 +76,11 @@ bad,HTML,8,0,107
 
 
 def test_excluded_dirs_cover_generated_shell_artifacts() -> None:
+    assert _is_excluded_dir("shells/positron/.briefcase")
+    assert _is_excluded_dir("shells/positron/build")
+    assert _is_excluded_dir("shells/positron/dist")
+    assert _is_excluded_dir("shells/positron/logs")
+    assert _is_excluded_dir("shells/positron/macOS")
     assert _is_excluded_dir("shells/tauri/node_modules")
     assert _is_excluded_dir("shells/tauri/src-tauri/target")
     assert _is_excluded_dir("tauri")

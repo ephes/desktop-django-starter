@@ -61,6 +61,34 @@ tauri-packaged-smoke:
 tauri-build TARGET="--bundles dmg":
     npm --prefix shells/tauri run build -- {{TARGET}}
 
+positron-install:
+    env -u VIRTUAL_ENV uv sync --project shells/positron
+
+positron-icons:
+    env -u VIRTUAL_ENV uv run --project shells/positron python ./shells/positron/scripts/generate-icons.py
+
+positron-check:
+    env -u VIRTUAL_ENV uv run --project shells/positron python -m desktop_django_starter_positron.management check
+
+positron-start:
+    env -u VIRTUAL_ENV uv run --project shells/positron python -m desktop_django_starter_positron
+
+positron-smoke:
+    env -u VIRTUAL_ENV DESKTOP_DJANGO_SMOKE_TEST=1 uv run --project shells/positron python -m desktop_django_starter_positron
+
+positron-create:
+    just positron-icons
+    cd shells/positron && env -u VIRTUAL_ENV uvx briefcase create macOS app --no-input -a desktop_django_starter_positron
+
+positron-build:
+    just positron-icons
+    @if [ ! -d shells/positron/build/desktop_django_starter_positron/macos/app ]; then just positron-create; fi
+    cd shells/positron && env -u VIRTUAL_ENV uvx briefcase build macOS app --update-resources --no-input -a desktop_django_starter_positron
+
+positron-package-dmg:
+    just positron-build
+    cd shells/positron && env -u VIRTUAL_ENV uvx briefcase package macOS app --packaging-format dmg --adhoc-sign --no-notarize --no-input -a desktop_django_starter_positron
+
 packaged-stage:
     npm --prefix shells/electron run stage-backend
 
@@ -151,4 +179,4 @@ loc:
     uv run count-lines-of-code
 
 clean:
-    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 .stage shells/electron/dist shells/electron/node_modules shells/tauri/node_modules shells/tauri/src-tauri/target
+    rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 .stage shells/electron/dist shells/electron/node_modules shells/tauri/node_modules shells/tauri/src-tauri/target shells/positron/.briefcase shells/positron/.venv shells/positron/build shells/positron/dist shells/positron/linux shells/positron/logs shells/positron/macOS shells/positron/windows shells/positron/resources/app-icon.icns shells/positron/resources/app-icon.png

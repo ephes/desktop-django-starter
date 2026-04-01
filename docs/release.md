@@ -13,6 +13,10 @@ The repo now also includes one narrower Tauri-only local packaging command:
 
 - `just tauri-build` for a local host bundle, defaulting to a macOS DMG on macOS
 
+The repo also includes one narrower Positron-only local packaging command:
+
+- `just positron-package-dmg` for a local macOS DMG built with Briefcase ad-hoc signing
+
 Local packaging remains usable when no release credentials are configured. In that case, the build should still complete, but the resulting installer is expected to be unsigned and, on macOS, not notarized.
 
 The GitHub Actions workflow uses the same `electron-builder` config and only turns on signing/notarization when the relevant secrets are present. This keeps the starter teachable while still making the public-distribution requirements concrete.
@@ -23,6 +27,14 @@ Tauri is explicitly out of that release lane in this slice:
 - there is no Tauri checksum-artifact lane
 - local Tauri bundles are for experiment validation, not release parity
 - Windows packaged proof for Tauri is still deferred
+
+Positron is explicitly out of that release lane as well:
+
+- there is no dedicated Positron GitHub packaging workflow
+- there is no Positron checksum-artifact lane
+- local Positron bundles are for experiment validation, not release parity
+- local macOS packaging currently depends on Briefcase ad-hoc signing
+- Windows packaged proof for Positron is still deferred
 
 Current output artifacts:
 
@@ -47,6 +59,19 @@ That path intentionally stays narrower than Electron:
 - it reuses the shared `.stage/backend` payload as bundled resources
 - it does not participate in `.github/workflows/desktop-packages.yml`
 - it does not add checksum uploads, signing automation, or notarization scaffolding
+- it should be described as local-only experiment scope until a dedicated release lane exists
+
+## Positron Local Bundle Scope
+
+The experimental Positron shell under `shells/positron/` can build a local macOS app bundle through `just positron-build` and package a local DMG through `just positron-package-dmg`.
+
+That path intentionally stays narrower than Electron:
+
+- it uses Briefcase rather than the shared staged-backend subprocess contract
+- it does not participate in `.github/workflows/desktop-packages.yml`
+- it does not add checksum uploads, signing automation, or notarization scaffolding
+- `just positron-package-dmg` currently relies on Briefcase ad-hoc signing, so the resulting app is suitable only for the machine that built it
+- splashscreen parity is intentionally not required on macOS for this shell
 - it should be described as local-only experiment scope until a dedicated release lane exists
 
 ## macOS Signing and Notarization Inputs

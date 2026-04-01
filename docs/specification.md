@@ -5,7 +5,7 @@ Scope: specification for the starter, with the runnable development slice, stage
 
 ## 1. Project Summary
 
-`desktop-django-starter` is the canonical attendee-facing minimal example for running Django as a desktop application inside Electron.
+`desktop-django-starter` is the canonical attendee-facing minimal example for running Django as a desktop application inside Electron, with experimental Tauri and Positron shells retained as comparison paths on this spike branch.
 
 It exists to answer a practical question: what is the smallest credible setup that lets a Django team package a local desktop app without having to invent the process model, packaging story, and localhost lifecycle from scratch?
 
@@ -18,6 +18,8 @@ The starter should help a Django developer:
 - build packaged desktop artifacts with a bundled Python runtime
 - identify the exact seams where an existing Django app can replace the demo app
 - give coding agents a stable spec and reusable adaptation workflow they can apply in other Django repositories
+
+Electron remains the baseline shell for the starter contract. Tauri and Positron are useful experiment tracks for shell separation and runtime comparison, but they do not yet claim the same distribution maturity.
 
 The repository should optimize for comprehension, teachability, and adaptation speed, not for feature breadth.
 
@@ -156,11 +158,16 @@ Rationale:
 
 ### Runtime model
 
-- Electron is the desktop shell and process supervisor
+- Electron is the baseline desktop shell and process supervisor
 - a bundled Python runtime is used for packaged builds
 - Django runs locally on `127.0.0.1:<random-port>`
 - Electron waits for a health check before loading the renderer window
 - SQLite stores local data in a writable app-data location
+
+Current experiment note:
+
+- Tauri mirrors the Electron subprocess model locally
+- Positron is allowed to keep a different shell-local runtime model with in-process Django and an in-process task worker thread
 
 Bundling direction for v1:
 

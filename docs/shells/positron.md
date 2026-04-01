@@ -1,13 +1,38 @@
 # Positron Shell
 
-Status: placeholder only in this slice.
+Status: implemented as an experimental local shell in this slice.
 
-`shells/positron/` is intentionally not implemented yet on this branch.
+The current Positron port lives under [`shells/positron/`](../../shells/positron/).
 
-Planned direction:
+Current responsibilities:
 
-- keep Positron-specific startup behavior shell-local
-- reuse the shared brand source under `assets/brand/`
-- document its differences from the Electron subprocess model explicitly
+- import the shared Django code from `src/` instead of forking app code into the shell
+- start Django inside the Positron process with an in-process WSGI server bound to a random localhost port
+- run the optional `tasks_demo` worker in-process on a background thread
+- reuse the shared brand source under `assets/brand/` and generate shell-local icon outputs into `shells/positron/resources/`
+- keep Positron-specific runtime behavior under `shells/positron/src/desktop_django_starter_positron/`
 
-This page exists to reserve the documentation seam for a later shell port without implying that the Positron implementation is already present.
+Local commands:
+
+- `just positron-install`
+- `just positron-check`
+- `just positron-start`
+- `just positron-smoke`
+- `just positron-icons`
+- `just positron-create`
+- `just positron-build`
+- `just positron-package-dmg`
+
+Scope boundaries:
+
+- Positron is still experimental and local-only in this slice
+- GitHub Actions artifact generation remains out of scope
+- Electron remains the most complete shell path
+- splashscreen parity is intentionally not required on macOS for Positron
+- Windows packaged-build parity is not claimed for Positron yet
+- local macOS packaging uses Briefcase and currently depends on ad-hoc signing
+
+`tasks_demo` posture in this slice:
+
+- supported
+- Positron intentionally differs from Electron and Tauri here: the shell starts the `django_tasks_db` worker in-process on a thread instead of spawning a `db_worker` subprocess

@@ -28,6 +28,7 @@ def test_core_docs_scaffold_exists() -> None:
         ROOT / "shells" / "electron" / "scripts" / "materialize-symlinks.cjs",
         ROOT / "shells" / "tauri" / "package.json",
         ROOT / "shells" / "tauri" / "src-tauri" / "tauri.conf.json",
+        ROOT / "shells" / "positron" / "pyproject.toml",
         ROOT / "skills" / "wrap-existing-django-in-electron" / "SKILL.md",
         ROOT / ".github" / "workflows" / "ci.yml",
     ]
@@ -60,15 +61,20 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert ".stage/backend" in readme
     assert "shells/electron" in readme
     assert "shells/tauri" in readme
+    assert "shells/positron" in readme
     assert "assets/brand/flying-stable-app-icon.svg" in readme
     assert "kept in the repo" in readme
     assert "just tauri-start" in readme
     assert "just tauri-build" in readme
+    assert "just positron-start" in readme
+    assert "just positron-package-dmg" in readme
     assert "APPLE_API_KEY_ID" in release
     assert "WIN_CSC_LINK" in release
     assert "shells/electron/signing/" in release
     assert "just tauri-build" in release
     assert "no dedicated Tauri GitHub packaging workflow" in release
+    assert "no dedicated Positron GitHub packaging workflow" in release
+    assert "just positron-package-dmg" in release
     assert "air-gapped" in release
     assert "app.sqlite3" in release
     assert "auto-update" in release
@@ -80,9 +86,11 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert ".stage/backend/" in architecture
     assert "shells/electron/" in architecture
     assert "shells/tauri/" in architecture
+    assert "shells/positron/" in architecture
     assert "packaged-app copy first" in architecture
     assert "shells/electron/" in llms
     assert "shells/tauri/" in llms
+    assert "shells/positron/" in llms
     assert "assets/brand/" in llms
     assert ".stage/" in gitignore
 
@@ -108,3 +116,4 @@ def test_packaging_workflow_mentions_signing_and_checksum_steps() -> None:
     assert "Upload packaged desktop artifact checksums" in workflow
     assert "desktop-django-starter-macos-sha256.txt" in workflow
     assert "shells/tauri" not in workflow
+    assert "shells/positron" not in workflow

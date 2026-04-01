@@ -1,6 +1,6 @@
 # Multi-Shell Separation Plan
 
-Status: layout/staging slice and the Tauri port are implemented on `experiment/multi-shell-separation-plan`; Positron remains unimplemented
+Status: layout/staging slice plus the Tauri and Positron ports are implemented on `experiment/multi-shell-separation-plan`
 
 ## Goal
 
@@ -36,10 +36,7 @@ Implemented in this branch so far:
 - shell-neutral staged backend output under `.stage/backend/`
 - Electron moved under `shells/electron/`
 - runnable Tauri shell under `shells/tauri/`
-
-Still not implemented in this slice:
-
-- runnable `shells/positron/`
+- runnable Positron shell under `shells/positron/`
 
 Notes:
 
