@@ -16,7 +16,8 @@ test("electron-builder config ships the staged backend as a packaged resource", 
     "main.js",
     "package.json",
     "preload.cjs",
-    "scripts/bundled-python.cjs"
+    "scripts/bundled-python.cjs",
+    "assets/icons/app-icon.png"
   ]);
   assert.deepEqual(config.extraResources, [
     {
@@ -29,9 +30,12 @@ test("electron-builder config ships the staged backend as a packaged resource", 
   assert.equal(config.mac.entitlementsInherit, "signing/entitlements.mac.inherit.plist");
   assert.equal(config.mac.hardenedRuntime, true);
   assert.equal(config.mac.gatekeeperAssess, false);
+  assert.equal(config.mac.icon, "assets/icons/app-icon.icns");
   assert.equal(config.mac.notarize, false);
   assert.deepEqual(config.dmg, { sign: false });
+  assert.equal(config.win.icon, "assets/icons/app-icon.png");
   assert.equal(config.win.signtoolOptions, undefined);
+  assert.equal(config.linux.icon, "assets/icons/app-icon.png");
 });
 
 test("electron-builder config keeps per-platform artifact names explicit", () => {

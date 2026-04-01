@@ -29,7 +29,7 @@ Runnable starter slices:
 
 Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
 
-The example app uses a branded presentation layer called "Flying Stable" (a Pegasus/pony theme) to demonstrate that the starter can carry a real visual identity while remaining a generic teaching scaffold underneath. The theme includes a dark topnav with logo and brand name, teal page headers with background images, a content panel with toolbar, a sticky footer, CSS custom-property design tokens, SVG empty-state illustrations, an in-page delete-confirmation modal, client-side form validation with themed error messages, and a splash screen at `/splash/` that Electron now shows during backend startup. Item statuses are themed as Grazing (backlog), Galloping (active), and Show Ready (done). Development mode includes `django-browser-reload` for auto-reload.
+The example app uses a branded presentation layer called "Flying Stable" (a Pegasus/pony theme) to demonstrate that the starter can carry a real visual identity while remaining a generic teaching scaffold underneath. The theme includes a dark topnav with logo and brand name, teal page headers with background images, a content panel with toolbar, a sticky footer, CSS custom-property design tokens, SVG empty-state illustrations, an in-page delete-confirmation modal, client-side form validation with themed error messages, a splash screen at `/splash/` that Electron now shows during backend startup, and packaged app icons derived from the same pony mark under `electron/assets/icons/`. Item statuses are themed as Grazing (backlog), Galloping (active), and Show Ready (done). Development mode includes `django-browser-reload` for auto-reload.
 
 ## Docs
 
@@ -55,6 +55,7 @@ The docs are built with Sphinx over the Markdown sources in `docs/` and are inte
 - `just task-worker`: run the single background task worker for `/tasks/` without Electron
 - `just electron-install`: install Electron dependencies
 - `just electron-start`: start the Electron shell, which launches Django plus one background task worker on a random localhost port
+- `npm --prefix electron run icons`: regenerate the packaged app icon PNG and macOS ICNS from `electron/assets/icons/flying-stable-app-icon.svg` (requires `rsvg-convert` from `librsvg`; macOS uses the built-in `iconutil` for ICNS output)
 - `just packaged-stage`: build the staged packaged-backend bundle under `electron/.stage/backend`, including the bundled Python runtime
 - `just packaged-start`: rebuild the staged bundle and launch Electron in packaged-like mode against the staged bundled runtime
 - `just packaged-smoke`: rebuild the staged bundle and run a packaged-like Electron smoke launch that auto-exits after load

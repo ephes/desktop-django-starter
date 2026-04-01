@@ -86,6 +86,7 @@ Key elements of the current themed UI:
 - SVG empty-state illustrations (stacked documents for My Ponies, interlocking gears for Stable Routines)
 - all colors defined as CSS custom properties (design tokens) in `:root`
 - a splash screen at `/splash/` with animated logo and loading dots, now reused by Electron as the startup splash window
+- packaged app icons derived from the same Flying Stable pony mark, with the source art stored under `electron/assets/icons/`
 - `django-browser-reload` for development auto-reload (local settings only)
 - Play font loaded from Google Fonts, falling back to Helvetica Neue / Arial / sans-serif in offline or packaged mode
 

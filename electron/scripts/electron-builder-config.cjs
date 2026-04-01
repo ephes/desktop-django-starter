@@ -85,7 +85,8 @@ function buildConfig(env = process.env) {
       "main.js",
       "package.json",
       "preload.cjs",
-      "scripts/bundled-python.cjs"
+      "scripts/bundled-python.cjs",
+      "assets/icons/app-icon.png"
     ],
     extraResources: [
       {
@@ -95,6 +96,7 @@ function buildConfig(env = process.env) {
       }
     ],
     mac: {
+      icon: "assets/icons/app-icon.icns",
       category: "public.app-category.developer-tools",
       target: ["dmg"],
       artifactName: "desktop-django-starter-macos-${version}-${arch}.${ext}",
@@ -110,6 +112,7 @@ function buildConfig(env = process.env) {
       sign: false
     },
     win: {
+      icon: "assets/icons/app-icon.png",
       target: ["nsis"],
       artifactName: "desktop-django-starter-windows-${version}-${arch}.${ext}",
       ...(windowsSigntoolOptions ? { signtoolOptions: windowsSigntoolOptions } : {})
@@ -120,6 +123,7 @@ function buildConfig(env = process.env) {
       allowToChangeInstallationDirectory: true
     },
     linux: {
+      icon: "assets/icons/app-icon.png",
       category: "Development",
       target: ["AppImage"],
       artifactName: "desktop-django-starter-linux-${version}-${arch}.${ext}"

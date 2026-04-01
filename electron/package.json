@@ -5,6 +5,7 @@
   "description": "Electron shell for the desktop Django starter.",
   "main": "main.js",
   "scripts": {
+    "icons": "node ./scripts/generate-icons.cjs",
     "start": "electron .",
     "test": "node --test ./scripts/*.test.cjs",
     "stage-backend": "node ./scripts/stage-backend.cjs",

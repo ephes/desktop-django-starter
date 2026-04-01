@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } = require("electron");
 const { spawn } = require("node:child_process");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -14,6 +14,7 @@ const HOST = "127.0.0.1";
 const STARTUP_TIMEOUT_MS = 15000;
 const POLL_INTERVAL_MS = 250;
 const MINIMUM_SPLASH_DURATION_MS = 2400;
+const APP_ICON_PATH = path.join(__dirname, "assets", "icons", "app-icon.png");
 // Local packaged-like runs still need a Django secret key, but we do not want
 // this teaching slice to require end-user env setup before Electron can boot.
 const PACKAGED_RUNTIME_SECRET_KEY = "desktop-django-starter-packaged-runtime-secret";
@@ -65,6 +66,27 @@ function getBackendRoot(runtimeMode) {
 
 function getSplashTemplatePath(backendRoot) {
   return path.join(backendRoot, "src", "desktop_django_starter", "templates", "splash.html");
+}
+
+function getWindowIconOptions() {
+  if (process.platform === "darwin" || !fs.existsSync(APP_ICON_PATH)) {
+    return {};
+  }
+
+  return { icon: APP_ICON_PATH };
+}
+
+function setApplicationIcon() {
+  if (process.platform !== "darwin" || !app.dock || !fs.existsSync(APP_ICON_PATH)) {
+    return;
+  }
+
+  const icon = nativeImage.createFromPath(APP_ICON_PATH);
+  if (icon.isEmpty()) {
+    return;
+  }
+
+  app.dock.setIcon(icon);
 }
 
 function sleep(ms) {
@@ -378,6 +400,7 @@ function createSplashWindow(backendRoot) {
     fullscreenable: false,
     autoHideMenuBar: true,
     backgroundColor: "#222121",
+    ...getWindowIconOptions(),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false
@@ -407,6 +430,7 @@ function createWindow(url) {
     height: 840,
     show: false,
     backgroundColor: "#222121",
+    ...getWindowIconOptions(),
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -542,6 +566,7 @@ app.on("activate", () => {
 app.whenReady()
   .then(async () => {
     try {
+      setApplicationIcon();
       await bootstrap();
     } catch (error) {
       closeSplashWindow();
