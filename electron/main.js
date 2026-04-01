@@ -13,6 +13,7 @@ const {
 const HOST = "127.0.0.1";
 const STARTUP_TIMEOUT_MS = 15000;
 const POLL_INTERVAL_MS = 250;
+const MINIMUM_SPLASH_DURATION_MS = 2400;
 // Local packaged-like runs still need a Django secret key, but we do not want
 // this teaching slice to require end-user env setup before Electron can boot.
 const PACKAGED_RUNTIME_SECRET_KEY = "desktop-django-starter-packaged-runtime-secret";
@@ -23,9 +24,12 @@ let djangoProcess = null;
 let taskWorkerProcess = null;
 let quitting = false;
 let currentAppUrl = null;
+let mainWindow = null;
+let splashWindow = null;
+let splashShownAt = null;
 
 function focusExistingWindow() {
-  const existingWindow = BrowserWindow.getAllWindows()[0];
+  const existingWindow = mainWindow || splashWindow || BrowserWindow.getAllWindows()[0];
   if (!existingWindow) {
     return;
   }
@@ -57,6 +61,10 @@ function getBackendRoot(runtimeMode) {
   }
 
   return repoRoot;
+}
+
+function getSplashTemplatePath(backendRoot) {
+  return path.join(backendRoot, "src", "desktop_django_starter", "templates", "splash.html");
 }
 
 function sleep(ms) {
@@ -329,11 +337,76 @@ function clearManagedProcess(processName, child) {
   }
 }
 
+function closeSplashWindow() {
+  if (!splashWindow || splashWindow.isDestroyed()) {
+    splashWindow = null;
+    splashShownAt = null;
+    return;
+  }
+
+  const windowToClose = splashWindow;
+  splashWindow = null;
+  splashShownAt = null;
+  windowToClose.destroy();
+}
+
+async function waitForMinimumSplashDuration() {
+  if (typeof splashShownAt !== "number") {
+    return;
+  }
+
+  const elapsedMs = Date.now() - splashShownAt;
+  const remainingMs = MINIMUM_SPLASH_DURATION_MS - elapsedMs;
+  if (remainingMs > 0) {
+    await sleep(remainingMs);
+  }
+}
+
+function createSplashWindow(backendRoot) {
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    return splashWindow;
+  }
+
+  const win = new BrowserWindow({
+    width: 560,
+    height: 560,
+    show: false,
+    frame: false,
+    resizable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    autoHideMenuBar: true,
+    backgroundColor: "#222121",
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false
+    }
+  });
+
+  splashWindow = win;
+
+  win.on("closed", () => {
+    if (splashWindow === win) {
+      splashWindow = null;
+    }
+  });
+
+  win.once("ready-to-show", () => {
+    splashShownAt = Date.now();
+    win.show();
+  });
+
+  win.loadFile(getSplashTemplatePath(backendRoot));
+  return win;
+}
+
 function createWindow(url) {
   const win = new BrowserWindow({
     width: 1200,
     height: 840,
     show: false,
+    backgroundColor: "#222121",
     webPreferences: {
       preload: path.join(__dirname, "preload.cjs"),
       contextIsolation: true,
@@ -341,10 +414,19 @@ function createWindow(url) {
     }
   });
 
+  mainWindow = win;
   currentAppUrl = url;
 
-  win.once("ready-to-show", () => {
+  win.on("closed", () => {
+    if (mainWindow === win) {
+      mainWindow = null;
+    }
+  });
+
+  win.once("ready-to-show", async () => {
+    await waitForMinimumSplashDuration();
     win.show();
+    closeSplashWindow();
   });
 
   win.webContents.once("did-finish-load", () => {
@@ -411,6 +493,8 @@ async function bootstrap() {
   const port = await getOpenPort();
   const baseUrl = `http://${HOST}:${port}`;
 
+  createSplashWindow(backendRoot);
+
   if (runtimeMode === "packaged") {
     validatePackagedBackendRoot(backendRoot);
   }
@@ -460,6 +544,7 @@ app.whenReady()
     try {
       await bootstrap();
     } catch (error) {
+      closeSplashWindow();
       dialog.showErrorBox(
         "Startup failed",
         error instanceof Error ? error.message : "Unknown startup failure."

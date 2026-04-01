@@ -48,6 +48,13 @@ testpaths = ["tests"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+extend-exclude = [
+    "docs/_build",
+    "electron/.stage",
+    "electron/node_modules",
+    "positron",
+    "tauri",
+]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

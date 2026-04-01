@@ -67,14 +67,15 @@ Notes:
 
 The eventual implementation should follow this sequence:
 
-1. Electron chooses an open localhost port.
-2. Electron runs migrations using either the bundled runtime or a local development interpreter.
-3. Electron starts Django.
-4. Django exposes a dedicated health endpoint.
-5. Electron polls that endpoint until it succeeds or times out.
-6. Electron starts the single `db_worker` process only after Django is healthy.
-7. Electron loads the app window only after both backend processes have started cleanly.
-8. Closing the desktop app shuts down both child processes cleanly.
+1. Electron creates a local splash window immediately after `app.whenReady()`.
+2. Electron chooses an open localhost port.
+3. Electron runs migrations using either the bundled runtime or a local development interpreter.
+4. Electron starts Django.
+5. Django exposes a dedicated health endpoint.
+6. Electron polls that endpoint until it succeeds or times out.
+7. Electron starts the single `db_worker` process only after Django is healthy.
+8. Electron loads the main app window only after both backend processes have started cleanly, then closes the splash window once the main window is ready to show.
+9. Closing the desktop app shuts down both child processes cleanly.
 
 Single-instance expectation:
 

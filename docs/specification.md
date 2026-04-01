@@ -85,7 +85,7 @@ Key elements of the current themed UI:
 - client-side form validation with themed error messages (tooltip-style with warning icon)
 - SVG empty-state illustrations (stacked documents for My Ponies, interlocking gears for Stable Routines)
 - all colors defined as CSS custom properties (design tokens) in `:root`
-- a splash screen at `/splash/` with animated logo and loading dots, available for Electron startup (not yet wired into Electron)
+- a splash screen at `/splash/` with animated logo and loading dots, now reused by Electron as the startup splash window
 - `django-browser-reload` for development auto-reload (local settings only)
 - Play font loaded from Google Fonts, falling back to Helvetica Neue / Arial / sans-serif in offline or packaged mode
 
