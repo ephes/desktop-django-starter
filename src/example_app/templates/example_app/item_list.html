@@ -32,7 +32,7 @@
                         <a href="{% url 'example_app:item-update' item.pk %}" class="action-edit" title="Edit">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </a>
-                        <a href="{% url 'example_app:item-delete' item.pk %}" class="action-delete" title="Delete">
+                        <a href="{% url 'example_app:item-delete' item.pk %}" class="action-delete" title="Release">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
                         </a>
                     </td>
@@ -66,10 +66,10 @@
 {% csrf_token %}
 <div class="modal-overlay" id="delete-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
-        <p class="modal-text">Delete <strong id="delete-modal-title"></strong>?</p>
+        <p class="modal-text">Release <strong id="delete-modal-title"></strong>?</p>
         <div class="actions actions-right">
             <button type="button" class="secondary" id="delete-cancel">Keep It</button>
-            <button type="button" class="danger" id="delete-confirm">Delete</button>
+            <button type="button" class="danger" id="delete-confirm">Release Pony</button>
         </div>
     </div>
 </div>

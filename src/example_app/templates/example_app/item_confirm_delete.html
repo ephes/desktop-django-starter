@@ -1,11 +1,11 @@
 {% extends "base.html" %}
 
-{% block title %}Delete Pony | Flying Stable{% endblock %}
-{% block heading %}Delete Pony{% endblock %}
+{% block title %}Release Pony | Flying Stable{% endblock %}
+{% block heading %}Release Pony{% endblock %}
 
 {% block content %}
 <div class="confirm-delete">
-    <p>Delete <strong>{{ object.title }}</strong>?</p>
+    <p>Release <strong>{{ object.title }}</strong>?</p>
     <form method="post">
         {% csrf_token %}
         <div class="actions">
