@@ -81,6 +81,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "not a release-parity path" in readme
     assert "just positron-start" in readme
     assert "just positron-package-dmg" in readme
+    assert "dist/github-actions/latest" in readme
+    assert "dist/github-actions/tauri/latest" in readme
     assert "APPLE_API_KEY_ID" in release
     assert "WIN_CSC_LINK" in release
     assert "shells/electron/signing/" in release
@@ -188,6 +190,11 @@ def test_tauri_packaging_workflow_mentions_tauri_action_and_checksums() -> None:
     assert "ubuntu-22.04 # pinned for libwebkit2gtk-4.1-dev availability" in workflow
     assert 'gh workflow run tauri-packages.yml' in justfile
     assert 'gh run list --workflow tauri-packages.yml' in justfile
+    assert 'gh run list --workflow desktop-packages.yml' in justfile
+    assert 'ln -s "$run_id" dist/github-actions/latest' in justfile
+    assert 'ln -s "$run_id" dist/github-actions/tauri/latest' in justfile
+    assert 'readlink dist/github-actions/latest' in justfile
+    assert 'readlink dist/github-actions/tauri/latest' in justfile
     assert "desktop-django-starter-tauri-macos-checksums" in justfile
 
 

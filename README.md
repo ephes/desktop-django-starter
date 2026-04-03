@@ -116,10 +116,10 @@ For the experimental Positron shell, use `just positron-install` once and then `
 For the packaged-mode staging slice, use `just packaged-start`.
 The `.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
 
-For GitHub-built Electron install artifacts, use `just github-package` and then `just github-package-download-latest` once the workflow succeeds. The download helpers require the GitHub CLI plus an authenticated `gh` session and place per-platform artifacts under `dist/github-actions/<run-id>/`. `just github-package-latest-run` prints the current latest run id, `just github-package-download-latest` prints the downloaded paths and records the run id in `dist/github-actions/latest-run.txt`, and `just github-package-latest-path` prints the local directory for that latest downloaded run.
+For GitHub-built Electron install artifacts, use `just github-package` and then `just github-package-download-latest` once the workflow succeeds. The download helpers require the GitHub CLI plus an authenticated `gh` session and place per-platform artifacts under `dist/github-actions/<run-id>/`. `just github-package-latest-run` prints the current latest run id, `just github-package-download-latest` records the run id in `dist/github-actions/latest-run.txt`, creates `dist/github-actions/latest` as a symlink to the newest downloaded run, and `just github-package-latest-path` prints the resolved local directory for that latest download.
 Pass a different branch as the first argument when needed, for example `just github-package my-branch`.
 
-For GitHub-built Tauri artifacts, use `just github-package-tauri` and then `just github-package-tauri-download-latest` once the workflow succeeds. Those helpers place artifacts under `dist/github-actions/tauri/<run-id>/`, record the last downloaded run in `dist/github-actions/tauri/latest-run.txt`, and keep the same branch-selection behavior as the Electron helpers.
+For GitHub-built Tauri artifacts, use `just github-package-tauri` and then `just github-package-tauri-download-latest` once the workflow succeeds. Those helpers place artifacts under `dist/github-actions/tauri/<run-id>/`, record the last downloaded run in `dist/github-actions/tauri/latest-run.txt`, create `dist/github-actions/tauri/latest` as a symlink to the newest downloaded run, and keep the same branch-selection behavior as the Electron helpers.
 
 Both hosted workflows currently build one architecture per platform: macOS arm64 on `macos-latest`, plus Windows x64 and Linux x64 on the hosted runners.
 

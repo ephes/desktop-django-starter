@@ -137,6 +137,11 @@ github-package-latest-run BRANCH="":
 
 github-package-latest-path:
     @set -eu; \
+    if [ -L dist/github-actions/latest ]; then \
+        latest_path="$(readlink dist/github-actions/latest)"; \
+        echo "dist/github-actions/$latest_path"; \
+        exit 0; \
+    fi; \
     if [ -f dist/github-actions/latest-run.txt ]; then \
         run_id="$(cat dist/github-actions/latest-run.txt)"; \
         run_dir="dist/github-actions/$run_id"; \
@@ -159,6 +164,9 @@ github-package-download-latest BRANCH="":
     just github-package-download "$run_id"; \
     mkdir -p dist/github-actions; \
     printf "%s\n" "$run_id" > dist/github-actions/latest-run.txt; \
+    rm -f dist/github-actions/latest; \
+    ln -s "$run_id" dist/github-actions/latest; \
+    echo "Latest symlink: dist/github-actions/latest"; \
     echo "Latest downloaded path: dist/github-actions/$run_id"
 
 github-package-tauri BRANCH="":
@@ -194,6 +202,11 @@ github-package-tauri-latest-run BRANCH="":
 
 github-package-tauri-latest-path:
     @set -eu; \
+    if [ -L dist/github-actions/tauri/latest ]; then \
+        latest_path="$(readlink dist/github-actions/tauri/latest)"; \
+        echo "dist/github-actions/tauri/$latest_path"; \
+        exit 0; \
+    fi; \
     if [ -f dist/github-actions/tauri/latest-run.txt ]; then \
         run_id="$(cat dist/github-actions/tauri/latest-run.txt)"; \
         run_dir="dist/github-actions/tauri/$run_id"; \
@@ -216,6 +229,9 @@ github-package-tauri-download-latest BRANCH="":
     just github-package-tauri-download "$run_id"; \
     mkdir -p dist/github-actions/tauri; \
     printf "%s\n" "$run_id" > dist/github-actions/tauri/latest-run.txt; \
+    rm -f dist/github-actions/tauri/latest; \
+    ln -s "$run_id" dist/github-actions/tauri/latest; \
+    echo "Latest Tauri symlink: dist/github-actions/tauri/latest"; \
     echo "Latest downloaded path: dist/github-actions/tauri/$run_id"
 
 dev:
