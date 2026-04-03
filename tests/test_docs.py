@@ -74,6 +74,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "just tauri-build" in readme
     assert "`nsis` on Windows" in readme
     assert "real live Windows machine" in readme
+    assert "minimal CSP" in readme
+    assert "not a release-parity path" in readme
     assert "just positron-start" in readme
     assert "just positron-package-dmg" in readme
     assert "APPLE_API_KEY_ID" in release
@@ -82,8 +84,11 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "just tauri-build" in release
     assert "no dedicated Tauri GitHub packaging workflow" in release
     assert "real live Windows machine test" in release
+    assert "Windows NSIS validation checklist" in release
+    assert "minimal CSP" in release
     assert "no dedicated Positron GitHub packaging workflow" in release
     assert "just positron-package-dmg" in release
+    assert "not a release-parity path in this slice" in release
     assert "air-gapped" in release
     assert "app.sqlite3" in release
     assert "auto-update" in release
@@ -98,18 +103,24 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/positron/" in architecture
     assert "packaged-app copy first" in architecture
     assert "shell-local splash window" in architecture
-    assert "fallback `DJANGO_SECRET_KEY` only when the environment does not provide one" in architecture
+    expected = "fallback `DJANGO_SECRET_KEY` only when the environment does not provide one"
+    assert expected in architecture
     assert "comparison paths in this repo" in specification
     assert "shells/electron/" in llms
     assert "shells/tauri/" in llms
     assert "shells/positron/" in llms
     assert "assets/brand/" in llms
     assert "prepared, unverified local Windows NSIS bundle path" in llms
+    assert "minimal localhost-aware CSP" in llms
     assert "shells/electron.html" in docs_llms
     assert "shells/tauri.html" in docs_llms
     assert "shells/positron.html" in docs_llms
     assert "app.security.csp" in tauri_doc
+    assert "Current minimal CSP posture" in tauri_doc
+    assert "canonical written checklist" in tauri_doc
+    assert "not a release-parity path in this slice" in tauri_doc
     assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in positron_doc
+    assert "not a release-parity path in this slice" in positron_doc
     assert ".stage/" in gitignore
 
 

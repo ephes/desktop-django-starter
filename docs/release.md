@@ -26,6 +26,7 @@ Tauri is explicitly out of that release lane in this slice:
 - there is no dedicated Tauri GitHub packaging workflow
 - there is no Tauri checksum-artifact lane
 - local Tauri bundles are for experiment validation, not release parity
+- Tauri-served shell assets now use a minimal CSP for the local splash/bootstrap surface only; the localhost-served Django UI is not presented here as a hardened release renderer
 - the Windows claim is limited to a prepared local NSIS installer path and a required manual Windows validation path
 
 Positron is explicitly out of that release lane as well:
@@ -34,6 +35,7 @@ Positron is explicitly out of that release lane as well:
 - there is no Positron checksum-artifact lane
 - local Positron bundles are for experiment validation, not release parity
 - local macOS packaging currently depends on Briefcase ad-hoc signing
+- Positron is not a release-parity path in this slice
 - Windows packaged proof for Positron is still deferred
 
 Current output artifacts:
@@ -59,8 +61,19 @@ That path intentionally stays narrower than Electron:
 - it reuses the shared `.stage/backend` payload as bundled resources
 - it does not participate in `.github/workflows/desktop-packages.yml`
 - it does not add checksum uploads, signing automation, or notarization scaffolding
+- it now applies a minimal CSP to Tauri-served shell assets such as the local splash window, without claiming production-hardening for the Django pages served over localhost
 - on Windows, the current scope is limited to generating the local NSIS installer path; install/run still needs a real live Windows machine test
+- the build wrapper now prints a Windows NSIS validation checklist, but that checklist is still preparation work rather than proof
 - it should be described as local-only experiment scope until a dedicated release lane exists
+
+Windows NSIS validation checklist:
+
+1. Run `just tauri-build` on a Windows machine and note the generated `.exe` path under `shells/tauri/src-tauri/target/release/bundle/nsis/`.
+2. Install that NSIS artifact on the same or another clean Windows machine.
+3. Launch the installed app and confirm the splash appears before the localhost Django UI loads.
+4. Confirm startup does not depend on a system Python install and that the staged bundled runtime is the interpreter actually used.
+5. Confirm app shutdown stops both Django and `db_worker` cleanly.
+6. Confirm per-user writable state survives relaunches under the Windows app-data directory.
 
 ## Positron Local Bundle Scope
 
@@ -73,6 +86,7 @@ That path intentionally stays narrower than Electron:
 - it does not add checksum uploads, signing automation, or notarization scaffolding
 - `just positron-package-dmg` currently relies on Briefcase ad-hoc signing, so the resulting app is suitable only for the machine that built it
 - splashscreen parity is intentionally not required on macOS for this shell
+- it is not a release-parity path in this slice
 - it should be described as local-only experiment scope until a dedicated release lane exists
 
 ## macOS Signing and Notarization Inputs

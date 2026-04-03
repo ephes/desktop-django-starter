@@ -31,6 +31,7 @@ Scope boundaries:
 - Electron remains the most complete shell path
 - packaged startup uses the same fallback `DJANGO_SECRET_KEY` value as Electron and Tauri when the environment does not provide one; this is only a local bootstrap convenience, not a release secret
 - splashscreen parity is intentionally not required on macOS for Positron
+- Positron is not a release-parity path in this slice
 - Windows packaged-build parity is not claimed for Positron yet
 - local macOS packaging uses Briefcase and currently depends on ad-hoc signing
 

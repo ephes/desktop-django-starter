@@ -27,9 +27,20 @@ Scope boundaries:
 - Tauri is still experimental and local-only in this slice
 - GitHub Actions artifact generation remains Electron-only
 - Electron remains the most complete shell path
-- the current Tauri config keeps `app.security.csp` disabled so the shell can load its local splash and localhost-served Django pages without pretending this is already a hardened release policy
+- the current Tauri config now applies a minimal `app.security.csp` for Tauri-served shell assets, including the local splash window and localhost bootstrap surface
+- that CSP is intentionally narrow and should not be read as production-hardening for the Django pages loaded over `http://127.0.0.1:<random-port>`
+- Tauri is not a release-parity path in this slice
 - the Windows support claim is limited to preparing a local NSIS installer path with `just tauri-build`
+- `just tauri-build` now also prints a Windows NSIS validation checklist when run on Windows, while `/docs/release.md` keeps the canonical written checklist
 - installer install/run validation still needs a real live Windows machine and is not automated in this repo
+
+Current minimal CSP posture:
+
+- `default-src 'self'`
+- `connect-src` is limited to Tauri IPC plus localhost (`ipc:`, `http://ipc.localhost`, `http://127.0.0.1:*`, `http://localhost:*`)
+- inline style is still allowed for the shell-local splash document
+- the policy blocks plugin/object embedding and framing with `object-src 'none'` and `frame-ancestors 'none'`
+- this covers the Tauri-served splash/bootstrap assets only; the Django UI remains a localhost-served renderer with its own separate hardening story
 
 `tasks_demo` posture in this slice:
 

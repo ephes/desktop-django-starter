@@ -104,7 +104,7 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 For backend-only work, use `just backend-dev`.
 When you need the real `/tasks/` demo outside Electron, run `just task-worker` in a second terminal.
 
-For the experimental Tauri shell, use `just tauri-install` once and then `just tauri-start`. The Tauri path keeps the same localhost Django plus `db_worker` subprocess model as Electron, now with a shell-local startup splash while backend bootstrap runs in the background, but its packaged build scope is still local-only and intentionally does not add a GitHub Actions artifact lane in this slice. On Windows, `just tauri-build` now defaults to a local NSIS installer path and prints the generated bundle path, but the installer install/run path remains unverified until a real live Windows test is performed.
+For the experimental Tauri shell, use `just tauri-install` once and then `just tauri-start`. The Tauri path keeps the same localhost Django plus `db_worker` subprocess model as Electron, now with a shell-local startup splash while backend bootstrap runs in the background. Its Tauri-side assets now use a minimal CSP for the local splash/bootstrap surface, not as a claim of release-grade hardening for the Django pages loaded over `http://127.0.0.1:<random-port>`. Its packaged build scope is still local-only, intentionally does not add a GitHub Actions artifact lane in this slice, and is not a release-parity path. On Windows, `just tauri-build` now defaults to a local NSIS installer path, prints the generated bundle path, and prints a manual validation checklist, but the installer install/run path remains unverified until a real live Windows test is performed.
 
 For the experimental Positron shell, use `just positron-install` once and then `just positron-start`. The Positron path intentionally keeps a different runtime model: Django and the optional `tasks_demo` worker run in-process on threads, there is no splashscreen-parity requirement on macOS, and packaged builds remain a local-only Briefcase experiment.
 
@@ -128,6 +128,7 @@ The Tauri packaging path is explicitly narrower than Electron in this slice:
 - it is local-only
 - it reuses `.stage/backend` as bundled resources
 - it does not add GitHub Actions artifact generation
+- it now applies a minimal CSP to Tauri-served shell assets such as the local splash window, while the Django UI still loads over localhost and is not presented as production-hardening
 - it now prepares a local Windows NSIS bundle path only
 - installer install/run validation still requires a real live Windows machine and is not part of the GitHub release lane
 
@@ -137,6 +138,7 @@ The Positron packaging path is also explicitly narrower than Electron:
 - it uses Briefcase rather than the Electron/Tauri staged-backend subprocess model
 - local macOS DMG packaging currently depends on `briefcase package macOS app --packaging-format dmg --adhoc-sign`
 - the ad-hoc-signed app is suitable only for the local machine that built it and is not a release-grade artifact
+- it is not a release-parity path in this slice
 - Windows packaged-build parity is not claimed for Positron in this slice
 
 When signing credentials are present, `electron-builder` now uses them directly:

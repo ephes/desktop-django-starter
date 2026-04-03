@@ -34,8 +34,10 @@ def test_positron_docs_and_commands_state_scope_honestly() -> None:
     assert "Windows packaged-build parity is not claimed" in shell_doc
     assert "ad-hoc signing" in shell_doc
     assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in shell_doc
+    assert "not a release-parity path in this slice" in shell_doc
     assert "no dedicated Positron GitHub packaging workflow" in release
     assert "just positron-package-dmg" in release
+    assert "not a release-parity path in this slice" in release
     assert "positron-start" in justfile
     assert "positron-smoke" in justfile
     assert "positron-build" in justfile
@@ -97,7 +99,10 @@ def test_positron_runtime_validation_uses_shared_django_source(tmp_path) -> None
     finally:
         sys.path.remove(str(POSITRON_SRC))
 
-    module_file = tmp_path / "shells" / "positron" / "src" / "desktop_django_starter_positron" / "runtime.py"
+    module_file = (
+        tmp_path / "shells" / "positron" / "src"
+        / "desktop_django_starter_positron" / "runtime.py"
+    )
     module_file.parent.mkdir(parents=True)
     module_file.write_text("", encoding="utf-8")
 
@@ -115,7 +120,10 @@ def test_positron_runtime_validation_raises_clear_error_when_src_missing(tmp_pat
     finally:
         sys.path.remove(str(POSITRON_SRC))
 
-    module_file = tmp_path / "shells" / "positron" / "src" / "desktop_django_starter_positron" / "runtime.py"
+    module_file = (
+        tmp_path / "shells" / "positron" / "src"
+        / "desktop_django_starter_positron" / "runtime.py"
+    )
     module_file.parent.mkdir(parents=True)
     module_file.write_text("", encoding="utf-8")
 

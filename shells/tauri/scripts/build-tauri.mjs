@@ -161,6 +161,20 @@ function resolveSmokeBinary(profile) {
   throw new Error(`Unable to locate a runnable bundled Tauri app under ${bundleRoot}.`);
 }
 
+function printWindowsValidationChecklist(artifacts) {
+  if (process.platform !== "win32" || artifacts.length === 0) {
+    return;
+  }
+
+  process.stdout.write("\nWindows NSIS validation checklist:\n");
+  process.stdout.write(`- Install the generated NSIS .exe from: ${artifacts[0]}\n`);
+  process.stdout.write("- Launch the installed app on a real Windows machine.\n");
+  process.stdout.write("- Confirm the splash appears, then the Django UI loads from localhost.\n");
+  process.stdout.write("- Confirm app startup runs against the staged bundled runtime with no system Python dependency.\n");
+  process.stdout.write("- Confirm closing the app stops the bundled Django and db_worker processes cleanly.\n");
+  process.stdout.write("- Confirm writable app data persists across relaunches under the per-user app-data directory.\n");
+}
+
 const buildArgs = hasBundleControlArg(forwardedArgs)
   ? forwardedArgs
   : [...defaultBundleArgs({ smokeTest }), ...forwardedArgs];
@@ -183,6 +197,8 @@ if (builtArtifacts.length > 0) {
     process.stdout.write(`- ${artifactPath}\n`);
   }
 }
+
+printWindowsValidationChecklist(builtArtifacts);
 
 if (smokeTest) {
   const smokeBinary = resolveSmokeBinary(profile);
