@@ -177,6 +177,7 @@ def test_tauri_packaging_workflow_mentions_tauri_action_and_checksums() -> None:
     assert "file" in workflow
     assert 'NO_STRIP: "true"' in workflow
     assert "Build packaged Linux Tauri artifact" in workflow
+    assert "args: --verbose ${{ matrix.bundle_args }}" in workflow
     assert "python scripts/write-checksums.py" in workflow
     assert "desktop-django-starter-tauri-macos-sha256.txt" in workflow
     assert "desktop-django-starter-tauri-windows-sha256.txt" in workflow

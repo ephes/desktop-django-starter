@@ -97,7 +97,8 @@ jobs:
         uses: tauri-apps/tauri-action@v0
         with:
           projectPath: shells/tauri
-          args: ${{ matrix.bundle_args }}
+          # Tauri only emits linuxdeploy stderr at non-error log levels.
+          args: --verbose ${{ matrix.bundle_args }}
 
       - name: Build packaged Tauri artifact
         if: matrix.platform != 'linux'
