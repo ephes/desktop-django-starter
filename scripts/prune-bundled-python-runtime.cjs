@@ -1,6 +1,10 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
+function toPortableRelativePath(rootPath, targetPath) {
+  return path.relative(rootPath, targetPath).split(path.sep).join("/");
+}
+
 function removeIfPresent(targetPath) {
   if (!fs.existsSync(targetPath)) {
     return false;
@@ -20,7 +24,7 @@ function pruneBundledPythonRuntime(pythonRoot) {
       if (/^idle3(\.\d+)?$/.test(entry)) {
         const targetPath = path.join(binRoot, entry);
         if (removeIfPresent(targetPath)) {
-          removed.push(path.relative(pythonRoot, targetPath));
+          removed.push(toPortableRelativePath(pythonRoot, targetPath));
         }
       }
     }
@@ -31,12 +35,12 @@ function pruneBundledPythonRuntime(pythonRoot) {
       if (/^(tcl|tk)\d/.test(entry) || /^(itcl|thread)\d/.test(entry)) {
         const targetPath = path.join(libRoot, entry);
         if (removeIfPresent(targetPath)) {
-          removed.push(path.relative(pythonRoot, targetPath));
+          removed.push(toPortableRelativePath(pythonRoot, targetPath));
         }
       } else if (/^lib(tcl|tk|itcl)/.test(entry)) {
         const targetPath = path.join(libRoot, entry);
         if (removeIfPresent(targetPath)) {
-          removed.push(path.relative(pythonRoot, targetPath));
+          removed.push(toPortableRelativePath(pythonRoot, targetPath));
         }
       }
     }
@@ -51,7 +55,7 @@ function pruneBundledPythonRuntime(pythonRoot) {
       for (const candidate of ["idlelib", "tkinter"]) {
         const targetPath = path.join(stdlibRoot, candidate);
         if (removeIfPresent(targetPath)) {
-          removed.push(path.relative(pythonRoot, targetPath));
+          removed.push(toPortableRelativePath(pythonRoot, targetPath));
         }
       }
 
@@ -67,7 +71,7 @@ function pruneBundledPythonRuntime(pythonRoot) {
 
         const targetPath = path.join(dynloadRoot, dynloadEntry);
         if (removeIfPresent(targetPath)) {
-          removed.push(path.relative(pythonRoot, targetPath));
+          removed.push(toPortableRelativePath(pythonRoot, targetPath));
         }
       }
     }

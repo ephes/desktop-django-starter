@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -76,8 +77,10 @@ def test_prune_bundled_python_runtime_removes_tk_and_idle_artifacts(tmp_path: Pa
         text=True,
     )
 
-    assert "bin/idle3.14" in completed.stdout
-    assert "lib/libtcl9.0.so" in completed.stdout
+    removed = json.loads(completed.stdout)
+
+    assert "bin/idle3.14" in removed
+    assert "lib/libtcl9.0.so" in removed
     assert not idle_binary.exists()
     assert not tkinter_package.exists()
     assert not idlelib_package.exists()
