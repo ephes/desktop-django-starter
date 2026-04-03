@@ -17,10 +17,10 @@ const backendRoot = process.argv[1];
 const executable = path.join(backendRoot, "python", "bin", "python3");
 
 runtime.writeRuntimeManifest(backendRoot, {
-  version: "3.12.13",
+  version: "3.14.3",
   root: path.join(backendRoot, "python"),
   executable,
-  purelib: path.join(backendRoot, "python", "lib", "python3.12", "site-packages"),
+  purelib: path.join(backendRoot, "python", "lib", "python3.14", "site-packages"),
   scripts: path.join(backendRoot, "python", "bin")
 });
 

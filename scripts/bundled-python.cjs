@@ -1,7 +1,7 @@
 const fs = require("node:fs");
 const path = require("node:path");
 
-const DEFAULT_BUNDLED_PYTHON_VERSION = "3.12";
+const DEFAULT_BUNDLED_PYTHON_VERSION = "3.14";
 const RUNTIME_MANIFEST_FILENAME = "runtime-manifest.json";
 
 function toManifestPath(backendRoot, targetPath) {

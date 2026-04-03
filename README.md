@@ -193,7 +193,7 @@ The staged packaged-backend layout is now explicit enough to mirror a later pack
 - `.stage/backend/staticfiles/`: collected static assets for `DEBUG=False`
 - `.stage/backend/runtime-manifest.json`: runtime metadata that records the staged interpreter and launcher contract
 
-Electron and Tauri packaged mode read `runtime-manifest.json` to locate the bundled interpreter, then invoke `manage.py` from the backend root. The current staged manifest records the interpreter as `python/bin/python3.12` on POSIX and is designed to allow `python.exe` on Windows.
+Electron and Tauri packaged mode read `runtime-manifest.json` to locate the bundled interpreter, then invoke `manage.py` from the backend root. The current staged manifest records the interpreter as `python/bin/python3.14` on POSIX and is designed to allow `python.exe` on Windows.
 
 The shell-neutral staging build now lives in `scripts/stage-backend.cjs`, which writes the staged backend once at the repo root so later shells can consume the same contract.
 
@@ -202,7 +202,7 @@ Electron and Tauri now supervise two backend commands from that staged bundle:
 - `manage.py runserver ...` for the local web app
 - `manage.py db_worker --queue-name default ...` for the `/tasks/` demo worker
 
-Dependencies are installed into the staged runtime under `backend/python/lib/python3.12/site-packages` on the current macOS/Linux path. On Windows, the same contract is expected to resolve inside the staged `python/` tree rather than the repo environment.
+Dependencies are installed into the staged runtime under `backend/python/lib/python3.14/site-packages` on the current macOS/Linux path. On Windows, the same contract is expected to resolve inside the staged `python/` tree rather than the repo environment.
 
 Packaged mode still sets a small runtime environment at launch time:
 
