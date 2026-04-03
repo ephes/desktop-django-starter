@@ -97,6 +97,7 @@ Current workflow boundaries:
 - it should not be read as proof that Windows installer install/run behavior has been validated end to end
 - the Windows NSIS artifacts currently rely on Tauri's default `downloadBootstrapper` WebView2 behavior, so they are not the repo's offline-ready installer story
 - the Linux AppImage job currently sets `NO_STRIP=true` as a workflow-level workaround for the current upstream `linuxdeploy` strip failure on hosted Ubuntu runners
+- the staged bundled Python runtime now prunes unused Tk/IDLE pieces before packaging so hosted AppImage builds do not have to resolve Tcl/Tk GUI dependencies the starter does not use
 
 Windows NSIS validation checklist:
 

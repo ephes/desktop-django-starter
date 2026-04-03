@@ -10,6 +10,7 @@ const {
   writeRuntimeManifest
 } = require("./bundled-python.cjs");
 const { materializeSymlinks } = require("./materialize-symlinks.cjs");
+const { pruneBundledPythonRuntime } = require("./prune-bundled-python-runtime.cjs");
 
 const repoRoot = path.resolve(__dirname, "..");
 const stageRoot = path.join(repoRoot, ".stage");
@@ -102,6 +103,13 @@ function stageBundledPythonRuntime() {
   // uv's standalone runtimes can still leave link-shaped seams behind on some
   // platforms, so normalize the staged tree before packaging it as resources.
   materializeSymlinks(path.join(backendRoot, "python"));
+  const removed = pruneBundledPythonRuntime(path.join(backendRoot, "python"));
+  if (removed.length > 0) {
+    process.stdout.write("Pruned bundled Python GUI artifacts:\n");
+    for (const entry of removed) {
+      process.stdout.write(`- ${entry}\n`);
+    }
+  }
   return resolveBundledPythonExecutable(backendRoot);
 }
 
