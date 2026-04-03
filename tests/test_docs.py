@@ -175,6 +175,8 @@ def test_tauri_packaging_workflow_mentions_tauri_action_and_checksums() -> None:
     assert "libayatana-appindicator3-dev" in workflow
     assert "libfuse2" in workflow
     assert "file" in workflow
+    assert 'NO_STRIP: "true"' in workflow
+    assert "Build packaged Linux Tauri artifact" in workflow
     assert "python scripts/write-checksums.py" in workflow
     assert "desktop-django-starter-tauri-macos-sha256.txt" in workflow
     assert "desktop-django-starter-tauri-windows-sha256.txt" in workflow

@@ -96,6 +96,7 @@ Current workflow boundaries:
 - it is intentionally narrower than the Electron lane's signing/notarization posture
 - it should not be read as proof that Windows installer install/run behavior has been validated end to end
 - the Windows NSIS artifacts currently rely on Tauri's default `downloadBootstrapper` WebView2 behavior, so they are not the repo's offline-ready installer story
+- the Linux AppImage job currently sets `NO_STRIP=true` as a workflow-level workaround for the current upstream `linuxdeploy` strip failure on hosted Ubuntu runners
 
 Windows NSIS validation checklist:
 

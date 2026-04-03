@@ -89,7 +89,18 @@ jobs:
       - name: Stage packaged backend
         run: npm --prefix shells/tauri run stage-backend
 
+      - name: Build packaged Linux Tauri artifact
+        if: matrix.platform == 'linux'
+        env:
+          # Work around the current linuxdeploy strip failure on Ubuntu-hosted AppImage builds.
+          NO_STRIP: "true"
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: shells/tauri
+          args: ${{ matrix.bundle_args }}
+
       - name: Build packaged Tauri artifact
+        if: matrix.platform != 'linux'
         uses: tauri-apps/tauri-action@v0
         with:
           projectPath: shells/tauri

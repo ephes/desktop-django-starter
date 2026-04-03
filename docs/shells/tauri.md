@@ -34,6 +34,7 @@ Scope boundaries:
 - Tauri is not a release-parity path in this slice
 - the Windows support claim is limited to local plus CI-built NSIS installer generation, with manual install/run validation still required
 - the current Windows config keeps Tauri's default `downloadBootstrapper` WebView2 installer behavior rather than an offline-ready embedded runtime
+- the hosted Linux AppImage job currently applies `NO_STRIP=true` as an upstream `linuxdeploy` workaround rather than a claim of finished Linux release hardening
 - `just tauri-build` now also prints a Windows NSIS validation checklist when run on Windows, while `/docs/release.md` keeps the canonical written checklist
 - installer install/run validation still needs a real live Windows machine and is not automated in this repo
 
