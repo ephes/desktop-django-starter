@@ -41,7 +41,7 @@
 
 body {
     margin: 0;
-    background: var(--bg-page);
+    background: var(--bg-page) url('../desktop_django_starter/white-linen.png') repeat top left / 560px;
     color: var(--text-primary);
     min-height: 100vh;
     display: flex;
