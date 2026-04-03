@@ -43,12 +43,12 @@ shells/positron
 - `just github-package-download <run-id>` downloads one packaging workflow run into `dist/github-actions/<run-id>/`
 - `just github-package-latest-run` prints the latest successful packaging workflow run id for the current branch
 - `just github-package-latest-path` prints the local path for the last `github-package-download-latest` download
-- `just github-package-download-latest` downloads the latest successful packaging workflow run for the current branch
+- `just github-package-download-latest` downloads the latest successful packaging workflow run for the current branch and records it under `dist/github-actions/latest-run.txt`, with a best-effort `dist/github-actions/latest` symlink when the platform allows it
 - `just github-package-tauri` triggers the Tauri GitHub Actions packaging workflow for the current branch
 - `just github-package-tauri-download <run-id>` downloads one Tauri packaging workflow run into `dist/github-actions/tauri/<run-id>/`
 - `just github-package-tauri-latest-run` prints the latest successful Tauri packaging workflow run id for the current branch
 - `just github-package-tauri-latest-path` prints the local path for the last `github-package-tauri-download-latest` download
-- `just github-package-tauri-download-latest` downloads the latest successful Tauri packaging workflow run for the current branch
+- `just github-package-tauri-download-latest` downloads the latest successful Tauri packaging workflow run for the current branch and records it under `dist/github-actions/tauri/latest-run.txt`, with a best-effort `dist/github-actions/tauri/latest` symlink when the platform allows it
 - `just docs` builds the documentation and opens it locally
 - `just docs-serve` starts a live-reloading docs server
 - `just test` runs the backend and docs test suite

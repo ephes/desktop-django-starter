@@ -165,8 +165,11 @@ github-package-download-latest BRANCH="":
     mkdir -p dist/github-actions; \
     printf "%s\n" "$run_id" > dist/github-actions/latest-run.txt; \
     rm -f dist/github-actions/latest; \
-    ln -s "$run_id" dist/github-actions/latest; \
-    echo "Latest symlink: dist/github-actions/latest"; \
+    if ln -s "$run_id" dist/github-actions/latest 2>/dev/null; then \
+        echo "Latest symlink: dist/github-actions/latest"; \
+    else \
+        echo "Latest symlink not created; using dist/github-actions/latest-run.txt instead."; \
+    fi; \
     echo "Latest downloaded path: dist/github-actions/$run_id"
 
 github-package-tauri BRANCH="":
@@ -230,8 +233,11 @@ github-package-tauri-download-latest BRANCH="":
     mkdir -p dist/github-actions/tauri; \
     printf "%s\n" "$run_id" > dist/github-actions/tauri/latest-run.txt; \
     rm -f dist/github-actions/tauri/latest; \
-    ln -s "$run_id" dist/github-actions/tauri/latest; \
-    echo "Latest Tauri symlink: dist/github-actions/tauri/latest"; \
+    if ln -s "$run_id" dist/github-actions/tauri/latest 2>/dev/null; then \
+        echo "Latest Tauri symlink: dist/github-actions/tauri/latest"; \
+    else \
+        echo "Latest Tauri symlink not created; using dist/github-actions/tauri/latest-run.txt instead."; \
+    fi; \
     echo "Latest downloaded path: dist/github-actions/tauri/$run_id"
 
 dev:
