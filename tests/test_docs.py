@@ -167,8 +167,14 @@ def test_tauri_packaging_workflow_mentions_tauri_action_and_checksums() -> None:
     assert "actions/setup-node@v5" in workflow
     assert "dtolnay/rust-toolchain@stable" in workflow
     assert "swatinem/rust-cache@v2" in workflow
+    assert "--no-install-recommends --no-install-suggests" in workflow
+    assert "build-essential" in workflow
+    assert "libssl-dev" in workflow
+    assert "libgtk-3-dev" in workflow
     assert "libwebkit2gtk-4.1-dev" in workflow
+    assert "libayatana-appindicator3-dev" in workflow
     assert "libfuse2" in workflow
+    assert "file" in workflow
     assert "python scripts/write-checksums.py" in workflow
     assert "desktop-django-starter-tauri-macos-sha256.txt" in workflow
     assert "desktop-django-starter-tauri-windows-sha256.txt" in workflow
