@@ -34,7 +34,8 @@ Key expectations:
 
 Current shell split note:
 
-- Electron remains the baseline shell and the only release-oriented packaging lane
+- Electron remains the baseline shell and the most complete release-oriented packaging lane
+- Tauri now also has an experimental GitHub-hosted artifact lane, while keeping the same staged-backend subprocess model
 - Tauri keeps the same staged-backend subprocess model locally
 - Positron keeps shell-local ownership of an in-process Django server plus an in-process worker thread
 

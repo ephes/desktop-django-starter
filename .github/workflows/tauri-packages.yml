@@ -1,0 +1,103 @@
+name: Tauri Packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    name: package (${{ matrix.platform }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: macos
+            bundle_args: --bundles dmg
+            artifact_name: desktop-django-starter-tauri-macos
+            artifact_glob: shells/tauri/src-tauri/target/release/bundle/dmg/*.dmg
+            checksum_artifact_name: desktop-django-starter-tauri-macos-checksums
+            checksum_path: shells/tauri/src-tauri/target/release/bundle/desktop-django-starter-tauri-macos-sha256.txt
+          - os: windows-latest
+            platform: windows
+            bundle_args: --bundles nsis
+            artifact_name: desktop-django-starter-tauri-windows
+            artifact_glob: shells/tauri/src-tauri/target/release/bundle/nsis/*.exe
+            checksum_artifact_name: desktop-django-starter-tauri-windows-checksums
+            checksum_path: shells/tauri/src-tauri/target/release/bundle/desktop-django-starter-tauri-windows-sha256.txt
+          - os: ubuntu-22.04 # pinned for libwebkit2gtk-4.1-dev availability
+            platform: linux
+            bundle_args: --bundles appimage
+            artifact_name: desktop-django-starter-tauri-linux
+            artifact_glob: shells/tauri/src-tauri/target/release/bundle/appimage/*.AppImage
+            checksum_artifact_name: desktop-django-starter-tauri-linux-checksums
+            checksum_path: shells/tauri/src-tauri/target/release/bundle/desktop-django-starter-tauri-linux-sha256.txt
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Linux system dependencies
+        if: matrix.platform == 'linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: shells/tauri/package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./shells/tauri/src-tauri -> target"
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Sync Python dependencies
+        run: uv sync --locked
+
+      - name: Install Tauri dependencies
+        run: npm --prefix shells/tauri ci
+
+      - name: Stage packaged backend
+        run: npm --prefix shells/tauri run stage-backend
+
+      - name: Build packaged Tauri artifact
+        uses: tauri-apps/tauri-action@v0
+        with:
+          projectPath: shells/tauri
+          args: ${{ matrix.bundle_args }}
+
+      - name: Generate artifact checksums
+        run: python scripts/write-checksums.py --glob "${{ matrix.artifact_glob }}" --output "${{ matrix.checksum_path }}"
+
+      - name: Upload packaged Tauri artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+
+      - name: Upload packaged Tauri artifact checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.checksum_artifact_name }}
+          path: ${{ matrix.checksum_path }}
+          if-no-files-found: error

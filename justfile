@@ -116,8 +116,11 @@ github-package-download RUN_ID:
     rm -rf "$run_dir"; \
     mkdir -p "$run_dir"; \
     gh run download "{{RUN_ID}}" --name desktop-django-starter-macos --dir "$run_dir/macos" && \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-macos-checksums --dir "$run_dir/macos" && \
     gh run download "{{RUN_ID}}" --name desktop-django-starter-windows --dir "$run_dir/windows" && \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-windows-checksums --dir "$run_dir/windows" && \
     gh run download "{{RUN_ID}}" --name desktop-django-starter-linux --dir "$run_dir/linux" && \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-linux-checksums --dir "$run_dir/linux" && \
     echo "Downloaded workflow artifacts to $run_dir"; \
     echo "macOS:   $run_dir/macos"; \
     echo "Windows: $run_dir/windows"; \
@@ -157,6 +160,63 @@ github-package-download-latest BRANCH="":
     mkdir -p dist/github-actions; \
     printf "%s\n" "$run_id" > dist/github-actions/latest-run.txt; \
     echo "Latest downloaded path: dist/github-actions/$run_id"
+
+github-package-tauri BRANCH="":
+    @branch="{{BRANCH}}"; \
+    if [ -z "$branch" ]; then branch="$(git symbolic-ref --short -q HEAD)"; fi; \
+    [ -n "$branch" ] || { echo "Unable to determine a branch. Pass the branch name as the first argument."; exit 1; }; \
+    gh workflow run tauri-packages.yml --ref "$branch"
+
+github-package-tauri-download RUN_ID:
+    @set -eu; \
+    run_dir="dist/github-actions/tauri/{{RUN_ID}}"; \
+    rm -rf "$run_dir"; \
+    mkdir -p "$run_dir"; \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-tauri-macos --dir "$run_dir/macos" && \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-tauri-macos-checksums --dir "$run_dir/macos" && \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-tauri-windows --dir "$run_dir/windows" && \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-tauri-windows-checksums --dir "$run_dir/windows" && \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-tauri-linux --dir "$run_dir/linux" && \
+    gh run download "{{RUN_ID}}" --name desktop-django-starter-tauri-linux-checksums --dir "$run_dir/linux" && \
+    echo "Downloaded Tauri workflow artifacts to $run_dir"; \
+    echo "macOS:   $run_dir/macos"; \
+    echo "Windows: $run_dir/windows"; \
+    echo "Linux:   $run_dir/linux"
+
+github-package-tauri-latest-run BRANCH="":
+    @set -eu; \
+    branch="{{BRANCH}}"; \
+    if [ -z "$branch" ]; then branch="$(git symbolic-ref --short -q HEAD)"; fi; \
+    [ -n "$branch" ] || { echo "Unable to determine a branch. Pass the branch name as the first argument."; exit 1; }; \
+    run_id="$(gh run list --workflow tauri-packages.yml --branch "$branch" --status success --limit 1 --json databaseId --jq '.[0].databaseId')"; \
+    [ -n "$run_id" ] && [ "$run_id" != "null" ] || { echo "No successful tauri-packages.yml run found for branch $branch."; exit 1; }; \
+    echo "$run_id"
+
+github-package-tauri-latest-path:
+    @set -eu; \
+    if [ -f dist/github-actions/tauri/latest-run.txt ]; then \
+        run_id="$(cat dist/github-actions/tauri/latest-run.txt)"; \
+        run_dir="dist/github-actions/tauri/$run_id"; \
+        [ -d "$run_dir" ] || { echo "Recorded latest Tauri run $run_id is not downloaded locally."; exit 1; }; \
+        echo "$run_dir"; \
+        exit 0; \
+    fi; \
+    run_dir="$(find dist/github-actions/tauri -mindepth 1 -maxdepth 1 -type d -name '[0-9]*' -print 2>/dev/null | sort | tail -n 1)"; \
+    [ -n "$run_dir" ] || { echo "No downloaded Tauri package runs found under dist/github-actions/tauri."; exit 1; }; \
+    echo "$run_dir"
+
+github-package-tauri-download-latest BRANCH="":
+    @set -eu; \
+    branch="{{BRANCH}}"; \
+    if [ -z "$branch" ]; then branch="$(git symbolic-ref --short -q HEAD)"; fi; \
+    [ -n "$branch" ] || { echo "Unable to determine a branch. Pass the branch name as the first argument."; exit 1; }; \
+    run_id="$(gh run list --workflow tauri-packages.yml --branch "$branch" --status success --limit 1 --json databaseId --jq '.[0].databaseId')"; \
+    [ -n "$run_id" ] && [ "$run_id" != "null" ] || { echo "No successful tauri-packages.yml run found for branch $branch."; exit 1; }; \
+    echo "Latest successful Tauri run for $branch: $run_id"; \
+    just github-package-tauri-download "$run_id"; \
+    mkdir -p dist/github-actions/tauri; \
+    printf "%s\n" "$run_id" > dist/github-actions/tauri/latest-run.txt; \
+    echo "Latest downloaded path: dist/github-actions/tauri/$run_id"
 
 dev:
     just electron-start

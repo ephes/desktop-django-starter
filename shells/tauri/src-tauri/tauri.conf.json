@@ -24,6 +24,11 @@
     ],
     "resources": {
       "../../../.stage/backend": "backend"
+    },
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      }
     }
   }
 }

@@ -10,6 +10,7 @@ def test_tauri_bundle_uses_shared_stage_and_icons() -> None:
 
     assert config["bundle"]["active"] is True
     assert config["bundle"]["resources"] == {"../../../.stage/backend": "backend"}
+    assert config["bundle"]["windows"]["webviewInstallMode"]["type"] == "downloadBootstrapper"
     assert "icons/icon.icns" in config["bundle"]["icon"]
     assert "icons/icon.ico" in config["bundle"]["icon"]
     assert "default-src 'self'" in csp
@@ -40,7 +41,8 @@ def test_tauri_package_scripts_cover_local_runtime_flows() -> None:
     assert "bundle/nsis/" in builder
     assert "Windows bundle smoke testing is not automated" in builder
     assert "Windows NSIS validation checklist" in builder
-    assert "Confirm closing the app stops the bundled Django and db_worker processes cleanly." in builder
+    expected = "Confirm closing the app stops the bundled Django and db_worker processes cleanly."
+    assert expected in builder
     assert 'tauri-build TARGET=""' in justfile
     assert "Flying Stable" in splash
     assert "Saddling up" in splash
@@ -53,8 +55,10 @@ def test_tauri_runtime_keeps_tasks_demo_subprocess_model() -> None:
     assert "db_worker" in runtime
     assert "wait_for_django" in runtime
     assert "supported" in docs
-    assert "GitHub Actions artifact generation remains Electron-only" in docs
-    assert "preparing a local NSIS installer path" in docs
+    assert ".github/workflows/tauri-packages.yml" in docs
+    assert "artifact-only GitHub Actions workflow" in docs
+    assert "build-only `tauri-action`" in docs
+    assert "downloadBootstrapper" in docs
     assert "minimal `app.security.csp`" in docs
     assert "Current minimal CSP posture" in docs
     assert "canonical written checklist" in docs

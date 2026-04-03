@@ -126,7 +126,7 @@ jobs:
           npm --prefix shells/electron run dist -- ${{ matrix.build_flag }} ${{ matrix.build_target }}
 
       - name: Generate artifact checksums
-        run: python shells/electron/scripts/write-checksums.py --glob "${{ matrix.artifact_glob }}" --output "${{ matrix.checksum_path }}"
+        run: python scripts/write-checksums.py --glob "${{ matrix.artifact_glob }}" --output "${{ matrix.checksum_path }}"
 
       - name: Upload packaged desktop artifact
         uses: actions/upload-artifact@v4

@@ -1,6 +1,6 @@
 # Tauri Shell
 
-Status: implemented as an experimental local shell in this slice, now with a prepared but unverified local Windows packaged-build path.
+Status: implemented as an experimental shell in this slice, now with local bundle commands plus an artifact-only GitHub Actions workflow.
 
 The current Tauri port lives under [`shells/tauri/`](../../shells/tauri/).
 
@@ -11,6 +11,7 @@ Current responsibilities:
 - supervise both `manage.py runserver` and `manage.py db_worker` as child processes
 - consume the shared staged backend from `.stage/backend/` for packaged-like runs and local bundle builds
 - bundle shell-local icon outputs generated into `shells/tauri/src-tauri/icons/` from the shared source art under `assets/brand/`
+- build hosted CI artifacts through [`.github/workflows/tauri-packages.yml`](../../.github/workflows/tauri-packages.yml)
 
 Local commands:
 
@@ -24,13 +25,15 @@ Local commands:
 
 Scope boundaries:
 
-- Tauri is still experimental and local-only in this slice
-- GitHub Actions artifact generation remains Electron-only
+- Tauri is still experimental in this slice
+- `.github/workflows/tauri-packages.yml` now provides an artifact-only GitHub Actions workflow for this shell
 - Electron remains the most complete shell path
+- the hosted Tauri lane uses build-only `tauri-action`, not GitHub Release publication
 - the current Tauri config now applies a minimal `app.security.csp` for Tauri-served shell assets, including the local splash window and localhost bootstrap surface
 - that CSP is intentionally narrow and should not be read as production-hardening for the Django pages loaded over `http://127.0.0.1:<random-port>`
 - Tauri is not a release-parity path in this slice
-- the Windows support claim is limited to preparing a local NSIS installer path with `just tauri-build`
+- the Windows support claim is limited to local plus CI-built NSIS installer generation, with manual install/run validation still required
+- the current Windows config keeps Tauri's default `downloadBootstrapper` WebView2 installer behavior rather than an offline-ready embedded runtime
 - `just tauri-build` now also prints a Windows NSIS validation checklist when run on Windows, while `/docs/release.md` keeps the canonical written checklist
 - installer install/run validation still needs a real live Windows machine and is not automated in this repo
 

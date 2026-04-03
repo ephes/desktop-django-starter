@@ -1,8 +1,8 @@
 # Desktop Django Starter
 
-Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware GitHub packaging slice in place, and experimental Tauri and Positron shells for local comparison work. Electron remains the baseline release-oriented shell and the only GitHub Actions artifact lane in this repo.
+Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware Electron GitHub packaging slice, and experimental Tauri and Positron shells for local comparison work. Electron remains the baseline release-oriented shell, while Tauri now has an experimental GitHub-hosted artifact lane.
 
-The current implementation includes a local Django app, an Electron shell that supervises it over localhost, a `/health/` readiness check, a tiny CRUD demo, a background task visualization demo with animated indicators and live polling, a packaged-like staging flow with a bundled Python runtime plus collected static assets, and an on-demand GitHub Actions workflow that builds desktop artifacts for macOS, Windows, and Linux. macOS signing/notarization scaffolding and optional Windows signing inputs are now documented and wired into packaging; auto-update is still deferred.
+The current implementation includes a local Django app, an Electron shell that supervises it over localhost, a `/health/` readiness check, a tiny CRUD demo, a background task visualization demo with animated indicators and live polling, a packaged-like staging flow with a bundled Python runtime plus collected static assets, and on-demand GitHub Actions workflows that build desktop artifacts for macOS, Windows, and Linux. macOS signing/notarization scaffolding and optional Windows signing inputs are now documented and wired into packaging; auto-update is still deferred.
 
 ```{toctree}
 :maxdepth: 2
@@ -44,6 +44,11 @@ shells/positron
 - `just github-package-latest-run` prints the latest successful packaging workflow run id for the current branch
 - `just github-package-latest-path` prints the local path for the last `github-package-download-latest` download
 - `just github-package-download-latest` downloads the latest successful packaging workflow run for the current branch
+- `just github-package-tauri` triggers the Tauri GitHub Actions packaging workflow for the current branch
+- `just github-package-tauri-download <run-id>` downloads one Tauri packaging workflow run into `dist/github-actions/tauri/<run-id>/`
+- `just github-package-tauri-latest-run` prints the latest successful Tauri packaging workflow run id for the current branch
+- `just github-package-tauri-latest-path` prints the local path for the last `github-package-tauri-download-latest` download
+- `just github-package-tauri-download-latest` downloads the latest successful Tauri packaging workflow run for the current branch
 - `just docs` builds the documentation and opens it locally
 - `just docs-serve` starts a live-reloading docs server
 - `just test` runs the backend and docs test suite
@@ -61,6 +66,6 @@ The packaged-like staging flow now writes a concrete backend payload under `.sta
 
 Electron and Tauri packaged mode use that manifest to resolve the interpreter from the staged backend instead of falling back to the repo's `uv` environment.
 
-The GitHub packaging helpers use the GitHub CLI locally, require an authenticated `gh` session, and accept an optional first argument to target a different branch when the current checkout is not the branch you want to build or query. `just github-package-latest-run` prints the current latest successful run id, `just github-package-download-latest` prints the downloaded artifact paths and records the run id in `dist/github-actions/latest-run.txt`, and `just github-package-latest-path` prints the local directory for that latest downloaded run. The current workflow builds macOS arm64 plus Windows x64 and Linux x64 artifacts.
+The GitHub packaging helpers use the GitHub CLI locally, require an authenticated `gh` session, and accept an optional first argument to target a different branch when the current checkout is not the branch you want to build or query. Electron downloads live under `dist/github-actions/<run-id>/`, while Tauri downloads live under `dist/github-actions/tauri/<run-id>/`. Both workflows currently build macOS arm64 plus Windows x64 and Linux x64 artifacts.
 
-See [release](release.md) for the signing secrets, installer/update guidance, and the explicit boundary that Tauri and Positron local bundles do not yet have GitHub Actions artifact lanes.
+See [release](release.md) for the signing secrets, installer/update guidance, and the explicit boundary that Tauri's hosted lane is still artifact-only and not release parity.

@@ -8,7 +8,7 @@ Important constraints:
 
 - Keep the example generic, minimal, and server-rendered. The current themed presentation layer ("Flying Stable") is a demo; the underlying architecture is what matters.
 - Treat `djdesk` as reference material for packaging and lifecycle patterns only.
-- Windows support matters. Electron remains the baseline release lane; Tauri now has only a prepared, unverified local Windows NSIS bundle path plus a manual validation checklist, and still does not claim release parity or a GitHub artifact lane. Its Tauri-served shell assets use only a minimal localhost-aware CSP for the local splash/bootstrap surface, not a release-grade hardening claim for the Django UI. A real live Windows test is still required before making a stronger claim.
+- Windows support matters. Electron remains the baseline release lane; Tauri now has a GitHub-hosted Tauri artifact workflow plus a prepared, unverified Windows NSIS path, but it still does not claim release parity. Its Tauri-served shell assets use only a minimal localhost-aware CSP for the local splash/bootstrap surface, not a release-grade hardening claim for the Django UI. The hosted NSIS path still needs a real live Windows install/run test before making a stronger claim, and the current config keeps Tauri's default `downloadBootstrapper` WebView2 installer behavior rather than an offline-ready embedded runtime.
 - The update story must include air-gapped/manual installs, not only connected environments.
 - Electron lives under `shells/electron/`, the experimental Tauri port lives under `shells/tauri/`, and the experimental Positron port lives under `shells/positron/`, while shared icon source art lives under `assets/brand/`; regenerate the Electron PNG and macOS ICNS with `npm --prefix shells/electron run icons`, the Tauri icon set with `npm --prefix shells/tauri run icons`, and the Positron icons with `just positron-icons`.
 
@@ -29,6 +29,7 @@ Important constraints:
 
 - [.github/workflows/ci.yml](.github/workflows/ci.yml): Current cross-platform CI scaffold using GitHub-hosted runners.
 - [.github/workflows/desktop-packages.yml](.github/workflows/desktop-packages.yml): On-demand GitHub Actions packaging workflow for macOS, Windows, and Linux artifacts, checksum manifests, and optional signing inputs.
+- [.github/workflows/tauri-packages.yml](.github/workflows/tauri-packages.yml): Experimental GitHub-hosted Tauri packaging workflow using `tauri-action` in build-only mode with artifact uploads and checksum manifests.
 - [tests/test_docs.py](tests/test_docs.py): Minimal smoke tests for the documentation scaffold.
 - [tests/test_example_app.py](tests/test_example_app.py): Backend behavior checks for the demo CRUD slice ("My Ponies").
 - [tests/test_tasks_demo.py](tests/test_tasks_demo.py): Backend tests for the real async task demo ("Stable Routines"), including enqueueing, reconciliation, and status transitions.

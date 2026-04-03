@@ -23,6 +23,7 @@ def test_core_docs_scaffold_exists() -> None:
         ROOT / "docs" / "shells" / "tauri.md",
         ROOT / "docs" / "shells" / "positron.md",
         ROOT / "scripts" / "stage-backend.cjs",
+        ROOT / "scripts" / "write-checksums.py",
         ROOT / "shells" / "electron" / "package.json",
         ROOT / "shells" / "electron" / "scripts" / "materialize-symlinks.cjs",
         ROOT / "shells" / "tauri" / "package.json",
@@ -30,6 +31,8 @@ def test_core_docs_scaffold_exists() -> None:
         ROOT / "shells" / "positron" / "pyproject.toml",
         ROOT / "skills" / "wrap-existing-django-in-electron" / "SKILL.md",
         ROOT / ".github" / "workflows" / "ci.yml",
+        ROOT / ".github" / "workflows" / "desktop-packages.yml",
+        ROOT / ".github" / "workflows" / "tauri-packages.yml",
     ]
     for path in expected:
         assert path.exists(), f"Missing expected file: {path}"
@@ -82,7 +85,11 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "WIN_CSC_LINK" in release
     assert "shells/electron/signing/" in release
     assert "just tauri-build" in release
-    assert "no dedicated Tauri GitHub packaging workflow" in release
+    assert "tauri-packages.yml" in release
+    assert "official-style `tauri-action`" in release
+    assert "build-only mode" in release
+    assert "desktop-django-starter-tauri-windows-sha256.txt" in release
+    assert "downloadBootstrapper" in release
     assert "real live Windows machine test" in release
     assert "Windows NSIS validation checklist" in release
     assert "minimal CSP" in release
@@ -110,7 +117,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/tauri/" in llms
     assert "shells/positron/" in llms
     assert "assets/brand/" in llms
-    assert "prepared, unverified local Windows NSIS bundle path" in llms
+    assert "GitHub-hosted Tauri artifact workflow" in llms
+    assert "prepared, unverified Windows NSIS path" in llms
     assert "minimal localhost-aware CSP" in llms
     assert "shells/electron.html" in docs_llms
     assert "shells/tauri.html" in docs_llms
@@ -139,10 +147,45 @@ def test_packaging_workflow_mentions_signing_and_checksum_steps() -> None:
     assert "shells/electron/package-lock.json" in workflow
     assert "npm --prefix shells/electron ci" in workflow
     assert "npm --prefix shells/electron run dist" in workflow
-    assert "python shells/electron/scripts/write-checksums.py" in workflow
+    assert "python scripts/write-checksums.py" in workflow
     assert "Generate artifact checksums" in workflow
     assert "write-checksums.py" in workflow
     assert "Upload packaged desktop artifact checksums" in workflow
     assert "desktop-django-starter-macos-sha256.txt" in workflow
     assert "shells/tauri" not in workflow
     assert "shells/positron" not in workflow
+
+
+def test_tauri_packaging_workflow_mentions_tauri_action_and_checksums() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "tauri-packages.yml").read_text()
+    justfile = (ROOT / "justfile").read_text()
+
+    assert "tauri-apps/tauri-action@v0" in workflow
+    assert "projectPath: shells/tauri" in workflow
+    assert "npm --prefix shells/tauri run stage-backend" in workflow
+    assert "shells/tauri/package-lock.json" in workflow
+    assert "actions/setup-node@v5" in workflow
+    assert "dtolnay/rust-toolchain@stable" in workflow
+    assert "swatinem/rust-cache@v2" in workflow
+    assert "libwebkit2gtk-4.1-dev" in workflow
+    assert "python scripts/write-checksums.py" in workflow
+    assert "desktop-django-starter-tauri-macos-sha256.txt" in workflow
+    assert "desktop-django-starter-tauri-windows-sha256.txt" in workflow
+    assert "desktop-django-starter-tauri-linux-sha256.txt" in workflow
+    assert "tagName:" not in workflow
+    assert "releaseName:" not in workflow
+    assert "releaseId:" not in workflow
+    assert "ubuntu-22.04 # pinned for libwebkit2gtk-4.1-dev availability" in workflow
+    assert 'gh workflow run tauri-packages.yml' in justfile
+    assert 'gh run list --workflow tauri-packages.yml' in justfile
+    assert "desktop-django-starter-tauri-macos-checksums" in justfile
+
+
+def test_electron_github_download_helper_fetches_checksum_artifacts() -> None:
+    justfile = (ROOT / "justfile").read_text()
+    claude = (ROOT / "CLAUDE.md").read_text()
+
+    assert "desktop-django-starter-macos-checksums" in justfile
+    assert "desktop-django-starter-windows-checksums" in justfile
+    assert "desktop-django-starter-linux-checksums" in justfile
+    assert "hosted-artifact bundle helpers" in claude

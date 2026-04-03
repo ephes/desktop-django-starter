@@ -20,7 +20,7 @@
 - `assets/brand/`: shared brand source-of-truth for shell-generated icons
 - `scripts/`: shared packaging and staged-backend helpers
 - `shells/electron/`: Electron shell, builder config, generated icons, Node-side tests
-- `shells/tauri/`: experimental Tauri shell, Rust-side runtime supervision, local-only bundle helpers
+- `shells/tauri/`: experimental Tauri shell, Rust-side runtime supervision, and local plus hosted-artifact bundle helpers
 - `shells/positron/`: experimental Positron shell, Briefcase config, and in-process runtime
 - `docs/`: Sphinx source docs published from Markdown
 - `tests/`: pytest coverage for backend behavior, packaged-runtime contract, static assets, and docs scaffold
@@ -39,7 +39,8 @@
 
 ## Validation
 - Full pre-push check: `just check` (lint + test + docs-build)
-- Default validation: `just test`
+- Default validation for completion and handoff should be `just check`, not `just test` alone
+- `just test` is only a narrower loop while iterating locally
 - If docs changed: `just docs-build`
 - If Electron code or packaging scripts changed: `npm --prefix shells/electron test`
 - If packaged-runtime behavior changed: run `just packaged-smoke` unless the task requires a broader packaged run

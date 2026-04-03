@@ -4,10 +4,11 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 
 ## Packaging Workflow
 
-Two packaging paths are intentionally supported:
+Three packaging paths are intentionally supported:
 
 - local packaging with `just package-dist` or `just package-dist-dir`
-- GitHub Actions packaging with `.github/workflows/desktop-packages.yml`
+- Electron GitHub Actions packaging with `.github/workflows/desktop-packages.yml`
+- Tauri GitHub Actions packaging with `.github/workflows/tauri-packages.yml`
 
 The repo now also includes one narrower Tauri-only local packaging command:
 
@@ -19,15 +20,18 @@ The repo also includes one narrower Positron-only local packaging command:
 
 Local packaging remains usable when no release credentials are configured. In that case, the build should still complete, but the resulting installer is expected to be unsigned and, on macOS, not notarized.
 
-The GitHub Actions workflow uses the same `electron-builder` config and only turns on signing/notarization when the relevant secrets are present. This keeps the starter teachable while still making the public-distribution requirements concrete.
+The Electron GitHub Actions workflow uses the same `electron-builder` config and only turns on signing/notarization when the relevant secrets are present. This keeps the starter teachable while still making the public-distribution requirements concrete.
 
-Tauri is explicitly out of that release lane in this slice:
+The Tauri GitHub workflow is intentionally narrower than the Electron lane:
 
-- there is no dedicated Tauri GitHub packaging workflow
-- there is no Tauri checksum-artifact lane
-- local Tauri bundles are for experiment validation, not release parity
+- there is now a dedicated Tauri GitHub packaging workflow at `.github/workflows/tauri-packages.yml`
+- it uses the official-style `tauri-action` flow in build-only mode, rather than publishing a GitHub Release
+- it uploads per-platform Tauri artifacts and per-platform checksum manifests
+- it is still experimental and is not a release-parity path
+- it does not yet wire Tauri signing/notarization secrets or updater publication
 - Tauri-served shell assets now use a minimal CSP for the local splash/bootstrap surface only; the localhost-served Django UI is not presented here as a hardened release renderer
-- the Windows claim is limited to a prepared local NSIS installer path and a required manual Windows validation path
+- the Windows claim is limited to a prepared, CI-built NSIS installer path plus a required manual Windows validation path
+- the current Windows bundle config keeps Tauri's default `downloadBootstrapper` WebView2 installer behavior rather than switching to `offlineInstaller`
 
 Positron is explicitly out of that release lane as well:
 
@@ -49,6 +53,9 @@ Current checksum artifacts:
 - macOS: `desktop-django-starter-macos-sha256.txt`, containing SHA-256 lines for the DMG upload set
 - Windows: `desktop-django-starter-windows-sha256.txt`, containing SHA-256 lines for the NSIS `.exe` upload set
 - Linux: `desktop-django-starter-linux-sha256.txt`, containing SHA-256 lines for the AppImage upload set
+- Tauri macOS: `desktop-django-starter-tauri-macos-sha256.txt`, containing SHA-256 lines for the DMG upload set
+- Tauri Windows: `desktop-django-starter-tauri-windows-sha256.txt`, containing SHA-256 lines for the NSIS `.exe` upload set
+- Tauri Linux: `desktop-django-starter-tauri-linux-sha256.txt`, containing SHA-256 lines for the AppImage upload set
 
 Linux output remains available for parity, but Linux signing and Linux verification are not baseline requirements in this slice.
 
@@ -59,12 +66,36 @@ The experimental Tauri shell under `shells/tauri/` can build a local host bundle
 That path intentionally stays narrower than Electron:
 
 - it reuses the shared `.stage/backend` payload as bundled resources
-- it does not participate in `.github/workflows/desktop-packages.yml`
-- it does not add checksum uploads, signing automation, or notarization scaffolding
+- it now pairs with `.github/workflows/tauri-packages.yml`, which builds hosted artifacts from the same shell tree
+- it does not yet add signing automation, notarization scaffolding, or GitHub Release publication
 - it now applies a minimal CSP to Tauri-served shell assets such as the local splash window, without claiming production-hardening for the Django pages served over localhost
 - on Windows, the current scope is limited to generating the local NSIS installer path; install/run still needs a real live Windows machine test
+- the current `tauri.conf.json` makes `downloadBootstrapper` explicit for WebView2 installation, matching Tauri's default Windows installer behavior
 - the build wrapper now prints a Windows NSIS validation checklist, but that checklist is still preparation work rather than proof
-- it should be described as local-only experiment scope until a dedicated release lane exists
+- it should still be described as experimental artifact scope rather than release parity
+
+## Tauri GitHub Workflow Scope
+
+The dedicated Tauri workflow under `.github/workflows/tauri-packages.yml` follows the official Tauri GitHub pipeline shape closely:
+
+- it uses `tauri-apps/tauri-action@v0`
+- it sets `projectPath: shells/tauri` because the Tauri app is not at repo root
+- it runs in build-only mode by omitting `tagName`, `releaseName`, and `releaseId`
+- it stages `.stage/backend` before bundling so the hosted build uses the same packaged-runtime contract as local Tauri packaging
+- it uploads explicit workflow artifacts and checksum manifests instead of publishing a GitHub Release
+
+Current hosted bundle targets:
+
+- macOS: DMG
+- Windows: NSIS `.exe`
+- Linux: AppImage
+
+Current workflow boundaries:
+
+- the workflow is artifact-only and does not publish releases
+- it is intentionally narrower than the Electron lane's signing/notarization posture
+- it should not be read as proof that Windows installer install/run behavior has been validated end to end
+- the Windows NSIS artifacts currently rely on Tauri's default `downloadBootstrapper` WebView2 behavior, so they are not the repo's offline-ready installer story
 
 Windows NSIS validation checklist:
 
@@ -140,6 +171,12 @@ The packaging workflow now stops at two explicit artifact uploads per platform:
 
 - the installer artifact upload (`desktop-django-starter-macos`, `desktop-django-starter-windows`, or `desktop-django-starter-linux`)
 - the matching checksum upload (`desktop-django-starter-macos-checksums`, `desktop-django-starter-windows-checksums`, or `desktop-django-starter-linux-checksums`)
+
+The Tauri workflow uses the same checksum pattern:
+
+- `desktop-django-starter-tauri-macos` plus `desktop-django-starter-tauri-macos-checksums`
+- `desktop-django-starter-tauri-windows` plus `desktop-django-starter-tauri-windows-checksums`
+- `desktop-django-starter-tauri-linux` plus `desktop-django-starter-tauri-linux-checksums`
 
 Each checksum file is a plain-text SHA-256 manifest with one line per packaged installer file:
 
