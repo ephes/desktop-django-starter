@@ -9,6 +9,7 @@ Target: django-resume | Agent: Claude Code (Opus 4.6) | Mode: unattended (`claud
 | 3 | 2026-04-04 | 13m 39s | Tier 1+ | 95/95 | pass | 302→200 | 20/20 | `658ca3e` | packaged static serving, landing resolves to 200, auth URLs, adapted test assertions |
 | 4 | 2026-04-04 | 13m 14s | Tier 1 | 95/95 | pass | 302→200 | pass | `d2b55d6` | auto-login middleware instead of auth infra, clean origin/main run (no manual sync) |
 | 5 | 2026-04-04 | 13m 00s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `e805fbd` | preserved existing auth/data/root redirect, ran just check not just pytest |
+| 6 | 2026-04-04 | 13m 07s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `1ea668c` | auto-auth middleware, no login page, desktop_settings.py for dev mode, 17KB content |
 
 ## How to read this
 
