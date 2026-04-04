@@ -12,6 +12,7 @@ Target: django-resume | Agent: Claude Code (Opus 4.6) | Mode: unattended (`claud
 | 6 | 2026-04-04 | 13m 07s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `1ea668c` | auto-auth middleware, no login page, desktop_settings.py for dev mode, 17KB content |
 | 7a | 2026-04-04 | 4m 51s | fail | — | — | — | — | `56237ed` | Sonnet: presented plan, asked for confirmation, never implemented. Fixed prompt. |
 | 7b | 2026-04-04 | 13m 43s | Tier 1 | 125/125 | pass | pass | pass | `3663262` | Sonnet: all checks pass, light bg, auto-auth as 'user', flat settings, no login page |
+| 8 | 2026-04-04 | 15m 39s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `0beb612` | Sonnet: nav menu (Back/Forward/Resume List), setWindowOpenHandler, platform shortcuts, auto-auth |
 
 ## How to read this
 
