@@ -36,6 +36,10 @@ See the Required Output Shape section below for the complete target layout.
      → the target's packaged settings module)
    - Project structure (e.g., `src/` layout → the target's actual layout)
    - App identity (appId, productName, secret key placeholders)
+   - BrowserWindow `backgroundColor` in `main.js` — the starter uses a dark theme
+     (`#222121`). Check the target app's actual color scheme and match it. A light-themed
+     app needs a light background (e.g., `#ffffff`), otherwise the window flashes dark
+     before the page loads.
    - Relative path references (the starter has `scripts/` at repo root and
      `shells/electron/` two levels deep; wrapped projects have `electron/` one level deep)
    - The proxy wrapper scripts in `shells/electron/scripts/` (bundled-python.cjs,
