@@ -12,7 +12,7 @@ this project's `electron/` directory, then adapt them to this project's structur
 
 Critical points — read the skill carefully on these:
 - Use flat settings files (base_settings.py, packaged_settings.py), NOT a settings package.
-- The Electron window must land on real app content, not a login page. If views require auth, add desktop-only auto-auth middleware (see the skill's workflow step 3) that logs in the existing user — do NOT create new users or add login templates. Add the middleware to both dev and packaged desktop settings. Preserve the project's existing users, data, and root redirect. Follow the full redirect chain — the final response must be 200.
+- The desktop app must never show a login page. The user opens the app and sees their content immediately. If the Django project has views behind `@login_required`, add a small middleware to desktop settings (both dev and packaged) that silently authenticates every request as the project's existing user — so `request.user` is real and all data shows up. Do NOT create new user accounts, do NOT add login templates or auth URLs. Preserve existing users and data. The full redirect chain from `/` must end at a 200 with real content visible.
 - Packaged mode (DEBUG=False) needs explicit static file serving in the URLconf. Without this, CSS/JS/images return 404 in the packaged app.
 - Copy and adapt the starter's Node test harness (*.test.cjs files). Update assertions to match this project's values (settingsModule, appId, etc.).
 
