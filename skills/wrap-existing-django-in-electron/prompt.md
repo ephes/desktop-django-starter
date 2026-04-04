@@ -10,6 +10,9 @@ Apply the skill to this Django project (the current working directory). Follow t
 skill's "Strategy: Copy and Adapt" section: copy the starter's Electron files into
 this project's `electron/` directory, then adapt them to this project's structure.
 
+Implement directly. Do not present a plan or ask for confirmation — this is an
+unattended run with no human in the loop.
+
 Critical points — read the skill carefully on these:
 - Use flat settings files (base_settings.py, packaged_settings.py), NOT a settings package.
 - The desktop app must never show a login page. The user opens the app and sees their content immediately. If the Django project has views behind `@login_required`, add a small middleware to desktop settings (both dev and packaged) that silently authenticates every request as the project's existing user — so `request.user` is real and all data shows up. Do NOT create new user accounts, do NOT add login templates or auth URLs. Preserve existing users and data. The full redirect chain from `/` must end at a 200 with real content visible.
