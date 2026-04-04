@@ -1,6 +1,6 @@
 # Wrapping Skill Run Log
 
-Target: django-resume | Agent: Claude Code (Opus 4.6) | Mode: unattended (`claude -p`)
+Target: django-resume | Mode: unattended | Agents: Claude Code (Opus/Sonnet), Codex (gpt-5.4)
 
 | Run | Date | Duration | Tier | Tests | Smoke | Root URL | Node tests | Ref | Notes |
 |-----|------|----------|------|-------|-------|----------|------------|-----|-------|
@@ -13,6 +13,7 @@ Target: django-resume | Agent: Claude Code (Opus 4.6) | Mode: unattended (`claud
 | 7a | 2026-04-04 | 4m 51s | fail | — | — | — | — | `56237ed` | Sonnet: presented plan, asked for confirmation, never implemented. Fixed prompt. |
 | 7b | 2026-04-04 | 13m 43s | Tier 1 | 125/125 | pass | pass | pass | `3663262` | Sonnet: all checks pass, light bg, auto-auth as 'user', flat settings, no login page |
 | 8 | 2026-04-04 | 15m 39s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `0beb612` | Sonnet: nav menu (Back/Forward/Resume List), setWindowOpenHandler, platform shortcuts, auto-auth |
+| 9 | 2026-04-04 | 18m 40s | Tier 1 | pass | pass | 302→200 | pass | `0beb612` | Codex (gpt-5.4): nav menu, setWindowOpenHandler, seed-data copy, desktop runtime tests, docs updates |
 
 ## How to read this
 
