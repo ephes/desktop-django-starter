@@ -95,6 +95,10 @@ Check for:
 - writable database and app-data paths
 - static files that still work with `DEBUG=False`
 - host validation and CSRF assumptions
+- **existing auth and data**: if the project already has user accounts, seed data,
+  login URLs, or a root redirect, preserve them. Do not create new users, middleware,
+  or auth flows that duplicate or bypass what the project already provides. A desktop
+  app should use the same data and auth as the web version.
 
 4. Add the smallest native surface.
 
@@ -184,24 +188,19 @@ that are not available in the bundled runtime. The flat file approach avoids thi
 # packaged_settings.py — from .base_settings import *; packaged runtime config
 ```
 
-**Root URL — the Electron window must load actual app content.** Find the target
-project's main URL pattern (e.g., `/resume/`, `/app/`, or `/`). Then ensure the
-Electron window lands on a page that actually renders, not a redirect chain that
-ends at a 404.
+**Root URL — the Electron window must load actual app content.** Check if the
+target project already has a root URL handler, login configuration, or redirect
+logic. If it does, preserve it — do not replace it with new middleware, views, or
+auth flows.
 
-This is a local desktop app — authentication is unnecessary. If the landing view
-has `@login_required` or similar, remove the auth requirement for desktop mode rather
-than adding login infrastructure. A local app runs on the user's own machine; there
-is no untrusted access to protect against.
+If the project does not have a root handler, either:
+1. Configure `main.js` to load the app's main URL directly
+2. Add a simple redirect view at `/`
 
-Options, in order of preference:
-1. Disable auth for the landing view in desktop mode (e.g., make it unconditionally
-   public, or add middleware that auto-authenticates in desktop settings)
-2. Configure `main.js` to load a URL that is already public
-3. Add a public desktop home view at `/`
-
-Do NOT add login templates, auth URLs, or user-facing authentication flows. That is
-overengineered for a single-user local app.
+Do NOT create new user accounts, auto-login middleware, or authentication flows.
+The desktop app should use the same users and data as the web version. If the
+project has existing accounts and seed data (e.g., in a committed `db.sqlite3`),
+those should work as-is in the desktop shell.
 
 The full redirect chain must terminate at a 200, not a 404 at any step.
 
