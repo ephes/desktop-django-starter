@@ -10,6 +10,8 @@ Target: django-resume | Agent: Claude Code (Opus 4.6) | Mode: unattended (`claud
 | 4 | 2026-04-04 | 13m 14s | Tier 1 | 95/95 | pass | 302→200 | pass | `d2b55d6` | auto-login middleware instead of auth infra, clean origin/main run (no manual sync) |
 | 5 | 2026-04-04 | 13m 00s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `e805fbd` | preserved existing auth/data/root redirect, ran just check not just pytest |
 | 6 | 2026-04-04 | 13m 07s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `1ea668c` | auto-auth middleware, no login page, desktop_settings.py for dev mode, 17KB content |
+| 7a | 2026-04-04 | 4m 51s | fail | — | — | — | — | `56237ed` | Sonnet: presented plan, asked for confirmation, never implemented. Fixed prompt. |
+| 7b | 2026-04-04 | 13m 43s | Tier 1 | 125/125 | pass | pass | pass | `3663262` | Sonnet: all checks pass, light bg, auto-auth as 'user', flat settings, no login page |
 
 ## How to read this
 
