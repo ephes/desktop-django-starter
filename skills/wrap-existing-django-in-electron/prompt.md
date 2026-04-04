@@ -18,6 +18,7 @@ Critical points — read the skill carefully on these:
 - The desktop app must never show a login page. The user opens the app and sees their content immediately. If the Django project has views behind `@login_required`, add a small middleware to desktop settings (both dev and packaged) that silently authenticates every request as the project's existing user — so `request.user` is real and all data shows up. Do NOT create new user accounts, do NOT add login templates or auth URLs. Preserve existing users and data. The full redirect chain from `/` must end at a 200 with real content visible.
 - Packaged mode (DEBUG=False) needs explicit static file serving in the URLconf. Without this, CSS/JS/images return 404 in the packaged app.
 - Copy and adapt the starter's Node test harness (*.test.cjs files). Update assertions to match this project's values (settingsModule, appId, etc.).
+- Assess what the app loses when browser chrome disappears (back/forward, address bar, tabs). Restore only the missing affordances the app actually needs — via Electron menu, Django template override, or nothing if the app already navigates well on its own.
 
 When done, verify (see Self-Verification in the skill for details):
 1. The existing test suite still passes.

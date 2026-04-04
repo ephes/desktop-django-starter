@@ -82,6 +82,16 @@ Look for:
 - startup command and local dev commands
 - whether the app already has a natural readiness URL
 
+Also assess navigation assumptions and browser-dependent affordances:
+
+- Does the app have persistent in-app navigation (navbar, sidebar, breadcrumbs)?
+- Do important user flows depend on browser back/forward to reach prior pages?
+- Can the root URL or login redirect strand the user on a page with no way out?
+- Do any links open new tabs/windows (`target="_blank"` or JavaScript `window.open`)?
+- What would a user lose if the browser chrome disappeared entirely?
+
+Record the findings — they inform the native surface decisions in step 4.
+
 2. Define the Electron boundary.
 
 Minimum boundary:
@@ -117,6 +127,43 @@ Prefer:
 
 - one preload bridge or one menu action
 - simple native affordances such as opening the app-data folder
+
+Using the navigation assessment from step 1, restore only the missing
+affordances the app actually needs. The right fix depends on the target app:
+
+- **Nothing** — if the app already has persistent navigation and no flows
+  depend on browser back/forward.
+- **Electron application menu** — add a Go or Navigation menu with Back,
+  Forward, and an entry to the app's primary app URL. Use platform-standard
+  shortcuts (macOS: Cmd+[ and Cmd+], Windows/Linux: Alt+Left and
+  Alt+Right). Appropriate when the app has some navigation but users need
+  native back/forward affordances to move between views.
+- **Django-side navigation element** — add a minimal nav bar, breadcrumb, or
+  home link via base template extension or template override. Appropriate
+  when the app has no persistent navigation at all and an Electron menu
+  alone wouldn't make it usable.
+- **Combination** — menu shortcuts for back/forward plus a Django-side nav
+  element. Appropriate when neither alone is sufficient.
+
+The agent decides which approach fits based on the inspection findings. The
+goal is minimum intervention that makes the wrapped app navigable.
+
+For links that open new tabs or windows (`target="_blank"`, `window.open`),
+decide whether they should stay inside the main window or open in the system
+browser. Managed secondary Electron windows are intentionally out of scope
+for the wrapping skill — the choice is in-app or system browser, not a
+custom popup. Make that decision explicitly in Electron's main process,
+typically with `setWindowOpenHandler` and related navigation guards, rather
+than relying on default behavior. Prefer handling new-window and
+external-navigation policy in Electron's main process. Only change Django
+templates when the app's internal navigation structure itself needs repair.
+
+If an application menu is added and existing preload actions (like "reveal
+app data") aren't referenced in the app's templates, the agent may
+consolidate them into the menu.
+
+If navigation code is added, add a focused smoke check or Node test where
+practical.
 
 5. Plan packaging and release behavior early.
 
