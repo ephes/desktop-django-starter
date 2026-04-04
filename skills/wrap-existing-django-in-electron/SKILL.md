@@ -22,6 +22,33 @@ Load only what you need from the starter repo:
 
 If source files are unavailable, use the published docs and `llms.txt` as the fallback context.
 
+## Strategy: Copy and Adapt
+
+When working from a sibling checkout of this starter (e.g., in a lab workspace), copy
+reference files rather than writing from scratch.
+See the Required Output Shape section below for the complete target layout.
+
+1. Copy the starter's `shells/electron/` contents into the target's `electron/` directory.
+2. Copy the starter's `scripts/` helpers (stage-backend.cjs, bundled-python.cjs,
+   materialize-symlinks.cjs, prune-bundled-python-runtime.cjs) into `electron/scripts/`.
+3. Adapt every copied file to the target project:
+   - Settings module paths (e.g., `desktop_django_starter.settings.packaged`
+     → the target's packaged settings module)
+   - Project structure (e.g., `src/` layout → the target's actual layout)
+   - App identity (appId, productName, secret key placeholders)
+   - Relative path references (the starter has `scripts/` at repo root and
+     `shells/electron/` two levels deep; wrapped projects have `electron/` one level deep)
+   - The proxy wrapper scripts in `shells/electron/scripts/` (bundled-python.cjs,
+     materialize-symlinks.cjs) — which just resolve a shared helper from two possible
+     locations — should be replaced with the full implementations from `scripts/`,
+     since wrapped projects don't need the two-location resolution.
+
+This strategy is more reliable than writing from scratch because the starter's files are
+tested and production-ready. The adaptation is where intelligence adds value.
+
+If the starter is not available as a sibling directory, write the files from scratch
+following the patterns in the starter's docs (especially `architecture.md` and `agent-use.md`) and `llms.txt`.
+
 ## Goal
 
 Adapt the target Django repo so Electron becomes a thin desktop shell around the existing app.
@@ -94,13 +121,110 @@ At minimum:
 
 ## Required Output Shape
 
-When implementing in another repo, aim for these seams:
+Wrapped projects use `electron/` at the repo root. (The starter uses `shells/electron/`
+because it supports multiple shells; that convention does not apply to wrapped projects.)
 
-- `shells/electron/` shell code
-- launcher script for Django
-- explicit health endpoint
-- packaged/static-file strategy
-- docs explaining how desktop mode differs from normal web deployment
+File layout for the target repo:
+
+```text
+target-project/
+├── electron/
+│   ├── main.js                              # Electron main process
+│   ├── preload.cjs                          # IPC bridge (app-data folder)
+│   ├── package.json                         # Electron deps and npm scripts
+│   ├── electron-builder.config.cjs          # top-level builder config
+│   └── scripts/
+│       ├── launch-electron.cjs              # CLI launcher with env setup
+│       ├── bundled-python.cjs               # Python runtime manifest/resolution
+│       ├── stage-backend.cjs                # backend staging for packaged mode
+│       ├── electron-builder-config.cjs      # builder config details
+│       ├── materialize-symlinks.cjs         # portability: symlinks → copies
+│       └── prune-bundled-python-runtime.cjs # strip tkinter/idle from bundle
+├── .stage/                                  # (gitignored) staged backend
+└── .github/workflows/
+    └── desktop-packages.yml                 # cross-platform packaging CI
+```
+
+Django-side additions (paths depend on the target project's layout):
+
+- `base_settings.py` — shared settings with `DEBUG=False` defaults
+- modified `settings.py` — imports from `base_settings`, adds dev overrides
+- `packaged_settings.py` — imports from `base_settings`, adds packaged runtime config
+- `runtime.py` — desktop runtime helpers (bundle dir, app data dir, host/port)
+- health endpoint view at `/health/`
+- desktop home view at `/` that redirects to the app's main URL (or configure Electron
+  to load the app's main URL directly in `main.js`)
+- URL wiring for new views
+- `STATIC_ROOT`, `STATICFILES_DIRS` in base settings
+- **Packaged static/media serving in URLs.** In packaged mode (`DEBUG=False`), Django's
+  `staticfiles` app does not serve files automatically. The URLconf must explicitly
+  serve `STATIC_URL` and `MEDIA_URL` using `django.views.static.serve` when
+  `DESKTOP_PACKAGED_RUNTIME` is set. Without this, all CSS/JS/images return 404
+  in the packaged app. Example:
+  ```python
+  if settings.DEBUG:
+      urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+  elif getattr(settings, "DESKTOP_PACKAGED_RUNTIME", False):
+      urlpatterns += [
+          re_path(r"^static/(?P<path>.*)$", serve, {"document_root": settings.STATIC_ROOT}),
+          re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
+      ]
+  ```
+
+**Settings split — use flat files, not a package.** Create `base_settings.py` and
+`packaged_settings.py` as sibling files next to the existing `settings.py`. Do NOT
+convert `settings.py` into a Python package (`settings/__init__.py`). A package layout
+causes import side effects: packaged mode imports `packaged_settings.py` which may
+trigger `settings/__init__.py`, pulling in dev-only dependencies like `django_extensions`
+that are not available in the bundled runtime. The flat file approach avoids this:
+
+```python
+# base_settings.py — shared, DEBUG=False, no dev-only deps
+# settings.py — from .base_settings import *; DEBUG=True; add dev deps
+# packaged_settings.py — from .base_settings import *; packaged runtime config
+```
+
+**Root URL — the Electron window must load actual app content.** Find the target
+project's main URL pattern (e.g., `/resume/`, `/app/`, or `/`). Then ensure the
+Electron window lands on a page that actually renders, not a redirect chain that
+ends at a 404.
+
+This is a local desktop app — authentication is unnecessary. If the landing view
+has `@login_required` or similar, remove the auth requirement for desktop mode rather
+than adding login infrastructure. A local app runs on the user's own machine; there
+is no untrusted access to protect against.
+
+Options, in order of preference:
+1. Disable auth for the landing view in desktop mode (e.g., make it unconditionally
+   public, or add middleware that auto-authenticates in desktop settings)
+2. Configure `main.js` to load a URL that is already public
+3. Add a public desktop home view at `/`
+
+Do NOT add login templates, auth URLs, or user-facing authentication flows. That is
+overengineered for a single-user local app.
+
+The full redirect chain must terminate at a 200, not a 404 at any step.
+
+Verify by following the full redirect chain: the final response must be 200.
+
+**Node test harness.** Copy and adapt the starter's `shells/electron/scripts/*.test.cjs`
+files. The `electron/package.json` must include a `test` script (`node --test ./scripts/*.test.cjs`).
+These tests validate the bundled-python manifest logic and builder config, catching
+adaptation errors before runtime. When adapting tests, update assertions to match the
+target project's values — especially `settingsModule` (e.g., `example.packaged_settings`),
+`appId`, `productName`, and `sourceRoot`. A test that still asserts the starter's values
+passes but does not catch regressions in the adapted code.
+
+Build/dev justfile targets:
+
+- `desktop-dev` — start Electron with Django in development mode
+- `desktop-dev-smoke` — boot dev mode, verify `/health/` responds 200, exit
+- `desktop-stage` — stage backend with bundled Python
+- `desktop-smoke` — boot packaged mode, verify, exit
+- `desktop-dist` — build distributable installer
+- `desktop-dist-dir` — build unpacked distributable
+
+`.gitignore` additions: `.stage/`, `electron/dist/`, `electron/node_modules/`
 
 ## Validation Checklist
 
@@ -110,3 +234,21 @@ When implementing in another repo, aim for these seams:
 - shutdown works on Windows as well as macOS/Linux
 - update docs include connected and air-gapped/manual paths
 - CI exercises Windows, macOS, and Linux
+
+## Self-Verification (for unattended runs)
+
+When running unattended, verify your own work before finishing. All checks must be
+bounded — no long-running processes.
+
+1. Run the target project's existing test suite. It must still pass.
+2. Run `just desktop-dev-smoke`. This boots the Electron shell, confirms `/health/`
+   responds 200, and exits. If this target is missing or fails, report it as a failure.
+3. Verify the desktop window lands on real content. Follow the full redirect chain
+   from the URL that Electron loads (either `/` or the app's main URL). Every step
+   must resolve — the final response must be 200, not 404. Check this with Django's
+   test client: `Client().get("/resume/", follow=True)` should end at status 200.
+4. Run `npm --prefix electron test` to confirm the Node-side test harness passes.
+5. If any check fails, report what failed and do not continue past the failed step.
+
+Packaged-mode verification (`just desktop-smoke`) is a separate concern — do not
+attempt it in the same unattended run unless explicitly requested.
