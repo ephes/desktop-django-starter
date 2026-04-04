@@ -95,10 +95,17 @@ Check for:
 - writable database and app-data paths
 - static files that still work with `DEBUG=False`
 - host validation and CSRF assumptions
-- **existing auth and data**: if the project already has user accounts, seed data,
-  login URLs, or a root redirect, preserve them. Do not create new users, middleware,
-  or auth flows that duplicate or bypass what the project already provides. A desktop
-  app should use the same data and auth as the web version.
+- **existing auth and data**: preserve existing user accounts, seed data, login URLs,
+  and root redirects. Do not create new user accounts.
+- **desktop auto-auth**: if the target app's useful UI is gated by auth and the desktop
+  deployment is intentionally single-user/local, add desktop-only auto-auth middleware
+  that logs in a configured existing user. Add this middleware to all desktop runtime
+  settings (both dev and packaged), not just packaged settings — otherwise `desktop-dev`
+  will still land on a login page. Do not patch `AnonymousUser` or disable
+  `login_required`. Do not use this pattern for multi-user, security-sensitive, or
+  network-exposed deployments. Prefer configuring the user by username or user ID
+  rather than blindly picking "first user" — fall back to first existing user only
+  when the target repo is clearly a single-user local demo and document that assumption.
 
 4. Add the smallest native surface.
 
@@ -190,17 +197,16 @@ that are not available in the bundled runtime. The flat file approach avoids thi
 
 **Root URL — the Electron window must load actual app content.** Check if the
 target project already has a root URL handler, login configuration, or redirect
-logic. If it does, preserve it — do not replace it with new middleware, views, or
-auth flows.
+logic. If it does, preserve it — do not replace it with new views or auth flows.
 
 If the project does not have a root handler, either:
 1. Configure `main.js` to load the app's main URL directly
 2. Add a simple redirect view at `/`
 
-Do NOT create new user accounts, auto-login middleware, or authentication flows.
-The desktop app should use the same users and data as the web version. If the
-project has existing accounts and seed data (e.g., in a committed `db.sqlite3`),
-those should work as-is in the desktop shell.
+If auth-gated views block access (see desktop auto-auth guidance in the workflow
+section above), the auto-auth middleware handles this — do not add login templates
+or alternative auth flows. The existing users and seed data (e.g., in a committed
+`db.sqlite3`) should work as-is in the desktop shell.
 
 The full redirect chain must terminate at a 200, not a 404 at any step.
 

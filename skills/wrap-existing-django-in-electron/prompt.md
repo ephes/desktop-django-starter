@@ -12,7 +12,7 @@ this project's `electron/` directory, then adapt them to this project's structur
 
 Critical points — read the skill carefully on these:
 - Use flat settings files (base_settings.py, packaged_settings.py), NOT a settings package.
-- The Electron window must land on real app content. Do NOT create new user accounts, auto-login middleware, or auth flows — preserve the project's existing users, data, and login configuration. If the project already has a root redirect and login URL, just keep them. Follow the full redirect chain — the final response must be 200.
+- The Electron window must land on real app content, not a login page. If views require auth, add desktop-only auto-auth middleware (see the skill's workflow step 3) that logs in the existing user — do NOT create new users or add login templates. Add the middleware to both dev and packaged desktop settings. Preserve the project's existing users, data, and root redirect. Follow the full redirect chain — the final response must be 200.
 - Packaged mode (DEBUG=False) needs explicit static file serving in the URLconf. Without this, CSS/JS/images return 404 in the packaged app.
 - Copy and adapt the starter's Node test harness (*.test.cjs files). Update assertions to match this project's values (settingsModule, appId, etc.).
 
