@@ -7,6 +7,7 @@ Target: django-resume | Agent: Claude Code (Opus 4.6) | Mode: unattended (`claud
 | 1 | 2026-04-03 | 17m 04s | partial | 95/95 | pass | 404 | missing | `14c89da` | settings package broke packaged mode; window loaded 404; no node tests |
 | 2 | 2026-04-03 | 10m 08s | Tier 1 | 95/95 | pass | 302 | 20/20 | `c9ba37e` | flat settings, root redirect, node tests — all 3 bugs fixed, 7min faster |
 | 3 | 2026-04-04 | 13m 39s | Tier 1+ | 95/95 | pass | 302→200 | 20/20 | `658ca3e` | packaged static serving, landing resolves to 200, auth URLs, adapted test assertions |
+| 4 | 2026-04-04 | 13m 14s | Tier 1 | 95/95 | pass | 302→200 | pass | `d2b55d6` | auto-login middleware instead of auth infra, clean origin/main run (no manual sync) |
 
 ## How to read this
 
