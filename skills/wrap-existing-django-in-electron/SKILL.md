@@ -41,7 +41,12 @@ See the Required Output Shape section below for the complete target layout.
      app needs a light background (e.g., `#ffffff`), otherwise the window flashes dark
      before the page loads.
    - Relative path references (the starter has `scripts/` at repo root and
-     `shells/electron/` two levels deep; wrapped projects have `electron/` one level deep)
+     `shells/electron/` two levels deep; wrapped projects have `electron/` one level deep).
+     Concrete example: electron-builder resolves `extraResources.from` relative to the
+     project directory (where `package.json` lives), not relative to the script that
+     generates the config. The starter's `shells/electron/` is two levels from `.stage/`,
+     so the path is `../../.stage/backend`; a wrapped project's `electron/` is one level
+     from `.stage/`, so it becomes `../.stage/backend`
    - The proxy wrapper scripts in `shells/electron/scripts/` (bundled-python.cjs,
      materialize-symlinks.cjs) — which just resolve a shared helper from two possible
      locations — should be replaced with the full implementations from `scripts/`,
@@ -55,7 +60,7 @@ Common adaptation decisions (resolve these during step 1 inspection):
 | Situation | Approach |
 |-----------|----------|
 | `manage.py` at repo root | `cwd` in the manage invocation is the repo root |
-| `manage.py` in a subdirectory (e.g., `example/`) | `cwd` must point to that subdirectory; adjust backend root accordingly |
+| `manage.py` in a subdirectory (e.g., `example/`) | `cwd` must point to that subdirectory; adjust backend root accordingly. Note: `uv run` walks up to find `pyproject.toml`, so it works even when cwd differs from the project root |
 | Existing root URL handler or redirect | Preserve it; do not add a competing view at `/` |
 | No root URL handler | Either load the app's main URL in `main.js` directly, or add a redirect view |
 | Login-gated views, single-user local app | Add auto-auth middleware gated by env var (see step 3) |
@@ -108,7 +113,9 @@ Record the findings — they inform the native surface decisions in step 4.
 After inspecting, record these values — they drive the most error-prone
 adaptations in `main.js` and the settings split:
 
-- Path to `manage.py` relative to repo root (may not be at root, e.g., `example/manage.py`)
+- Path to the app's `manage.py` relative to repo root (may not be at root, e.g., `example/manage.py`).
+  Some repos have multiple `manage.py` files (e.g., one at root for tests, one in a subdirectory
+  for the actual project) — identify which one the desktop app should launch
 - Source directories that contain Django app code (e.g., `src/`, `example/`)
 - Django settings module for development (e.g., `example.settings`)
 - Name for the packaged settings module you will create (e.g., `example.packaged_settings`)
@@ -159,6 +166,8 @@ Prefer:
 
 - one preload bridge or one menu action
 - simple native affordances such as opening the app-data folder
+- the starter's splash screen is optional — skip it for small apps where startup is fast enough
+  that the window appears quickly on its own
 
 Using the navigation assessment from step 1, restore only the missing
 affordances the app actually needs. The right fix depends on the target app:
