@@ -31,7 +31,10 @@ See the Required Output Shape section below for the complete target layout.
 1. Copy the starter's `shells/electron/` contents into the target's `electron/` directory.
 2. Copy the starter's `scripts/` helpers (stage-backend.cjs, bundled-python.cjs,
    materialize-symlinks.cjs, prune-bundled-python-runtime.cjs) into `electron/scripts/`.
-3. Adapt every copied file to the target project:
+3. For cross-platform packaging CI, use the starter's `.github/workflows/desktop-packages.yml`
+   as a starting point and adapt it to the target project's triggers, artifact names,
+   signing inputs, and path layout.
+4. Adapt every copied file to the target project:
    - Settings module paths (e.g., `desktop_django_starter.settings.packaged`
      → the target's packaged settings module)
    - Project structure (e.g., `src/` layout → the target's actual layout)
