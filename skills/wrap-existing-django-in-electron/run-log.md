@@ -16,6 +16,7 @@ Target: django-resume | Mode: unattended | Agents: Claude Code (Opus/Sonnet), Co
 | 9 | 2026-04-04 | 18m 40s | Tier 1 | pass | pass | 302→200 | pass | `0beb612` | Codex (gpt-5.4): nav menu, setWindowOpenHandler, seed-data copy, desktop runtime tests, docs updates |
 | 10 | 2026-04-05 | 8m 08s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `49b5cae` | pi (Opus): fastest run, Go menu, env-gated auto-auth, seed-db copy, retro included |
 | 11 | 2026-04-05 | 16m 07s | Tier 1 | pass | pass | 302→200 | pass | `9a98b7c` | pi (gpt-5.4): nav menu, seed-db copy, CI workflow, checksum helper, retro included |
+| 12 | 2026-04-05 | 14m 10s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `a5da82d` | pi (Sonnet): Go menu, env-gated auto-auth, seed-db copy, installable library wheel noted |
 
 ## How to read this
 
