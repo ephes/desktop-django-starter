@@ -50,6 +50,19 @@ See the Required Output Shape section below for the complete target layout.
 This strategy is more reliable than writing from scratch because the starter's files are
 tested and production-ready. The adaptation is where intelligence adds value.
 
+Common adaptation decisions (resolve these during step 1 inspection):
+
+| Situation | Approach |
+|-----------|----------|
+| `manage.py` at repo root | `cwd` in the manage invocation is the repo root |
+| `manage.py` in a subdirectory (e.g., `example/`) | `cwd` must point to that subdirectory; adjust backend root accordingly |
+| Existing root URL handler or redirect | Preserve it; do not add a competing view at `/` |
+| No root URL handler | Either load the app's main URL in `main.js` directly, or add a redirect view |
+| Login-gated views, single-user local app | Add auto-auth middleware gated by env var (see step 3) |
+| Public views, no auth required | No auto-auth needed |
+| Committed `db.sqlite3` with seed data | Treat as immutable input; copy to writable app-data path on first run (see step 3) |
+| No committed database (SQLite-backed desktop app) | Migrations create it at the writable app-data path |
+
 If the starter is not available as a sibling directory, write the files from scratch
 following the patterns in the starter's docs (especially `architecture.md` and `agent-use.md`) and `llms.txt`.
 
@@ -92,6 +105,16 @@ Also assess navigation assumptions and browser-dependent affordances:
 
 Record the findings — they inform the native surface decisions in step 4.
 
+After inspecting, record these values — they drive the most error-prone
+adaptations in `main.js` and the settings split:
+
+- Path to `manage.py` relative to repo root (may not be at root, e.g., `example/manage.py`)
+- Source directories that contain Django app code (e.g., `src/`, `example/`)
+- Django settings module for development (e.g., `example.settings`)
+- Name for the packaged settings module you will create (e.g., `example.packaged_settings`)
+- App directories that must exist in the staged backend bundle so packaged startup validation passes
+- Whether the repo has a committed `db.sqlite3` or other seed data
+
 2. Define the Electron boundary.
 
 Minimum boundary:
@@ -120,6 +143,15 @@ Check for:
   network-exposed deployments. Prefer configuring the user by username or user ID
   rather than blindly picking "first user" — fall back to first existing user only
   when the target repo is clearly a single-user local demo and document that assumption.
+  Gate the middleware with an environment variable (e.g., `DESKTOP_AUTO_LOGIN_ENABLED=1`)
+  rather than making it always-on. Have `main.js` set this variable in the Django
+  environment so the middleware only activates when launched from the desktop shell —
+  never when running the Django app standalone or in tests.
+- **seed data**: if the target repo has a committed `db.sqlite3` or media files,
+  treat them as immutable inputs. In packaged settings, copy the seed database to
+  the writable app-data directory on first run or when the writable copy is missing,
+  rather than writing to the committed file. This prevents smoke tests and desktop-dev
+  runs from dirtying the working tree.
 
 4. Add the smallest native surface.
 
@@ -214,8 +246,9 @@ Django-side additions (paths depend on the target project's layout):
 - `packaged_settings.py` — imports from `base_settings`, adds packaged runtime config
 - `runtime.py` — desktop runtime helpers (bundle dir, app data dir, host/port)
 - health endpoint view at `/health/`
-- desktop home view at `/` that redirects to the app's main URL (or configure Electron
-  to load the app's main URL directly in `main.js`)
+- root URL handling: if the project already has a root handler or redirect, preserve it;
+  if not, either configure `main.js` to load the app's main URL directly or add a
+  simple redirect view at `/`
 - URL wiring for new views
 - `STATIC_ROOT`, `STATICFILES_DIRS` in base settings
 - **Packaged static/media serving in URLs.** In packaged mode (`DEBUG=False`), Django's

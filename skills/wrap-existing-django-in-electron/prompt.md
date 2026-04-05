@@ -5,6 +5,7 @@ Read the wrapping skill and reference material from the desktop-django-starter r
 1. Read `../desktop-django-starter/skills/wrap-existing-django-in-electron/SKILL.md` — this is your workflow.
 2. Read `../desktop-django-starter/docs/architecture.md` — this is the runtime contract.
 3. Use the starter's `shells/electron/` and `scripts/` directories as reference code to copy and adapt.
+4. Read `../desktop-django-starter/docs/specification.md` for scope boundaries — especially the non-goals and packaging expectations. You do not need `decisions.md` or `agent-use.md` unless the skill points you there or you get blocked.
 
 Apply the skill to this Django project (the current working directory). Follow the
 skill's "Strategy: Copy and Adapt" section: copy the starter's Electron files into
@@ -15,7 +16,7 @@ unattended run with no human in the loop.
 
 Critical points — read the skill carefully on these:
 - Use flat settings files (base_settings.py, packaged_settings.py), NOT a settings package.
-- The desktop app must never show a login page. The user opens the app and sees their content immediately. If the Django project has views behind `@login_required`, add a small middleware to desktop settings (both dev and packaged) that silently authenticates every request as the project's existing user — so `request.user` is real and all data shows up. Do NOT create new user accounts, do NOT add login templates or auth URLs. Preserve existing users and data. The full redirect chain from `/` must end at a 200 with real content visible.
+- The desktop app must never show a login page. The user opens the app and sees their content immediately. If the Django project has views behind `@login_required`, add a small middleware to desktop settings (both dev and packaged) that silently authenticates every request as the project's existing user — so `request.user` is real and all data shows up. Do NOT create new user accounts, do NOT add login templates or auth URLs. Preserve existing users and data. The full redirect chain from the URL Electron loads must end at a 200 with real content visible.
 - Packaged mode (DEBUG=False) needs explicit static file serving in the URLconf. Without this, CSS/JS/images return 404 in the packaged app.
 - Copy and adapt the starter's Node test harness (*.test.cjs files). Update assertions to match this project's values (settingsModule, appId, etc.).
 - Assess what the app loses when browser chrome disappears (back/forward, address bar, tabs). Restore only the missing affordances the app actually needs — via Electron menu, Django template override, or nothing if the app already navigates well on its own.
