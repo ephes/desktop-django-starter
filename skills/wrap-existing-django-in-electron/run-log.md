@@ -1,6 +1,6 @@
 # Wrapping Skill Run Log
 
-Target: django-resume | Mode: unattended | Agents: Claude Code (Opus/Sonnet), Codex (gpt-5.4), pi (Opus, gpt-5.4)
+Targets: django-resume, django-wiki | Mode: unattended | Agents: Claude Code (Opus/Sonnet), Codex (gpt-5.4), pi (Opus, Sonnet, gpt-5.4)
 
 | Run | Date | Duration | Tier | Tests | Smoke | Root URL | Node tests | Ref | Notes |
 |-----|------|----------|------|-------|-------|----------|------------|-----|-------|
@@ -17,6 +17,7 @@ Target: django-resume | Mode: unattended | Agents: Claude Code (Opus/Sonnet), Co
 | 10 | 2026-04-05 | 8m 08s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `49b5cae` | pi (Opus): fastest run, Go menu, env-gated auto-auth, seed-db copy, retro included |
 | 11 | 2026-04-05 | 16m 07s | Tier 1 | pass | pass | 302→200 | pass | `9a98b7c` | pi (gpt-5.4): nav menu, seed-db copy, CI workflow, checksum helper, retro included |
 | 12 | 2026-04-05 | 14m 10s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `a5da82d` | pi (Sonnet): Go menu, env-gated auto-auth, seed-db copy, installable library wheel noted |
+| 13 | 2026-04-06 | 13m 17s | Tier 1 | 289/289 | pass | 200 | 20/20 | `0f15e85` | **django-wiki** · pi (Opus): first new target, Go menu, flat settings beside settings package, fixture loading, wiki wheel in staging |
 
 ## How to read this
 
