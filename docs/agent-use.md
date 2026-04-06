@@ -37,32 +37,65 @@ an Electron shell using an AI coding agent.
 
 ### Quick start
 
-```bash
-# Create a paired workspace (django-resume example)
-just -f ~/.config/desktop-django-lab/Justfile new resume-demo
+From inside the target Django project:
 
-# Run the agent from the target project directory
-cd ~/workspaces/resume-demo/django-resume
+```bash
+# Preflight: checks the target repo and prints the agent command
+~/projects/desktop-django-starter/scripts/wrap
+
+# Run the agent
+~/projects/desktop-django-starter/scripts/wrap --run
+```
+
+This requires an existing `desktop-django-starter` checkout on disk. The starter
+repo is inferred from the script's location, or specified with `--starter`:
+
+```bash
+~/projects/desktop-django-starter/scripts/wrap --starter ~/projects/desktop-django-starter
+```
+
+After wrapping, the target repo has an `electron/` directory and justfile targets:
+
+```bash
+just desktop-dev          # Electron + Django dev mode
+just desktop-dev-smoke    # headless boot + health check
+npm --prefix electron test  # node-side tests
+```
+
+### Lab workflow (experiment harness)
+
+For iterating on the wrapping skill itself, the `desktop-django-lab` tooling
+creates paired worktrees for reset-and-rerun experiments:
+
+```bash
+# Create a paired workspace for any target Django app
+djl new wiki-demo ~/projects/django-wiki
+
+# Run the agent from the target worktree
+cd ~/workspaces/wiki-demo/django-wiki
 time claude --dangerously-skip-permissions \
   -p "$(cat ../desktop-django-starter/skills/wrap-existing-django-in-electron/prompt.md)" \
   --add-dir ../desktop-django-starter
+
+# Reset for another run
+djl reset wiki-demo
 ```
 
-The agent reads the skill, copies and adapts reference Electron code from this repo,
-wires it into the target Django project, and self-verifies the result.
+The lab tooling lives in dotfiles (`~/.config/desktop-django-lab/`), not in this repo.
 
 ### Key files
 
+- `scripts/wrap` — front-door command for wrapping a target Django project
 - `skills/wrap-existing-django-in-electron/SKILL.md` — the wrapping workflow, strategy,
   output shape, and verification steps
-- `skills/wrap-existing-django-in-electron/prompt.md` — the short invocation prompt
-  piped to `claude -p`
+- `skills/wrap-existing-django-in-electron/prompt.md` — the prompt template used by
+  `scripts/wrap` and the lab workflow
 - `skills/wrap-existing-django-in-electron/run-log.md` — results from each test run,
   with git refs linking to the skill/prompt version used
 
 ### Iteration loop
 
-1. Create a fresh workspace with the lab tooling
+1. Create a fresh workspace with the lab tooling (`djl new`)
 2. Run the agent with the prompt (timed)
 3. Check results against the verification steps in the skill
 4. Record the run in `run-log.md` (see instructions in that file)

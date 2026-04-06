@@ -1,0 +1,254 @@
+#!/usr/bin/env bash
+# Front-door command for wrapping a Django project in an Electron shell.
+#
+# Run from inside the target Django repo:
+#   /path/to/desktop-django-starter/scripts/wrap            # preflight only
+#   /path/to/desktop-django-starter/scripts/wrap --run       # preflight + invoke agent
+#
+# v1 requires an existing desktop-django-starter checkout on disk.
+# The starter repo is inferred from this script's location, or specified
+# with --starter.
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# ── Argument defaults ────────────────────────────────────────────────
+starter_repo=""
+run_agent=false
+agent="claude"
+force=false
+emit_prompt=false
+
+# ── Parse arguments ──────────────────────────────────────────────────
+usage() {
+    cat <<'USAGE'
+Usage: scripts/wrap [OPTIONS]
+
+Run from inside the target Django project directory.
+
+Options:
+  --starter PATH   Path to desktop-django-starter checkout
+                   (default: inferred from this script's location)
+  --run            Invoke the agent after preflight passes
+  --agent NAME     Agent to use: claude (default), pi, codex
+  --force          Bypass dirty-worktree and existing-electron/ checks
+  --emit-prompt    Print the resolved wrapping prompt to stdout and exit
+  -h, --help       Show this help
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --starter)
+            [[ $# -ge 2 ]] || { echo "error: --starter requires a path" >&2; exit 1; }
+            starter_repo="$2"; shift 2 ;;
+        --run)          run_agent=true; shift ;;
+        --agent)
+            [[ $# -ge 2 ]] || { echo "error: --agent requires a name" >&2; exit 1; }
+            agent="$2"; shift 2 ;;
+        --force)        force=true; shift ;;
+        --emit-prompt)  emit_prompt=true; shift ;;
+        -h|--help)      usage; exit 0 ;;
+        *)              echo "error: unknown option: $1" >&2; usage >&2; exit 1 ;;
+    esac
+done
+
+# ── Resolve starter repo ────────────────────────────────────────────
+if [[ -z "${starter_repo}" ]]; then
+    starter_repo="$(cd "${SCRIPT_DIR}/.." && pwd)"
+fi
+if [[ ! -d "${starter_repo}" ]]; then
+    echo "error: starter repo not found: ${starter_repo}" >&2
+    exit 1
+fi
+starter_repo="$(cd "${starter_repo}" && pwd)"
+
+# ── Prompt generation ────────────────────────────────────────────────
+generate_prompt() {
+    local template="${starter_repo}/skills/wrap-existing-django-in-electron/prompt.md"
+    if [[ ! -f "${template}" ]]; then
+        echo "error: prompt template not found: ${template}" >&2
+        exit 1
+    fi
+
+    # Escape sed replacement-text special characters (& and \)
+    local escaped_path
+    escaped_path="$(printf '%s' "${starter_repo}" | sed 's/[&\\/]/\\&/g')"
+
+    local resolved
+    resolved="$(sed "s|\.\./desktop-django-starter|${escaped_path}|g" "${template}")"
+
+    # Defensive: fail if any expected starter-path references remain
+    if printf '%s' "${resolved}" | grep -q '\.\./desktop-django-starter'; then
+        echo "error: unresolved ../desktop-django-starter references remain in prompt" >&2
+        exit 1
+    fi
+
+    printf '%s\n' "${resolved}"
+}
+
+# --emit-prompt: output resolved prompt and exit (no preflight)
+if [[ "${emit_prompt}" == true ]]; then
+    generate_prompt
+    exit 0
+fi
+
+# ── Preflight checks ────────────────────────────────────────────────
+errors=0
+warnings=0
+
+preflight_error() { echo "  x $1" >&2; errors=$((errors + 1)); }
+preflight_warn()  { echo "  ! $1";     warnings=$((warnings + 1)); }
+preflight_ok()    { echo "  ok $1"; }
+
+echo "Preflight"
+echo ""
+
+# 1. Git repo (hard error, always)
+if ! git rev-parse --git-dir >/dev/null 2>&1; then
+    preflight_error "Not a git repository"
+else
+    preflight_ok "Git repository"
+fi
+
+# 2. Starter repo valid (hard error, always)
+skill_path="${starter_repo}/skills/wrap-existing-django-in-electron/SKILL.md"
+if [[ ! -f "${skill_path}" ]]; then
+    preflight_error "Starter repo invalid: SKILL.md not found at ${skill_path}"
+else
+    preflight_ok "Starter repo: ${starter_repo}"
+fi
+
+# 3. Clean worktree (--force downgrades to warning)
+if [[ -n "$(git status --porcelain 2>/dev/null)" ]]; then
+    if [[ "${force}" == true ]]; then
+        preflight_warn "Working tree has uncommitted changes (--force, continuing)"
+    else
+        preflight_error "Working tree has uncommitted changes (use --force to override)"
+    fi
+else
+    preflight_ok "Working tree clean"
+fi
+
+# 4. manage.py discovery (at least one)
+manage_files=()
+while IFS= read -r f; do
+    manage_files+=("$f")
+done < <(find . -name manage.py \
+    -not -path '*/\.*' \
+    -not -path '*/node_modules/*' \
+    -not -path '*/venv/*' \
+    -not -path '*/env/*' \
+    -not -path '*/__pycache__/*' \
+    2>/dev/null | sort)
+
+if [[ ${#manage_files[@]} -eq 0 ]]; then
+    preflight_error "No manage.py found (is this a Django project?)"
+elif [[ ${#manage_files[@]} -eq 1 ]]; then
+    preflight_ok "manage.py: ${manage_files[0]}"
+else
+    preflight_ok "manage.py found (multiple — the agent will inspect):"
+    for f in "${manage_files[@]}"; do
+        echo "       ${f}"
+    done
+fi
+
+# 5. electron/ doesn't exist (--force downgrades to warning)
+if [[ -d "electron" ]]; then
+    if [[ "${force}" == true ]]; then
+        preflight_warn "electron/ already exists (--force, continuing)"
+    else
+        preflight_error "electron/ already exists (use --force to re-wrap)"
+    fi
+else
+    preflight_ok "No existing electron/ directory"
+fi
+
+# 6. Required CLIs: warning in print mode, hard error with --run
+for cmd in node npm just; do
+    if command -v "${cmd}" >/dev/null 2>&1; then
+        preflight_ok "${cmd} found"
+    elif [[ "${run_agent}" == true ]]; then
+        preflight_error "${cmd} not found (required for wrapping and verification)"
+    else
+        preflight_warn "${cmd} not found (required for post-wrap verification)"
+    fi
+done
+
+# 7. Agent CLI (hard error only with --run)
+if [[ "${run_agent}" == true ]]; then
+    case "${agent}" in
+        claude|pi|codex) ;;
+        *) preflight_error "Unknown agent: ${agent} (supported: claude, pi, codex)" ;;
+    esac
+    if ! command -v "${agent}" >/dev/null 2>&1; then
+        preflight_error "${agent} not found on PATH"
+    else
+        preflight_ok "${agent} found"
+    fi
+fi
+
+# Verdict
+echo ""
+if [[ "${errors}" -gt 0 ]]; then
+    echo "Preflight failed (${errors} error(s))."
+    exit 1
+fi
+echo "Preflight passed."
+
+# ── Run or print ─────────────────────────────────────────────────────
+wrap_script="${SCRIPT_DIR}/$(basename "$0")"
+
+# Shell-quote a string for safe copy-paste display.
+# Uses single quotes with embedded single quotes escaped as '\''.
+shell_quote() {
+    local s="$1"
+    if [[ "${s}" == *[^A-Za-z0-9_./:=@-]* ]]; then
+        printf "'%s'" "${s//\'/\'\\\'\'}"
+    else
+        printf '%s' "${s}"
+    fi
+}
+
+quoted_script="$(shell_quote "${wrap_script}")"
+starter_flag=""
+if [[ "${starter_repo}" != "$(cd "${SCRIPT_DIR}/.." && pwd)" ]]; then
+    starter_flag=" --starter $(shell_quote "${starter_repo}")"
+fi
+
+if [[ "${run_agent}" == true ]]; then
+    resolved_prompt="$(generate_prompt)"
+
+    case "${agent}" in
+        claude)
+            exec claude --dangerously-skip-permissions \
+                -p "${resolved_prompt}" \
+                --add-dir "${starter_repo}"
+            ;;
+        pi)
+            exec pi --provider anthropic --model opus \
+                -p "${resolved_prompt}" \
+                < /dev/null
+            ;;
+        codex)
+            exec codex exec --dangerously-bypass-approvals-and-sandbox \
+                --add-dir "${starter_repo}" \
+                "${resolved_prompt}"
+            ;;
+    esac
+else
+    echo ""
+    echo "To wrap this project:"
+    echo ""
+    echo "  ${quoted_script}${starter_flag} --run"
+    echo ""
+    echo "With a different agent:"
+    echo ""
+    echo "  ${quoted_script}${starter_flag} --run --agent pi"
+    echo "  ${quoted_script}${starter_flag} --run --agent codex"
+    echo ""
+    echo "Or generate the resolved prompt for manual use:"
+    echo ""
+    echo "  ${quoted_script}${starter_flag} --emit-prompt"
+fi

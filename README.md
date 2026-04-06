@@ -45,9 +45,22 @@ The example app uses a branded presentation layer called "Flying Stable" (a Pega
 
 The docs are built with Sphinx over the Markdown sources in `docs/` and are intended to be publishable on Read the Docs.
 
+## Wrapping an Existing Django Project
+
+To wrap another Django project in Electron, run `scripts/wrap` from inside the target repo:
+
+```bash
+cd ~/projects/my-django-app
+~/projects/desktop-django-starter/scripts/wrap        # preflight only
+~/projects/desktop-django-starter/scripts/wrap --run   # preflight + invoke agent
+```
+
+This requires an existing checkout of this starter. See [`docs/agent-use.md`](docs/agent-use.md) for details.
+
 ## Agent Consumers
 
 - `llms.txt`: concise repo entry point for coding agents
+- `scripts/wrap`: front-door command for agent-driven wrapping of a target Django project
 - `skills/wrap-existing-django-in-electron/SKILL.md`: reusable workflow for adapting an existing Django project to an Electron shell
 - `docs/agent-use.md`: agent-oriented usage notes and guardrails
 
