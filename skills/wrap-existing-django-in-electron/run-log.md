@@ -18,6 +18,7 @@ Targets: django-resume, django-wiki | Mode: unattended | Agents: Claude Code (Op
 | 11 | 2026-04-05 | 16m 07s | Tier 1 | pass | pass | 302→200 | pass | `9a98b7c` | pi (gpt-5.4): nav menu, seed-db copy, CI workflow, checksum helper, retro included |
 | 12 | 2026-04-05 | 14m 10s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `a5da82d` | pi (Sonnet): Go menu, env-gated auto-auth, seed-db copy, installable library wheel noted |
 | 13 | 2026-04-06 | 13m 17s | Tier 1 | 289/289 | pass | 200 | 20/20 | `0f15e85` | **django-wiki** · pi (Opus): first new target, Go menu, flat settings beside settings package, fixture loading, wiki wheel in staging |
+| 14 | 2026-04-06 | 20m 50s | Tier 1 | pass | pass | 200 | pass | `e46b200` | **django-wiki** · pi (Sonnet): auto-auth as admin, catch-all URL ordering, seed-db copy, no splash, retro included |
 
 ## How to read this
 
