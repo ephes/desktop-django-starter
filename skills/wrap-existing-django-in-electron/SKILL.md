@@ -267,7 +267,9 @@ Django-side additions (paths depend on the target project's layout):
 - modified `settings.py` — imports from `base_settings`, adds dev overrides
 - `packaged_settings.py` — imports from `base_settings`, adds packaged runtime config
 - `runtime.py` — desktop runtime helpers (bundle dir, app data dir, host/port)
-- health endpoint view at `/health/`
+- health endpoint view at `/health/`. If the target app has a catch-all URL pattern
+  (e.g., `re_path(r"", include(...))`), place the health URL before it in `urlpatterns`
+  so it isn't shadowed
 - root URL handling: if the project already has a root handler or redirect, preserve it;
   if not, either configure `main.js` to load the app's main URL directly or add a
   simple redirect view at `/`
