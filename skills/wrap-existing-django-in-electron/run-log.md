@@ -1,6 +1,6 @@
 # Wrapping Skill Run Log
 
-Targets: django-resume, django-wiki | Mode: unattended | Agents: Claude Code (Opus/Sonnet), Codex (gpt-5.4), pi (Opus, Sonnet, gpt-5.4)
+Targets: django-resume, django-wiki, django-cast | Mode: unattended | Agents: Claude Code (Opus/Sonnet), Codex (gpt-5.4), pi (Opus, Sonnet, gpt-5.4)
 
 | Run | Date | Duration | Tier | Tests | Smoke | Root URL | Node tests | Ref | Notes |
 |-----|------|----------|------|-------|-------|----------|------------|-----|-------|
@@ -19,6 +19,7 @@ Targets: django-resume, django-wiki | Mode: unattended | Agents: Claude Code (Op
 | 12 | 2026-04-05 | 14m 10s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `a5da82d` | pi (Sonnet): Go menu, env-gated auto-auth, seed-db copy, installable library wheel noted |
 | 13 | 2026-04-06 | 13m 17s | Tier 1 | 289/289 | pass | 200 | 20/20 | `0f15e85` | **django-wiki** · pi (Opus): first new target, Go menu, flat settings beside settings package, fixture loading, wiki wheel in staging |
 | 14 | 2026-04-06 | 20m 50s | Tier 1 | pass | pass | 200 | pass | `e46b200` | **django-wiki** · pi (Sonnet): auto-auth as admin, catch-all URL ordering, seed-db copy, no splash, retro included |
+| 15 | 2026-04-06 | 16m 56s | Tier 1 | 1098/1098 | pass | 200 | 16/16 | `93ab020` | **django-cast** · pi (Opus): Wagtail CMS, settings package, manage.py setdefault fix, seed via mgmt command |
 
 ## How to read this
 
