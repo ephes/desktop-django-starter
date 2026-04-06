@@ -71,6 +71,7 @@ Common adaptation decisions (resolve these during step 1 inspection):
 | Committed `db.sqlite3` with seed data | Treat as immutable input; copy to writable app-data path on first run (see step 3) |
 | No committed database (SQLite-backed desktop app) | Migrations create it at the writable app-data path |
 | Installable library with separate example project (e.g., `src/` + `example/`) | Dev mode works because the package is already installed in the venv. But `stage-backend.cjs` must build and install a wheel into the bundled Python — copying `src/` alone won't make the package importable in packaged mode |
+| Existing settings as a package (`settings/` directory) | Place flat desktop settings files as siblings to the package directory. Import from the package's base module directly (e.g., `from myproject.settings.base import *`), bypassing the package's `__init__.py` |
 
 If the starter is not available as a sibling directory, write the files from scratch
 following the patterns in the starter's docs (especially `architecture.md` and `agent-use.md`) and `llms.txt`.
@@ -162,7 +163,10 @@ Check for:
   treat them as immutable inputs. In packaged settings, copy the seed database to
   the writable app-data directory on first run or when the writable copy is missing,
   rather than writing to the committed file. This prevents smoke tests and desktop-dev
-  runs from dirtying the working tree.
+  runs from dirtying the working tree. If the project uses fixtures (JSON/YAML via
+  `manage.py loaddata`) instead of a committed database, treat them the same way —
+  load them into the writable app-data database on first run or initialization, not
+  on every startup.
 
 4. Add the smallest native surface.
 
@@ -348,7 +352,9 @@ bounded — no long-running processes.
 3. Verify the desktop window lands on real content. Follow the full redirect chain
    from the URL that Electron loads (either `/` or the app's main URL). Every step
    must resolve — the final response must be 200, not 404. Check this with Django's
-   test client: `Client().get("/resume/", follow=True)` should end at status 200.
+   test client using the URL Electron loads, e.g., `Client().get("/", follow=True)`
+   should end at status 200. If ALLOWED_HOSTS rejects the test client's default
+   `testserver` hostname, add it to the desktop settings.
 4. Run `npm --prefix electron test` to confirm the Node-side test harness passes.
 5. If any check fails, report what failed and do not continue past the failed step.
 
