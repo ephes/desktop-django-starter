@@ -235,8 +235,11 @@ If an application menu is added and existing preload actions (like "reveal
 app data") aren't referenced in the app's templates, the agent may
 consolidate them into the menu.
 
-If navigation code is added, add a focused smoke check or Node test where
-practical.
+When the wrap introduces native behavior — menu items, `setWindowOpenHandler`
+policy, auto-auth, or secondary-window handling — add a bounded verification
+that exercises that behavior. A Node-side Electron test or a deterministic
+script is preferred over broad browser automation. Only reach for Playwright
+if the app's core workflow genuinely needs click-through UI validation.
 
 5. Plan packaging and release behavior early.
 
