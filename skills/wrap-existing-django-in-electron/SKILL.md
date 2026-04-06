@@ -70,6 +70,7 @@ Common adaptation decisions (resolve these during step 1 inspection):
 | Public views, no auth required | No auto-auth needed |
 | Committed `db.sqlite3` with seed data | Treat as immutable input; copy to writable app-data path on first run (see step 3) |
 | No committed database (SQLite-backed desktop app) | Migrations create it at the writable app-data path |
+| Installable library with separate example project (e.g., `src/` + `example/`) | Dev mode works because the package is already installed in the venv. But `stage-backend.cjs` must build and install a wheel into the bundled Python — copying `src/` alone won't make the package importable in packaged mode |
 
 If the starter is not available as a sibling directory, write the files from scratch
 following the patterns in the starter's docs (especially `architecture.md` and `agent-use.md`) and `llms.txt`.
