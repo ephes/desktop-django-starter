@@ -98,7 +98,11 @@ Avoid:
 
 Look for:
 
-- `manage.py`
+- `manage.py` — check whether it uses `os.environ.setdefault("DJANGO_SETTINGS_MODULE", ...)`
+  or a hard assignment (`os.environ["..."] = ...`). A hard assignment prevents Electron
+  from overriding the settings module via the environment. Note it and adapt the desktop
+  entrypoint so Electron can override settings; change `manage.py` only if that is the
+  cleanest project-local fix.
 - settings layout
 - static file handling
 - SQLite or other database assumptions
@@ -164,6 +168,9 @@ Check for:
   fixtures, or object-level locks, confirm the user is both authenticated and
   authorized for the intended desktop use case (e.g., a wiki user who can edit,
   not just view).
+  The middleware must tolerate an unmigrated or uninitialized database — it may run
+  during the health-check phase before migrations complete. Catch `OperationalError`
+  or similar and fall through silently.
 - **seed data**: if the target repo has a committed `db.sqlite3` or media files,
   treat them as immutable inputs. In packaged settings, copy the seed database to
   the writable app-data directory on first run or when the writable copy is missing,
@@ -201,6 +208,11 @@ affordances the app actually needs. The right fix depends on the target app:
 
 The agent decides which approach fits based on the inspection findings. The
 goal is minimum intervention that makes the wrapped app navigable.
+
+Consider whether the app's primary workflow is reachable from the entry URL
+without an address bar. If sections needed for the intended desktop use case
+(e.g., a content editor, an admin panel) are only accessible by typing a URL,
+add menu items or navigation links so desktop users can reach them.
 
 For links that open new tabs or windows (`target="_blank"`, `window.open`),
 decide whether they should stay inside the main window or open in the system
@@ -303,6 +315,12 @@ that are not available in the bundled runtime. The flat file approach avoids thi
 # packaged_settings.py — from .base_settings import *; packaged runtime config
 ```
 
+If the existing dev settings pull in browser-only tooling, desktop-hostile middleware,
+or URL configurations that conflict with the desktop shell (e.g., `debug_toolbar`,
+browser-reload), add a dedicated `desktop_dev_settings.py` that imports from
+`base_settings` and adds only what desktop-dev mode needs. This is optional — only
+create it when the existing dev settings are not desktop-safe.
+
 **Root URL — the Electron window must load actual app content.** Check if the
 target project already has a root URL handler, login configuration, or redirect
 logic. If it does, preserve it — do not replace it with new views or auth flows.
@@ -315,6 +333,11 @@ If auth-gated views block access (see desktop auto-auth guidance in the workflow
 section above), the auto-auth middleware handles this — do not add login templates
 or alternative auth flows. The existing users and seed data (e.g., in a committed
 `db.sqlite3`) should work as-is in the desktop shell.
+
+If the URL Electron loads depends on database-backed content (e.g., a CMS page, a
+wiki root article), ensure initialization or seed data makes that entry URL resolve
+to 200 before smoke verification. Initialization may be a seed DB copy, fixtures, or
+a project-specific management command run during bootstrap.
 
 The full redirect chain must terminate at a 200, not a 404 at any step.
 
