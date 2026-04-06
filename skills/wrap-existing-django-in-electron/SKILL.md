@@ -221,8 +221,10 @@ deny the popup); only external origins should open in the system browser via
 `shell.openExternal`. Do not route all `setWindowOpenHandler` traffic
 externally by default — apps like Wagtail use `window.open` for internal
 admin routes, and sending those to the browser breaks core workflows.
-Managed secondary Electron windows are intentionally out of scope for the
-wrapping skill — the choice is in-app or system browser, not a custom popup.
+Managed secondary Electron windows are generally out of scope for the
+wrapping skill. However, if the app uses `window.open` for same-origin UI
+flows like modal choosers or pickers, allow those as secondary windows
+rather than forcing them into the main window or the system browser.
 Make that decision explicitly in Electron's main process, typically with
 `setWindowOpenHandler` and related navigation guards, rather than relying on
 default behavior. Prefer handling new-window and external-navigation policy
