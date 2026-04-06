@@ -159,6 +159,11 @@ Check for:
   rather than making it always-on. Have `main.js` set this variable in the Django
   environment so the middleware only activates when launched from the desktop shell —
   never when running the Django app standalone or in tests.
+  Verify that the chosen user can actually perform the app's primary authenticated
+  workflow, not just load the landing page. For content apps with seeded roles,
+  fixtures, or object-level locks, confirm the user is both authenticated and
+  authorized for the intended desktop use case (e.g., a wiki user who can edit,
+  not just view).
 - **seed data**: if the target repo has a committed `db.sqlite3` or media files,
   treat them as immutable inputs. In packaged settings, copy the seed database to
   the writable app-data directory on first run or when the writable copy is missing,
@@ -355,6 +360,9 @@ bounded — no long-running processes.
    test client using the URL Electron loads, e.g., `Client().get("/", follow=True)`
    should end at status 200. If ALLOWED_HOSTS rejects the test client's default
    `testserver` hostname, add it to the desktop settings.
+   If desktop auto-auth is enabled, also verify one representative authenticated
+   action that matches the app's primary purpose — e.g., confirm the auto-auth user
+   can reach an edit or create page, not just view the landing page.
 4. Run `npm --prefix electron test` to confirm the Node-side test harness passes.
 5. If any check fails, report what failed and do not continue past the failed step.
 
