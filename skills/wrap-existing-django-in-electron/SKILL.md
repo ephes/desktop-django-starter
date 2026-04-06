@@ -215,14 +215,19 @@ without an address bar. If sections needed for the intended desktop use case
 add menu items or navigation links so desktop users can reach them.
 
 For links that open new tabs or windows (`target="_blank"`, `window.open`),
-decide whether they should stay inside the main window or open in the system
-browser. Managed secondary Electron windows are intentionally out of scope
-for the wrapping skill — the choice is in-app or system browser, not a
-custom popup. Make that decision explicitly in Electron's main process,
-typically with `setWindowOpenHandler` and related navigation guards, rather
-than relying on default behavior. Prefer handling new-window and
-external-navigation policy in Electron's main process. Only change Django
-templates when the app's internal navigation structure itself needs repair.
+distinguish internal app URLs from external URLs. Same-origin localhost URLs
+should stay in the Electron app (load them in the existing BrowserWindow and
+deny the popup); only external origins should open in the system browser via
+`shell.openExternal`. Do not route all `setWindowOpenHandler` traffic
+externally by default — apps like Wagtail use `window.open` for internal
+admin routes, and sending those to the browser breaks core workflows.
+Managed secondary Electron windows are intentionally out of scope for the
+wrapping skill — the choice is in-app or system browser, not a custom popup.
+Make that decision explicitly in Electron's main process, typically with
+`setWindowOpenHandler` and related navigation guards, rather than relying on
+default behavior. Prefer handling new-window and external-navigation policy
+in Electron's main process. Only change Django templates when the app's
+internal navigation structure itself needs repair.
 
 If an application menu is added and existing preload actions (like "reveal
 app data") aren't referenced in the app's templates, the agent may
