@@ -21,6 +21,9 @@ Targets: django-resume, django-wiki, django-cast | Mode: unattended | Agents: Cl
 | 14 | 2026-04-06 | 20m 50s | Tier 1 | pass | pass | 200 | pass | `e46b200` | **django-wiki** · pi (Sonnet): auto-auth as admin, catch-all URL ordering, seed-db copy, no splash, retro included |
 | 15 | 2026-04-06 | 16m 56s | Tier 1 | 1098/1098 | pass | 200 | 16/16 | `93ab020` | **django-cast** · pi (Opus): Wagtail CMS, settings package, manage.py setdefault fix, seed via mgmt command |
 | 16 | 2026-04-06 | 15m 00s | Tier 1 | pass | pass | 200 | 20/20 | `590190d` | **django-cast** · pi (Sonnet): CMS/Admin menu items, same-origin window handling, manage.py setdefault fix |
+| 17 | 2026-04-06 | — | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `42e0c34` | First `scripts/wrap --run` test from /tmp/ clone. Review: missing entitlements, no testserver, dirtied db.sqlite3 |
+| 18 | 2026-04-07 | 14m 33s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `998d2f3` | pi (gpt-5.4): `dds wrap` path, skill v2, 6/6 checks, but review found seed media not bootstrapped (404) |
+| 19 | 2026-04-07 | 17m 47s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `66b9aa7` | pi (gpt-5.4): skill v3 with media fix, 6/6 checks + media probe pass, review clean except upgrade-path edge |
 
 ## How to read this
 
