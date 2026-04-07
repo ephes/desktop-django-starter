@@ -444,11 +444,18 @@ bounded — no long-running processes.
    `Client().get("/health/")` returns 200. If it returns 400, `testserver` is
    missing from `ALLOWED_HOSTS` — add it and re-check.
 6. If the target repo has committed seed media (e.g., uploaded images referenced by
-   seeded data), verify that a representative page loads those assets under packaged
-   settings. Use the Django test client to load a detail page that references a media
-   file, then GET the media URL and confirm it returns 200. If the media URL returns
-   404, the seed media bootstrap is missing — add it to the runtime helper alongside
-   the database copy and re-check.
+   seeded data), verify the media bootstrap under packaged settings with two checks:
+   **a.** Clean app-data: delete or use a fresh app-data directory, then use the Django
+   test client to load a detail page that references a media file and GET the media
+   URL. It must return 200.
+   **b.** Pre-existing empty app-data media: create the app-data media directory but
+   leave it empty, then repeat the same GET. It must also return 200. This catches
+   bootstrap code that only copies when the destination directory is missing (e.g.,
+   a bare `if not dest.exists()` guard) but silently skips a stale or incomplete
+   directory left by a prior install.
+   If either check returns 404, the seed media bootstrap is missing or incomplete —
+   fix the runtime helper (e.g., use `shutil.copytree` with `dirs_exist_ok=True`)
+   and re-check both cases.
 7. Check that seed assets are not dirtied. If the target repo has a committed
    `db.sqlite3` or media directory, run `git status --short` scoped to those paths
    (e.g., `git status --short -- path/to/db.sqlite3 path/to/media/`) and verify no
