@@ -196,6 +196,12 @@ Check for:
   but the seed media is never copied there, pages that reference uploaded images or
   files will render broken assets. Add the media bootstrap to the same runtime helper
   that handles the database copy.
+  The media bootstrap must handle the upgrade path: if the destination directory
+  already exists but is empty or incomplete (e.g., from a prior broken install),
+  repopulate it rather than skipping the copy. Use `shutil.copytree` with
+  `dirs_exist_ok=True` or check whether the destination is empty before deciding
+  to skip. A simple `if not dest.exists()` guard silently fails for users who
+  already ran a build that created the directory without populating it.
 
 4. Add the smallest native surface.
 
