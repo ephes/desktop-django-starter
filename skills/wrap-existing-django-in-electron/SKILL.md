@@ -58,6 +58,16 @@ See the Required Output Shape section below for the complete target layout.
 This strategy is more reliable than writing from scratch because the starter's files are
 tested and production-ready. The adaptation is where intelligence adds value.
 
+**Post-copy audit.** After copying and adapting, verify that every path referenced by the
+adapted config files actually exists in the target repo. Common misses:
+
+- macOS signing entitlements (`signing/entitlements.mac.plist` and
+  `signing/entitlements.mac.inherit.plist`) referenced by `electron-builder-config.cjs`.
+  If the wrapped project does not need code signing yet, either copy the starter's
+  entitlement files or remove the references. Do not leave dangling paths.
+- Icon assets referenced by the builder config.
+- Any `extraResources` or `extraFiles` paths in the builder config.
+
 Common adaptation decisions (resolve these during step 1 inspection):
 
 | Situation | Approach |
@@ -279,7 +289,7 @@ target-project/
 │       ├── materialize-symlinks.cjs         # portability: symlinks → copies
 │       └── prune-bundled-python-runtime.cjs # strip tkinter/idle from bundle
 ├── .stage/                                  # (gitignored) staged backend
-└── .github/workflows/
+└── .github/workflows/                       # (optional — see completeness checklist)
     └── desktop-packages.yml                 # cross-platform packaging CI
 ```
 
@@ -287,8 +297,14 @@ Django-side additions (paths depend on the target project's layout):
 
 - `base_settings.py` — shared settings with `DEBUG=False` defaults
 - modified `settings.py` — imports from `base_settings`, adds dev overrides
-- `packaged_settings.py` — imports from `base_settings`, adds packaged runtime config
-- `runtime.py` — desktop runtime helpers (bundle dir, app data dir, host/port)
+- `packaged_settings.py` — imports from `base_settings`, adds packaged runtime config.
+  Include `"testserver"` in `ALLOWED_HOSTS` alongside `"127.0.0.1"` and `"localhost"` so
+  that Django's test client can verify the packaged settings without forcing a custom
+  `HTTP_HOST`
+- `runtime.py` — desktop runtime helpers (bundle dir, app data dir, host/port).
+  Optional: only create this if the packaged settings need helper functions that
+  don't belong inline. If the runtime logic is simple enough to live directly in
+  `packaged_settings.py`, a separate `runtime.py` is not required
 - health endpoint view at `/health/`. If the target app has a catch-all URL pattern
   (e.g., `re_path(r"", include(...))`), place the health URL before it in `urlpatterns`
   so it isn't shadowed
@@ -372,6 +388,17 @@ Build/dev justfile targets:
 
 `.gitignore` additions: `.stage/`, `electron/dist/`, `electron/node_modules/`
 
+**Completeness checklist.** Before finishing, verify these non-code outputs exist:
+
+- `.github/workflows/desktop-packages.yml` — cross-platform packaging CI (adapt from
+  the starter's workflow). This is optional: if the target project does not use GitHub
+  Actions or CI is out of scope for the wrap, skip it and note the omission in the
+  wrap summary. Do not treat a missing CI workflow as a verification failure.
+- `.gitignore` additions for `.stage/`, `electron/dist/`, `electron/node_modules/`
+- All paths referenced by `electron-builder-config.cjs` resolve to real files (signing
+  entitlements, icons, extraResources). Run a quick `grep` for file paths in the config
+  and verify each one exists.
+
 ## Validation Checklist
 
 - Django starts on a random localhost port
@@ -379,7 +406,7 @@ Build/dev justfile targets:
 - packaged mode does not assume `DEBUG=True`
 - shutdown works on Windows as well as macOS/Linux
 - update docs include connected and air-gapped/manual paths
-- CI exercises Windows, macOS, and Linux
+- if CI is included, it exercises Windows, macOS, and Linux
 
 ## Self-Verification (for unattended runs)
 
@@ -399,7 +426,18 @@ bounded — no long-running processes.
    action that matches the app's primary purpose — e.g., confirm the auto-auth user
    can reach an edit or create page, not just view the landing page.
 4. Run `npm --prefix electron test` to confirm the Node-side test harness passes.
-5. If any check fails, report what failed and do not continue past the failed step.
+5. Verify packaged settings work with the Django test client. Using
+   `DJANGO_SETTINGS_MODULE` set to the packaged settings module, confirm
+   `Client().get("/health/")` returns 200. If it returns 400, `testserver` is
+   missing from `ALLOWED_HOSTS` — add it and re-check.
+6. Check that seed assets are not dirtied. If the target repo has a committed
+   `db.sqlite3` or media directory, run `git status --short` scoped to those paths
+   (e.g., `git status --short -- path/to/db.sqlite3 path/to/media/`) and verify no
+   modifications or untracked files appear. If the verification steps modified or
+   created files there (e.g., by running migrations against the committed database or
+   writing uploads), fix the settings so the writable copy goes to a separate location
+   (app-data or a gitignored path) and restore the original with `git checkout`.
+7. If any check fails, report what failed and do not continue past the failed step.
 
 Packaged-mode verification (`just desktop-smoke`) is a separate concern — do not
 attempt it in the same unattended run unless explicitly requested.
