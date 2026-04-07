@@ -260,5 +260,15 @@ build:
 loc:
     uv run count-lines-of-code
 
+# CLI package (cli/)
+cli-sync-assets:
+    python cli/sync_assets.py
+
+cli-build: cli-sync-assets
+    cd cli && uv build
+
+cli-test: cli-sync-assets
+    cd cli && uv run pytest tests/
+
 clean:
     rm -rf build dist docs/_build .pytest_cache .ruff_cache *.egg-info db.sqlite3 .stage shells/electron/dist shells/electron/node_modules shells/tauri/node_modules shells/tauri/src-tauri/target shells/positron/.briefcase shells/positron/.venv shells/positron/build shells/positron/dist shells/positron/linux shells/positron/logs shells/positron/macOS shells/positron/windows shells/positron/resources/app-icon.icns shells/positron/resources/app-icon.png
