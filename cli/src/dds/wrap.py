@@ -195,10 +195,10 @@ def run_wrap(
                 "pi",
                 [
                     "pi",
-                    "--provider",
-                    "anthropic",
                     "--model",
-                    "opus",
+                    "openai-codex/gpt-5.4",
+                    "--thinking",
+                    "high",
                     "-p",
                     resolved_prompt,
                 ],

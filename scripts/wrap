@@ -227,7 +227,7 @@ if [[ "${run_agent}" == true ]]; then
                 --add-dir "${starter_repo}"
             ;;
         pi)
-            exec pi --provider anthropic --model opus \
+            exec pi --model openai-codex/gpt-5.4 --thinking high \
                 -p "${resolved_prompt}" \
                 < /dev/null
             ;;

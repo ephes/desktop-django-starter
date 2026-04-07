@@ -189,6 +189,13 @@ Check for:
   `manage.py loaddata`) instead of a committed database, treat them the same way —
   load them into the writable app-data database on first run or initialization, not
   on every startup.
+  **Seed media must be handled the same way as the seed database.** If the target
+  repo has committed uploads (e.g., `media/uploads/`) referenced by seeded data,
+  copy or symlink the seed media directory to the writable app-data `MEDIA_ROOT` on
+  first run, alongside the database copy. If `MEDIA_ROOT` points to an app-data path
+  but the seed media is never copied there, pages that reference uploaded images or
+  files will render broken assets. Add the media bootstrap to the same runtime helper
+  that handles the database copy.
 
 4. Add the smallest native surface.
 
@@ -430,14 +437,20 @@ bounded — no long-running processes.
    `DJANGO_SETTINGS_MODULE` set to the packaged settings module, confirm
    `Client().get("/health/")` returns 200. If it returns 400, `testserver` is
    missing from `ALLOWED_HOSTS` — add it and re-check.
-6. Check that seed assets are not dirtied. If the target repo has a committed
+6. If the target repo has committed seed media (e.g., uploaded images referenced by
+   seeded data), verify that a representative page loads those assets under packaged
+   settings. Use the Django test client to load a detail page that references a media
+   file, then GET the media URL and confirm it returns 200. If the media URL returns
+   404, the seed media bootstrap is missing — add it to the runtime helper alongside
+   the database copy and re-check.
+7. Check that seed assets are not dirtied. If the target repo has a committed
    `db.sqlite3` or media directory, run `git status --short` scoped to those paths
    (e.g., `git status --short -- path/to/db.sqlite3 path/to/media/`) and verify no
    modifications or untracked files appear. If the verification steps modified or
    created files there (e.g., by running migrations against the committed database or
    writing uploads), fix the settings so the writable copy goes to a separate location
    (app-data or a gitignored path) and restore the original with `git checkout`.
-7. If any check fails, report what failed and do not continue past the failed step.
+8. If any check fails, report what failed and do not continue past the failed step.
 
 Packaged-mode verification (`just desktop-smoke`) is a separate concern — do not
 attempt it in the same unattended run unless explicitly requested.
