@@ -198,10 +198,17 @@ Check for:
   that handles the database copy.
   The media bootstrap must handle the upgrade path: if the destination directory
   already exists but is empty or incomplete (e.g., from a prior broken install),
-  repopulate it rather than skipping the copy. Use `shutil.copytree` with
-  `dirs_exist_ok=True` or check whether the destination is empty before deciding
-  to skip. A simple `if not dest.exists()` guard silently fails for users who
-  already ran a build that created the directory without populating it.
+  repopulate it rather than skipping the copy. Use this pattern:
+  ```python
+  def _copy_seed_tree(source: Path, target: Path) -> None:
+      if not source.exists():
+          return
+      target.parent.mkdir(parents=True, exist_ok=True)
+      shutil.copytree(source, target, dirs_exist_ok=True)
+  ```
+  **Do not** use `if target.exists(): return` for seed media bootstrap. That guard
+  silently fails for users who already ran a build that created the directory
+  without populating it.
 
 4. Add the smallest native surface.
 
@@ -453,9 +460,10 @@ bounded — no long-running processes.
    bootstrap code that only copies when the destination directory is missing (e.g.,
    a bare `if not dest.exists()` guard) but silently skips a stale or incomplete
    directory left by a prior install.
-   If either check returns 404, the seed media bootstrap is missing or incomplete —
-   fix the runtime helper (e.g., use `shutil.copytree` with `dirs_exist_ok=True`)
-   and re-check both cases.
+   If either check returns 404, the seed media bootstrap is missing or incomplete.
+   If probe (b) fails, inspect the runtime helper for a bare `target.exists()` early
+   return — that is the most common cause. Replace it with `shutil.copytree` using
+   `dirs_exist_ok=True` and re-check both cases.
 7. Check that seed assets are not dirtied. If the target repo has a committed
    `db.sqlite3` or media directory, run `git status --short` scoped to those paths
    (e.g., `git status --short -- path/to/db.sqlite3 path/to/media/`) and verify no
