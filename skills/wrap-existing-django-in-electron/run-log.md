@@ -25,6 +25,8 @@ Targets: django-resume, django-wiki, django-cast | Mode: unattended | Agents: Cl
 | 18 | 2026-04-07 | 14m 33s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `998d2f3` | pi (gpt-5.4): `dds wrap` path, skill v2, 6/6 checks, but review found seed media not bootstrapped (404) |
 | 19 | 2026-04-07 | 17m 47s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `66b9aa7` | pi (gpt-5.4): skill v3 with media fix, 6/6 checks + media probe pass, review clean except upgrade-path edge |
 | 20 | 2026-04-08 | 14m 53s | Tier 1 | pass | pass | 302→200 | pass | `b22c03a` | pi (gpt-5.4): skill v4, clean-install media 200, but upgrade-path probe 404 (bare exists guard, no CI) |
+| 21 | 2026-04-08 | 18m 37s | Tier 1 | pass | pass | 302→200 | pass | `c0c9145` | pi (gpt-5.4): skill v4 retry, same bare exists() guard, upgrade-path probe 404 again |
+| 22 | 2026-04-08 | 16m 35s | Tier 1 | pass | pass | 302→200 | pass | `b0f0582` | pi (gpt-5.4): skill v5 (explicit code example), still bare exists() guard — manually fixed, both probes pass |
 
 ## How to read this
 
