@@ -24,6 +24,7 @@ Targets: django-resume, django-wiki, django-cast | Mode: unattended | Agents: Cl
 | 17 | 2026-04-06 | — | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `42e0c34` | First `scripts/wrap --run` test from /tmp/ clone. Review: missing entitlements, no testserver, dirtied db.sqlite3 |
 | 18 | 2026-04-07 | 14m 33s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `998d2f3` | pi (gpt-5.4): `dds wrap` path, skill v2, 6/6 checks, but review found seed media not bootstrapped (404) |
 | 19 | 2026-04-07 | 17m 47s | Tier 1 | 125/125 | pass | 302→200 | 20/20 | `66b9aa7` | pi (gpt-5.4): skill v3 with media fix, 6/6 checks + media probe pass, review clean except upgrade-path edge |
+| 20 | 2026-04-08 | 14m 53s | Tier 1 | pass | pass | 302→200 | pass | `b22c03a` | pi (gpt-5.4): skill v4, clean-install media 200, but upgrade-path probe 404 (bare exists guard, no CI) |
 
 ## How to read this
 
