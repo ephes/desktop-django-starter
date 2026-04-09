@@ -29,7 +29,9 @@ Key expectations:
 
 - Electron owns process startup and shutdown
 - Django and the task worker are treated as local backend processes, not as remote services
+- Electron binds Django to `127.0.0.1` on a random port before opening the renderer
 - the renderer loads normal Django pages over localhost
+- that localhost-only bind is a real baseline, but it is not presented as complete localhost hardening because the starter does not yet add a per-session shell-to-Django auth token
 - SQLite lives in a writable per-user app-data directory and stores both app data and task queue rows
 
 Current shell split note:
@@ -99,7 +101,7 @@ The eventual implementation should follow this sequence:
 6. Electron polls that endpoint until it succeeds or times out.
 7. Electron starts the single `db_worker` process only after Django is healthy.
 8. Electron loads the main app window only after both backend processes have started cleanly, then closes the splash window once the main window is ready to show.
-9. Closing the desktop app shuts down both child processes cleanly.
+9. Closing the desktop app shuts down both child processes; on Windows, the current Electron implementation does this with explicit forced process-tree termination rather than a graceful drain.
 
 Single-instance expectation:
 
@@ -158,6 +160,7 @@ Current launcher contract:
 - Electron and Tauri then run `manage.py` from `backend/` for both `runserver` and `db_worker`
 - packaged settings still rely on runtime environment variables for writable app data, bundle dir, localhost host/port, secret key, and unbuffered Python output
 - Electron, Tauri, and Positron all use the same fallback `DJANGO_SECRET_KEY` only when the environment does not provide one, so local packaged-like startup stays simple without claiming that the fallback value is a release-grade secret
+- packaged Django settings keep SQLite in per-user app data and now add desktop-oriented SQLite tuning with `transaction_mode=IMMEDIATE`, a 20-second timeout, `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, and modest cache/mmap settings
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
 - shell-local wrappers such as `shells/electron/scripts/bundled-python.cjs` are allowed to resolve shared helpers from two locations: a packaged-app copy first, then a repo-relative source path for local development
 - the Tauri shell keeps its subprocess supervision in Rust under `shells/tauri/src-tauri/src/lib.rs` instead of forcing a cross-shell launcher abstraction
@@ -191,7 +194,8 @@ Shutdown handling must be treated as a cross-platform lifecycle concern, not as 
 
 - macOS and Linux can usually terminate the Django and task worker child processes with normal process signals
 - Windows needs explicit handling because process-tree shutdown is less predictable
-- the implementation should document whether shutdown uses child-process tree termination, a dedicated local shutdown path, or another narrow mechanism
+- the current Electron implementation on Windows uses explicit forced child-process tree termination via `taskkill /t /f`
+- that forced tree kill is acceptable for this starter, but it is not the same as a graceful drain, a dedicated local shutdown endpoint, or a Job Object-based production approach
 - because Windows is a required proof point, reliable shutdown is part of the starter contract
 
 ## Deferred Areas

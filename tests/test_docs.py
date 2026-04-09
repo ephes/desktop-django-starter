@@ -83,6 +83,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "just positron-package-dmg" in readme
     assert "dist/github-actions/latest" in readme
     assert "dist/github-actions/tauri/latest" in readme
+    assert "per-session shell-to-Django auth token" in readme
+    assert "taskkill /t /f" in readme
+    assert "transaction_mode=IMMEDIATE" in readme
     assert "APPLE_API_KEY_ID" in release
     assert "WIN_CSC_LINK" in release
     assert "shells/electron/signing/" in release
@@ -105,6 +108,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "desktop-django-starter-windows-sha256.txt" in release
     assert "promote both files together" in release
     assert "Linux verification" in release
+    assert "per-session shell-to-Django auth token" in release
+    assert "taskkill /t /f" in release
+    assert "transaction_mode=IMMEDIATE" in release
     assert "assets/brand/" in architecture
     assert ".stage/backend/" in architecture
     assert "shells/electron/" in architecture
@@ -114,6 +120,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shell-local splash window" in architecture
     expected = "fallback `DJANGO_SECRET_KEY` only when the environment does not provide one"
     assert expected in architecture
+    assert "per-session shell-to-Django auth token" in architecture
+    assert "taskkill /t /f" in architecture
+    assert "PRAGMA journal_mode=WAL;" in architecture
     assert "comparison paths in this repo" in specification
     assert "shells/electron/" in llms
     assert "shells/tauri/" in llms
@@ -122,6 +131,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "GitHub-hosted Tauri artifact workflow" in llms
     assert "prepared, unverified Windows NSIS path" in llms
     assert "minimal localhost-aware CSP" in llms
+    assert "per-session shell-to-Django auth token" in llms
+    assert "taskkill /t /f" in llms
+    assert "transaction_mode=IMMEDIATE" in llms
     assert "shells/electron.html" in docs_llms
     assert "shells/tauri.html" in docs_llms
     assert "shells/positron.html" in docs_llms

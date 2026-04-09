@@ -23,7 +23,7 @@ Runnable starter slices:
 - Electron 40 shell under `shells/electron/`
 - Tauri 2 shell under `shells/tauri/` for local experiment scope, using the same staged backend contract and child-process worker model
 - Positron shell under `shells/positron/` for local experiment scope, running Django plus the optional task worker in-process inside a Toga web view
-- random-port localhost startup with `/health/` readiness polling
+- localhost startup on `127.0.0.1` with a random port and `/health/` readiness polling
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally, including the supervised task worker
@@ -32,6 +32,8 @@ Runnable starter slices:
 - on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
 
 Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
+
+Electron and Tauri load the Django UI over `http://127.0.0.1:<random-port>`. That localhost-only bind plus a random port is a real baseline, but it is not presented here as full localhost hardening: the starter does not yet add a per-session shell-to-Django auth token. On Windows, Electron currently shuts down Django and `db_worker` with explicit forced child-process tree termination via `taskkill /t /f`, which is acceptable for this starter slice but is not the same as a graceful drain or a more advanced production cleanup strategy.
 
 The example app uses a branded presentation layer called "Flying Stable" (a Pegasus/pony theme) to demonstrate that the starter can carry a real visual identity while remaining a generic teaching scaffold underneath. The theme includes a dark topnav with logo and brand name, teal page headers with background images, a content panel with toolbar, a sticky footer, CSS custom-property design tokens, SVG empty-state illustrations, an in-page delete-confirmation modal, client-side form validation with themed error messages, a splash screen at `/splash/` that Electron now shows during backend startup, and packaged app icons generated in `shells/electron/assets/icons/` and `shells/tauri/src-tauri/icons/` from the shared source art under `assets/brand/`. Item statuses are themed as Grazing (backlog), Galloping (active), and Show Ready (done). Development mode includes `django-browser-reload` for auto-reload.
 
@@ -194,7 +196,7 @@ Manual update model for this repo:
 
 - connected installs: download the installer plus its matching SHA-256 file from GitHub Actions artifacts, a GitHub Release, or your internal release channel, verify the checksum, then run the installer manually
 - air-gapped installs: transfer the DMG or `.exe` plus its matching SHA-256 file through the approved offline channel, verify version and integrity, then run the installer manually
-- local writable state survives reinstall/update because packaged mode keeps it under Electron's per-user app-data directory, with the SQLite database stored as `app.sqlite3`
+- local writable state survives reinstall/update because packaged mode keeps it under Electron's per-user app-data directory, with the SQLite database stored as `app.sqlite3` and packaged SQLite tuned for desktop use with `transaction_mode=IMMEDIATE`, WAL, `synchronous=NORMAL`, a 20-second timeout, and modest cache/mmap pragmas
 
 ## Staged Bundled Runtime Contract
 

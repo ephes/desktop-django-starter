@@ -105,7 +105,7 @@ Windows NSIS validation checklist:
 2. Install that NSIS artifact on the same or another clean Windows machine.
 3. Launch the installed app and confirm the splash appears before the localhost Django UI loads.
 4. Confirm startup does not depend on a system Python install and that the staged bundled runtime is the interpreter actually used.
-5. Confirm app shutdown stops both Django and `db_worker` cleanly.
+5. Confirm app shutdown stops both Django and `db_worker`; for Electron on Windows the current implementation uses explicit forced process-tree termination via `taskkill /t /f`, not a graceful drain.
 6. Confirm per-user writable state survives relaunches under the Windows app-data directory.
 
 ## Positron Local Bundle Scope
@@ -253,6 +253,8 @@ Packaged mode keeps writable state outside the app bundle.
 
 Electron sets `DESKTOP_DJANGO_APP_DATA_DIR` from `app.getPath("userData")`, and packaged Django settings store the SQLite database there as `app.sqlite3`.
 
+The packaged SQLite config is intentionally stronger than the repo-default development database setup: it keeps the single writable app-data database file, sets `transaction_mode=IMMEDIATE`, raises the timeout to 20 seconds, and initializes SQLite with `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, plus modest cache and mmap settings that fit a small teaching starter.
+
 That means a normal reinstall or manual update should replace the installed application files while leaving user data in place, including:
 
 - the SQLite database at `app.sqlite3`
@@ -266,6 +268,8 @@ This slice is intentionally incomplete in a few areas:
 
 - no auto-update feed or release manifest
 - no GitHub Release publication automation, signed-release publication automation, or in-app promotion workflow
+- the localhost-only `127.0.0.1:<random-port>` bind is the current shell-to-Django baseline, but the starter does not yet add a per-session shell-to-Django auth token
+- Electron on Windows currently relies on explicit forced child-process tree termination via `taskkill /t /f`, which is acceptable for this starter slice but is not equivalent to graceful drain or broader production orphan-control work
 - no Linux signing baseline and no Linux verification expectation for this slice
 - no opinionated Windows EV-token or self-hosted-runner guidance
 - no release promotion workflow beyond uploading GitHub Actions artifacts and their checksum manifests
