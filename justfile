@@ -98,6 +98,13 @@ packaged-start:
 packaged-smoke:
     npm --prefix shells/electron run smoke:packaged
 
+electron-package-dmg: (package-dist "--mac dmg")
+
+# Skip staging + signing for fast iteration. Run `just packaged-stage` first.
+electron-package-dmg-fast:
+    @test -d .stage/backend || { echo "Error: .stage/backend not found. Run 'just packaged-stage' first." >&2; exit 1; }
+    cd shells/electron && npx electron-builder --publish never --mac dmg --config ./electron-builder.config.cjs --config.mac.identity=null
+
 package-dist TARGET="--mac dmg":
     npm --prefix shells/electron run dist -- {{TARGET}}
 
