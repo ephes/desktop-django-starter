@@ -65,10 +65,12 @@ Or use the packaged CLI:
 
 ```bash
 uvx desktop-django-starter wrap --run
+uvx desktop-django-starter wrap --run --harness pi --model openai-codex/gpt-5.4
 ```
 
 Current `dds` builds stream concise Claude progress during `--run`; older builds
-could look idle until Claude finished. See [`docs/agent-use.md`](docs/agent-use.md) for details.
+could look idle until Claude finished. Use `--harness` and `--model` to choose the
+agent harness and model. See [`docs/agent-use.md`](docs/agent-use.md) for details.
 
 ## Agent Consumers
 

@@ -17,6 +17,7 @@ uv tool install desktop-django-starter
 dds wrap
 dds wrap --run
 dds wrap --run --agent codex
+dds wrap --run --harness pi --model openai-codex/gpt-5.4
 ```
 
 ## Commands
@@ -32,7 +33,8 @@ output, which could look idle until the agent finished.
 
 Options:
 - `--run` — invoke the agent after preflight passes
-- `--agent NAME` — agent to use: `claude` (default), `pi`, `codex`
+- `--agent NAME`, `--harness NAME` — agent harness to use: `claude` (default), `pi`, `codex`
+- `--model NAME` — model to pass to the selected agent
 - `--force` — bypass dirty-worktree and existing-electron/ checks
 - `--emit-prompt` — print the resolved wrapping prompt to stdout
 

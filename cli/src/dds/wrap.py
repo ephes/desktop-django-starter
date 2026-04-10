@@ -21,6 +21,7 @@ SKILL_PATH = ASSETS_PATH / "skills" / "wrap-existing-django-in-electron" / "SKIL
 # The token in prompt.md that references the starter repo.  The CLI replaces
 # it with the absolute path to the installed assets so the agent can read files.
 _STARTER_TOKEN = "../desktop-django-starter"
+DEFAULT_PI_MODEL = "openai-codex/gpt-5.4"
 
 
 def _summarize_claude_tool_use(content: dict[str, object]) -> str | None:
@@ -147,8 +148,7 @@ def _format_claude_stream_event(line: str) -> list[str]:
     return []
 
 
-def _run_claude(resolved_prompt: str, assets_str: str) -> None:
-    """Run Claude with streaming progress and exit with Claude's return code."""
+def _claude_command(resolved_prompt: str, assets_str: str, model: str | None) -> list[str]:
     command = [
         "claude",
         "--dangerously-skip-permissions",
@@ -160,6 +160,40 @@ def _run_claude(resolved_prompt: str, assets_str: str) -> None:
         "stream-json",
         "--verbose",
     ]
+    if model:
+        command.extend(["--model", model])
+    return command
+
+
+def _pi_command(resolved_prompt: str, model: str | None) -> list[str]:
+    return [
+        "pi",
+        "--model",
+        model or DEFAULT_PI_MODEL,
+        "--thinking",
+        "high",
+        "-p",
+        resolved_prompt,
+    ]
+
+
+def _codex_command(resolved_prompt: str, assets_str: str, model: str | None) -> list[str]:
+    command = [
+        "codex",
+        "exec",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--add-dir",
+        assets_str,
+    ]
+    if model:
+        command.extend(["--model", model])
+    command.append(resolved_prompt)
+    return command
+
+
+def _run_claude(resolved_prompt: str, assets_str: str, model: str | None) -> None:
+    """Run Claude with streaming progress and exit with Claude's return code."""
+    command = _claude_command(resolved_prompt, assets_str, model)
 
     print("Starting Claude. Progress will stream below.")
     with subprocess.Popen(  # noqa: S603
@@ -247,6 +281,7 @@ def run_wrap(
     *,
     run_agent: bool,
     agent: str,
+    model: str | None,
     force: bool,
     emit_prompt: bool,
 ) -> None:
@@ -339,33 +374,12 @@ def run_wrap(
         assets_str = str(ASSETS_PATH)
 
         if agent == "claude":
-            _run_claude(resolved_prompt, assets_str)
+            _run_claude(resolved_prompt, assets_str, model)
         elif agent == "pi":
             # pi doesn't support --add-dir; absolute paths in prompt are sufficient
-            os.execvp(
-                "pi",
-                [
-                    "pi",
-                    "--model",
-                    "openai-codex/gpt-5.4",
-                    "--thinking",
-                    "high",
-                    "-p",
-                    resolved_prompt,
-                ],
-            )
+            os.execvp("pi", _pi_command(resolved_prompt, model))
         elif agent == "codex":
-            os.execvp(
-                "codex",
-                [
-                    "codex",
-                    "exec",
-                    "--dangerously-bypass-approvals-and-sandbox",
-                    "--add-dir",
-                    assets_str,
-                    resolved_prompt,
-                ],
-            )
+            os.execvp("codex", _codex_command(resolved_prompt, assets_str, model))
     else:
         print()
         print("To wrap this project:")
@@ -376,6 +390,10 @@ def run_wrap(
         print()
         print("  dds wrap --run --agent pi")
         print("  dds wrap --run --agent codex")
+        print()
+        print("With a specific model:")
+        print()
+        print("  dds wrap --run --harness pi --model openai-codex/gpt-5.4")
         print()
         print("Or generate the resolved prompt for manual use:")
         print()

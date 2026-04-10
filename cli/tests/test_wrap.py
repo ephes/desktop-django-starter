@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 
-from dds.wrap import _format_claude_stream_event
+from dds.wrap import _claude_command, _codex_command, _format_claude_stream_event, _pi_command
 
 
 def _event(data: dict[str, object]) -> str:
@@ -128,3 +128,55 @@ def test_format_claude_stream_event_reports_result() -> None:
 def test_format_claude_stream_event_preserves_non_json_lines() -> None:
     assert _format_claude_stream_event("plain output\n") == ["plain output"]
     assert _format_claude_stream_event("{broken") == ["{broken"]
+
+
+def test_claude_command_includes_model_when_set() -> None:
+    command = _claude_command("prompt", "/tmp/assets", "claude-opus-4-6")
+
+    assert command == [
+        "claude",
+        "--dangerously-skip-permissions",
+        "-p",
+        "prompt",
+        "--add-dir",
+        "/tmp/assets",
+        "--output-format",
+        "stream-json",
+        "--verbose",
+        "--model",
+        "claude-opus-4-6",
+    ]
+
+
+def test_pi_command_uses_default_or_custom_model() -> None:
+    assert _pi_command("prompt", None) == [
+        "pi",
+        "--model",
+        "openai-codex/gpt-5.4",
+        "--thinking",
+        "high",
+        "-p",
+        "prompt",
+    ]
+    assert _pi_command("prompt", "openai/gpt-5.4-mini") == [
+        "pi",
+        "--model",
+        "openai/gpt-5.4-mini",
+        "--thinking",
+        "high",
+        "-p",
+        "prompt",
+    ]
+
+
+def test_codex_command_includes_model_before_prompt_when_set() -> None:
+    assert _codex_command("prompt", "/tmp/assets", "gpt-5.4") == [
+        "codex",
+        "exec",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--add-dir",
+        "/tmp/assets",
+        "--model",
+        "gpt-5.4",
+        "prompt",
+    ]

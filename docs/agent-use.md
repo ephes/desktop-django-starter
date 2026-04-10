@@ -58,11 +58,14 @@ The packaged CLI can be run without a local starter checkout:
 
 ```bash
 uvx desktop-django-starter wrap --run
+uvx desktop-django-starter wrap --run --harness pi --model openai-codex/gpt-5.4
 ```
 
 With the default `claude` agent, current `dds` builds stream concise progress
 while the agent works. Older builds delegated to Claude's default `-p` text
 output, which could make a long wrapping run look idle until Claude exited.
+Use `--harness` and `--model` to choose the agent harness and model. `--agent`
+remains available as a backward-compatible alias.
 
 After wrapping, the target repo has an `electron/` directory and justfile targets:
 

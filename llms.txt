@@ -29,7 +29,7 @@ Important constraints:
 ## Wrapping
 
 - [scripts/wrap](scripts/wrap): Front-door command for wrapping a target Django project. Run from inside the target repo; requires an existing checkout of this starter. Runs preflight checks by default; `--run` invokes the agent.
-- Packaged CLI: `uvx desktop-django-starter wrap --run` runs the same workflow without a local starter checkout. Current `dds` builds stream concise Claude progress during `--run`; older builds could look idle until Claude exited.
+- Packaged CLI: `uvx desktop-django-starter wrap --run` runs the same workflow without a local starter checkout. Current `dds` builds stream concise Claude progress during `--run`; older builds could look idle until Claude exited. Use `--harness` and `--model` to choose the agent harness and model, for example `--harness pi --model openai-codex/gpt-5.4`; `--agent` remains available as a backward-compatible alias.
 - [skills/wrap-existing-django-in-electron/SKILL.md](skills/wrap-existing-django-in-electron/SKILL.md): Reusable workflow for adapting an existing Django project to run inside an Electron shell.
 - [skills/wrap-existing-django-in-electron/prompt.md](skills/wrap-existing-django-in-electron/prompt.md): Prompt template for unattended agent-driven wrapping — used by `scripts/wrap` or piped manually to an agent CLI.
 - [skills/wrap-existing-django-in-electron/run-log.md](skills/wrap-existing-django-in-electron/run-log.md): Run results from agent wrapping iterations, with git refs to the skill/prompt version used.

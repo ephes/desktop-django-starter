@@ -13,9 +13,7 @@ def main(argv: list[str] | None = None) -> None:
         prog="dds",
         description="Wrap any Django project in an Electron shell.",
     )
-    parser.add_argument(
-        "--version", action="version", version=f"%(prog)s {__version__}"
-    )
+    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command")
 
     # --- wrap ---
@@ -29,9 +27,19 @@ def main(argv: list[str] | None = None) -> None:
     )
     wrap_parser.add_argument(
         "--agent",
+        "--harness",
+        dest="agent",
         default="claude",
         choices=["claude", "pi", "codex"],
-        help="Agent to use (default: claude)",
+        help="Agent harness to use (default: claude)",
+    )
+    wrap_parser.add_argument(
+        "--model",
+        help=(
+            "Model to pass to the selected agent. "
+            "When omitted, each agent uses its CLI default except pi, "
+            "which defaults to openai-codex/gpt-5.4."
+        ),
     )
     wrap_parser.add_argument(
         "--force",
@@ -59,6 +67,7 @@ def main(argv: list[str] | None = None) -> None:
         run_wrap(
             run_agent=args.run,
             agent=args.agent,
+            model=args.model,
             force=args.force,
             emit_prompt=args.emit_prompt,
         )
