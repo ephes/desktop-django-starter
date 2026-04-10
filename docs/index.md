@@ -12,6 +12,8 @@ specification
 architecture
 decisions
 release
+backlog
+done
 agent-use
 shells/electron
 shells/tauri

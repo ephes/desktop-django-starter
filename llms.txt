@@ -22,6 +22,8 @@ Important constraints:
 - [docs/architecture.md](docs/architecture.md): Runtime contract, repo shape, startup model, shutdown notes, and release/update direction.
 - [docs/decisions.md](docs/decisions.md): Scope and tradeoff decisions captured locally for this repo.
 - [docs/release.md](docs/release.md): Packaging secrets, installer artifacts, checksum files, and connected/offline manual promotion guidance.
+- [docs/backlog.md](docs/backlog.md): Explicit follow-on work, including Electron, Tauri, and Positron update entries structured for implementation handoff.
+- [docs/done.md](docs/done.md): Completed backlog entries after they are implemented.
 - [docs/agent-use.md](docs/agent-use.md): Guidance for coding agents consuming this repo.
 
 ## Wrapping

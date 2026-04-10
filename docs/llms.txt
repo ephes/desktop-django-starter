@@ -18,6 +18,8 @@ Important constraints:
 - [Specification](specification.html): Main product and technical specification for the starter.
 - [Architecture](architecture.html): Runtime contract, repo shape, startup model, shutdown notes, and release/update direction.
 - [Release](release.html): Packaging secrets, Electron and Tauri artifact workflows, installer artifacts, and manual update guidance.
+- [Backlog](backlog.html): Explicit follow-on work, including Electron, Tauri, and Positron update entries structured for implementation handoff.
+- [Done](done.html): Completed backlog entries after they are implemented.
 - [Decisions](decisions.html): Scope and tradeoff decisions captured locally for this repo.
 - [Agent use](agent-use.html): Guidance for coding agents consuming this repo.
 - [Electron shell](shells/electron.html): Baseline shell scope and responsibilities.

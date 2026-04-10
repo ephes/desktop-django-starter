@@ -18,6 +18,8 @@ def test_core_docs_scaffold_exists() -> None:
         ROOT / "docs" / "architecture.md",
         ROOT / "docs" / "decisions.md",
         ROOT / "docs" / "release.md",
+        ROOT / "docs" / "backlog.md",
+        ROOT / "docs" / "done.md",
         ROOT / "docs" / "agent-use.md",
         ROOT / "docs" / "shells" / "electron.md",
         ROOT / "docs" / "shells" / "tauri.md",
@@ -44,6 +46,8 @@ def test_docs_index_references_main_pages() -> None:
     assert "architecture" in index
     assert "decisions" in index
     assert "release" in index
+    assert "backlog" in index
+    assert "done" in index
     assert "agent-use" in index
     assert "shells/electron" in index
     assert "shells/tauri" in index
@@ -61,11 +65,15 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     specification = (ROOT / "docs" / "specification.md").read_text()
     llms = (ROOT / "llms.txt").read_text()
     docs_llms = (ROOT / "docs" / "llms.txt").read_text()
+    backlog = (ROOT / "docs" / "backlog.md").read_text()
+    done = (ROOT / "docs" / "done.md").read_text()
     tauri_doc = (ROOT / "docs" / "shells" / "tauri.md").read_text()
     positron_doc = (ROOT / "docs" / "shells" / "positron.md").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
 
     assert "docs/release.md" in readme
+    assert "docs/backlog.md" in readme
+    assert "docs/done.md" in readme
     assert "SHA-256" in readme
     assert ".stage/backend" in readme
     assert "shells/electron" in readme
@@ -146,6 +154,17 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/electron.html" in docs_llms
     assert "shells/tauri.html" in docs_llms
     assert "shells/positron.html" in docs_llms
+    assert "backlog.html" in docs_llms
+    assert "done.html" in docs_llms
+    assert "BL-001: Electron Connected Auto-Update" in backlog
+    assert "electron-updater" in backlog
+    assert "BL-002: Tauri Connected Auto-Update" in backlog
+    assert "tauri-plugin-updater" in backlog
+    assert "BL-003: Positron Update Strategy and Auto-Update Path" in backlog
+    assert "Briefcase's development update workflow is not the same thing as an end-user auto-updater" in backlog
+    assert "implementation handoff" in backlog
+    assert "done.md" in backlog
+    assert "No backlog entries have been completed" in done
     assert "app.security.csp" in tauri_doc
     assert "Current minimal CSP posture" in tauri_doc
     assert "canonical written checklist" in tauri_doc

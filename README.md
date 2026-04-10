@@ -45,6 +45,8 @@ The example app uses a branded presentation layer called "Flying Stable" (a Pega
 - [`docs/architecture.md`](docs/architecture.md): intended runtime model and draft repo shape
 - [`docs/decisions.md`](docs/decisions.md): repo-local decisions captured from the initial planning pass
 - [`docs/release.md`](docs/release.md): packaging secrets, installer artifacts, and connected/offline manual update guidance
+- [`docs/backlog.md`](docs/backlog.md): explicit follow-on work, including shell-specific auto-update entries ready for implementation handoff
+- [`docs/done.md`](docs/done.md): completed backlog entries after they are implemented
 - [`docs/agent-use.md`](docs/agent-use.md): how coding agents should consume this repo and reuse its skill
 
 The docs are built with Sphinx over the Markdown sources in `docs/` and are intended to be publishable on Read the Docs.
