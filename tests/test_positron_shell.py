@@ -53,6 +53,10 @@ def test_positron_runtime_reuses_shared_django_and_brand_assets() -> None:
 
     assert "collectstatic" in app
     assert "Worker(" in app
+    assert "secrets.token_hex(32)" in app
+    assert "bootstrap_url" in app
+    assert "/desktop-auth/bootstrap/" in app
+    assert "DESKTOP_DJANGO_AUTH_TOKEN" in runtime
     assert "desktop_django_starter.settings.packaged" in runtime
     assert "shared_brand_icon" in runtime
     assert "../../src" in pyproject
@@ -78,6 +82,7 @@ def test_positron_runtime_helpers_resolve_repo_paths(tmp_path) -> None:
         app_data_dir=tmp_path / "data",
         bundle_dir=tmp_path / "bundle",
         port=9042,
+        auth_token="positron-test-token",
     )
 
     assert app_root == POSITRON_SRC
@@ -89,6 +94,7 @@ def test_positron_runtime_helpers_resolve_repo_paths(tmp_path) -> None:
     assert env["DESKTOP_DJANGO_APP_DATA_DIR"] == str(tmp_path / "data")
     assert env["DESKTOP_DJANGO_BUNDLE_DIR"] == str(tmp_path / "bundle")
     assert env["DESKTOP_DJANGO_PORT"] == "9042"
+    assert env["DESKTOP_DJANGO_AUTH_TOKEN"] == "positron-test-token"
     assert env["DJANGO_SECRET_KEY"] == "desktop-django-starter-packaged-runtime-secret"
 
 

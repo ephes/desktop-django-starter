@@ -9,6 +9,7 @@ Current responsibilities:
 - import the shared Django code from `src/` instead of forking app code into the shell
 - validate that the shared Django source tree is present before configuring Django, so startup failures stay readable
 - start Django inside the Positron process with an in-process WSGI server bound to a random localhost port
+- generate a fresh per-session shell-to-Django auth token, pass it into Django as `DESKTOP_DJANGO_AUTH_TOKEN`, and load the web view through Django's `/desktop-auth/bootstrap/` URL so Django can set an HttpOnly same-origin auth cookie before redirecting to the app
 - run the optional `tasks_demo` worker in-process on a background thread
 - reuse the shared brand source under `assets/brand/` and generate shell-local icon outputs into `shells/positron/resources/`
 - keep Positron-specific runtime behavior under `shells/positron/src/desktop_django_starter_positron/`
@@ -30,7 +31,7 @@ Scope boundaries:
 - GitHub Actions artifact generation remains out of scope
 - Electron remains the most complete shell path
 - packaged startup uses the same fallback `DJANGO_SECRET_KEY` value as Electron and Tauri when the environment does not provide one; this is only a local bootstrap convenience, not a release secret
-- comparable per-session shell-to-Django auth token support remains separate follow-up design work because this Positron path does not currently have an Electron-equivalent external-localhost per-request header injection hook
+- Positron uses a bootstrap HttpOnly cookie instead of Electron's hidden per-request header injection because this Toga web view path does not currently have an Electron-equivalent external-localhost outgoing request header hook
 - splashscreen parity is intentionally not required on macOS for Positron
 - Positron is not a release-parity path in this slice
 - Windows packaged-build parity is not claimed for Positron yet

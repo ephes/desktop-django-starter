@@ -50,4 +50,10 @@ The `tasks_demo` app remains an optional post-v1 extension, but it now uses the 
 
 Electron adds a per-session shell-to-Django auth token to the localhost request channel. The main process generates a random token at startup, passes it to Django as `DESKTOP_DJANGO_AUTH_TOKEN`, and injects `X-Desktop-Django-Token` only for the exact `http://127.0.0.1:<random-port>` Django origin. Django rejects requests with missing or wrong tokens only when that setting is configured.
 
-The token is not exposed through preload or normal page JavaScript, is not placed in query strings or cookies, and does not replace Django's CSRF middleware. Tauri and Positron do not implement parity in this decision because their current web view paths do not expose an Electron-equivalent external-localhost per-request header injection hook.
+The token is not exposed through preload or normal page JavaScript and does not replace Django's CSRF middleware. Electron keeps the token out of query strings and cookies because its `webRequest.onBeforeSendHeaders` path can inject the header for the exact Django origin.
+
+## D-013: Bootstrap cookie auth for Tauri and Positron
+
+Tauri and Positron also generate per-session shell-to-Django tokens and pass them to Django as `DESKTOP_DJANGO_AUTH_TOKEN`, but they use a bootstrap-cookie transport instead of trying to copy Electron's hidden header hook. Their current public web view APIs do not expose an Electron-equivalent external-localhost per-request header injection path.
+
+The shell starts its web view at `/desktop-auth/bootstrap/?token=...&next=/`. Django validates the token, sets an HttpOnly same-origin cookie with `SameSite=Strict`, and redirects to the safe relative `next` target so the token is not retained in the current app URL. The cookie is intentionally not `Secure` because the starter serves the local app over `http://127.0.0.1:<random-port>`.

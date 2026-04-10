@@ -8,6 +8,7 @@ Important constraints:
 
 - Keep the example generic, minimal, and server-rendered.
 - Treat `djdesk` as reference material for packaging and lifecycle patterns only.
+- Electron uses exact-origin header injection for its per-session shell-to-Django auth token, while Tauri and Positron use a Django bootstrap URL that sets an HttpOnly same-origin auth cookie before redirecting to the app.
 - Windows support matters.
 - The update story must include air-gapped/manual installs, not only connected environments.
 

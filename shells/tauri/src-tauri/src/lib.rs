@@ -24,6 +24,8 @@ const MINIMUM_SPLASH_DURATION_MS: u64 = 2_400;
 const PACKAGED_RUNTIME_SECRET_KEY: &str = "desktop-django-starter-packaged-runtime-secret";
 const RUNTIME_MANIFEST_FILENAME: &str = "runtime-manifest.json";
 const SPLASH_WINDOW_LABEL: &str = "splash";
+const DESKTOP_AUTH_HEADER: &str = "X-Desktop-Django-Token";
+const DESKTOP_AUTH_BOOTSTRAP_PATH: &str = "/desktop-auth/bootstrap/";
 
 type ManagedChild = Arc<Mutex<Option<Child>>>;
 
@@ -163,10 +165,16 @@ fn get_open_port() -> Result<u16, String> {
         .map_err(|error| error.to_string())
 }
 
-fn health_status(port: u16) -> Option<u16> {
+fn health_status(port: u16, auth_token: &str) -> Option<u16> {
     let mut stream = TcpStream::connect((HOST, port)).ok()?;
-    let request =
-        format!("GET /health/ HTTP/1.1\r\nHost: {HOST}:{port}\r\nConnection: close\r\n\r\n");
+    let auth_header = if auth_token.is_empty() {
+        String::new()
+    } else {
+        format!("{DESKTOP_AUTH_HEADER}: {auth_token}\r\n")
+    };
+    let request = format!(
+        "GET /health/ HTTP/1.1\r\nHost: {HOST}:{port}\r\n{auth_header}Connection: close\r\n\r\n"
+    );
     stream.write_all(request.as_bytes()).ok()?;
 
     let mut response = String::new();
@@ -177,11 +185,11 @@ fn health_status(port: u16) -> Option<u16> {
     parts.next()?.parse::<u16>().ok()
 }
 
-fn wait_for_django(port: u16) -> Result<(), String> {
+fn wait_for_django(port: u16, auth_token: &str) -> Result<(), String> {
     let deadline = Instant::now() + Duration::from_millis(STARTUP_TIMEOUT_MS);
 
     while Instant::now() < deadline {
-        if health_status(port) == Some(200) {
+        if health_status(port, auth_token) == Some(200) {
             return Ok(());
         }
 
@@ -307,6 +315,7 @@ fn configure_manage_command(
     runtime_mode: RuntimeMode,
     backend_root: &Path,
     port: u16,
+    auth_token: &str,
     manage_args: &[&str],
 ) -> Result<Command, String> {
     let mut command = base_command(runtime_mode, backend_root)?;
@@ -321,6 +330,7 @@ fn configure_manage_command(
         .current_dir(backend_root)
         .env("DJANGO_SETTINGS_MODULE", settings_module)
         .env("DESKTOP_DJANGO_APP_DATA_DIR", &app_data_dir)
+        .env("DESKTOP_DJANGO_AUTH_TOKEN", auth_token)
         .env("DESKTOP_DJANGO_BUNDLE_DIR", backend_root)
         .env("DESKTOP_DJANGO_HOST", HOST)
         .env("DESKTOP_DJANGO_PORT", port.to_string())
@@ -343,11 +353,19 @@ fn run_manage_command(
     runtime_mode: RuntimeMode,
     backend_root: &Path,
     port: u16,
+    auth_token: &str,
     manage_args: &[&str],
 ) -> Result<(), String> {
-    let output = configure_manage_command(app, runtime_mode, backend_root, port, manage_args)?
-        .output()
-        .map_err(|error| error.to_string())?;
+    let output = configure_manage_command(
+        app,
+        runtime_mode,
+        backend_root,
+        port,
+        auth_token,
+        manage_args,
+    )?
+    .output()
+    .map_err(|error| error.to_string())?;
 
     if output.status.success() {
         return Ok(());
@@ -366,13 +384,21 @@ fn start_managed_process(
     runtime_mode: RuntimeMode,
     backend_root: &Path,
     port: u16,
+    auth_token: &str,
     manage_args: &[&str],
 ) -> Result<Child, String> {
-    configure_manage_command(app, runtime_mode, backend_root, port, manage_args)?
-        .stdout(Stdio::inherit())
-        .stderr(Stdio::inherit())
-        .spawn()
-        .map_err(|error| error.to_string())
+    configure_manage_command(
+        app,
+        runtime_mode,
+        backend_root,
+        port,
+        auth_token,
+        manage_args,
+    )?
+    .stdout(Stdio::inherit())
+    .stderr(Stdio::inherit())
+    .spawn()
+    .map_err(|error| error.to_string())
 }
 
 fn register_managed_process(
@@ -460,17 +486,21 @@ fn create_splash_window(app: &AppHandle) -> Result<WebviewWindow, String> {
         return Ok(window);
     }
 
-    WebviewWindowBuilder::new(app, SPLASH_WINDOW_LABEL, WebviewUrl::App("splash.html".into()))
-        .title("Flying Stable")
-        .inner_size(480.0, 560.0)
-        .resizable(false)
-        .maximizable(false)
-        .minimizable(false)
-        .closable(false)
-        .decorations(false)
-        .center()
-        .build()
-        .map_err(|error| error.to_string())
+    WebviewWindowBuilder::new(
+        app,
+        SPLASH_WINDOW_LABEL,
+        WebviewUrl::App("splash.html".into()),
+    )
+    .title("Flying Stable")
+    .inner_size(480.0, 560.0)
+    .resizable(false)
+    .maximizable(false)
+    .minimizable(false)
+    .closable(false)
+    .decorations(false)
+    .center()
+    .build()
+    .map_err(|error| error.to_string())
 }
 
 fn close_splash_window(app: &AppHandle) {
@@ -512,6 +542,21 @@ fn create_main_window(app: &AppHandle, url: &str) -> Result<WebviewWindow, Strin
         .map_err(|error| error.to_string())
 }
 
+fn generate_desktop_auth_token() -> Result<String, String> {
+    let mut token = [0_u8; 32];
+    getrandom::fill(&mut token).map_err(|error| error.to_string())?;
+    Ok(token.iter().map(|byte| format!("{byte:02x}")).collect())
+}
+
+fn build_bootstrap_url(base_url: &str, auth_token: &str) -> Result<String, String> {
+    let mut url = Url::parse(base_url).map_err(|error| error.to_string())?;
+    url.set_path(DESKTOP_AUTH_BOOTSTRAP_PATH);
+    url.query_pairs_mut()
+        .append_pair("token", auth_token)
+        .append_pair("next", "/");
+    Ok(url.to_string())
+}
+
 fn open_path(path: &Path) -> Result<(), String> {
     let status = if cfg!(target_os = "macos") {
         Command::new("open")
@@ -550,6 +595,8 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
     let backend_root = get_backend_root(app, runtime_mode)?;
     let port = get_open_port()?;
     let base_url = format!("http://{HOST}:{port}");
+    let auth_token = generate_desktop_auth_token()?;
+    let bootstrap_url = build_bootstrap_url(&base_url, &auth_token)?;
 
     if runtime_mode == RuntimeMode::Packaged {
         validate_packaged_backend_root(&backend_root)?;
@@ -560,6 +607,7 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
         runtime_mode,
         &backend_root,
         port,
+        &auth_token,
         &["migrate", "--noinput"],
     )?;
 
@@ -568,6 +616,7 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
         runtime_mode,
         &backend_root,
         port,
+        &auth_token,
         &["runserver", &format!("{HOST}:{port}"), "--noreload"],
     )?;
     register_managed_process(
@@ -578,7 +627,7 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
         django,
     );
 
-    if let Err(error) = wait_for_django(port) {
+    if let Err(error) = wait_for_django(port, &auth_token) {
         stop_managed_processes(app);
         return Err(error);
     }
@@ -588,6 +637,7 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
         runtime_mode,
         &backend_root,
         port,
+        &auth_token,
         &[
             "db_worker",
             "--queue-name",
@@ -611,7 +661,7 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
             return;
         }
 
-        if let Err(error) = create_main_window(&app_handle, &base_url) {
+        if let Err(error) = create_main_window(&app_handle, &bootstrap_url) {
             show_runtime_error_and_exit(app_handle.clone(), "Startup failed", error, 1);
         }
     })

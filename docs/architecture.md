@@ -32,8 +32,9 @@ Key expectations:
 - Electron binds Django to `127.0.0.1` on a random port before opening the renderer
 - the renderer loads normal Django pages over localhost
 - Electron now adds a per-session shell-to-Django auth token on top of the localhost bind: the main process passes `DESKTOP_DJANGO_AUTH_TOKEN` to Django and injects `X-Desktop-Django-Token` only for the exact local Django origin
-- the shell token is a channel check for Electron's localhost requests, not a CSRF replacement and not a value exposed through preload or normal page JavaScript
-- Tauri and Positron still need separate follow-up designs for comparable token support because they do not currently have an Electron-equivalent external-localhost per-request header injection path
+- Tauri and Positron use the same Django token setting but acquire an HttpOnly same-origin cookie by first loading `/desktop-auth/bootstrap/?token=...&next=/`; Django validates the token, sets the cookie, and redirects to the app URL without the token
+- the shell token is a channel check for localhost requests, not a CSRF replacement and not a value exposed through preload, a shell bridge, or normal page JavaScript
+- Tauri and Positron use the bootstrap cookie flow because their current web view paths do not have an Electron-equivalent external-localhost per-request header injection path
 - SQLite lives in a writable per-user app-data directory and stores both app data and task queue rows
 
 Current shell split note:

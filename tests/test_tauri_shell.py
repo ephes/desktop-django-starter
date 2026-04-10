@@ -51,9 +51,18 @@ def test_tauri_package_scripts_cover_local_runtime_flows() -> None:
 def test_tauri_runtime_keeps_tasks_demo_subprocess_model() -> None:
     runtime = (ROOT / "shells" / "tauri" / "src-tauri" / "src" / "lib.rs").read_text()
     docs = (ROOT / "docs" / "shells" / "tauri.md").read_text()
+    cargo_toml = (ROOT / "shells" / "tauri" / "src-tauri" / "Cargo.toml").read_text()
 
     assert "db_worker" in runtime
     assert "wait_for_django" in runtime
+    assert 'getrandom = "0.3.4"' in cargo_toml
+    assert "generate_desktop_auth_token" in runtime
+    assert "getrandom::fill" in runtime
+    assert "DESKTOP_DJANGO_AUTH_TOKEN" in runtime
+    assert "X-Desktop-Django-Token" in runtime
+    assert "build_bootstrap_url" in runtime
+    assert "/desktop-auth/bootstrap/" in runtime
+    assert "create_main_window(&app_handle, &bootstrap_url)" in runtime
     assert "supported" in docs
     assert ".github/workflows/tauri-packages.yml" in docs
     assert "artifact-only GitHub Actions workflow" in docs

@@ -191,9 +191,11 @@ Minimum expectation:
 - bind Django to `127.0.0.1` only
 - use a random port instead of a fixed public default
 - for Electron, require a per-session shell-to-Django auth token on localhost requests by passing the token through the child-process environment and injecting it as a request header only for the exact Django origin
+- for Tauri and Positron, require the same per-session shell-to-Django auth token through a Django bootstrap URL that validates the token, sets an HttpOnly same-origin cookie, and redirects to the app URL without the token
+- keep the Tauri and Positron bootstrap token out of normal page JavaScript and shell bridge APIs; this is a cookie bootstrap tradeoff because their current public web view APIs do not expose Electron's external-localhost per-request header injection hook
 - keep host validation tight
 - keep CSRF protections enabled unless a specific implementation detail proves otherwise
-- document that the Electron shell token is not a CSRF replacement
+- document that the shell token is not a CSRF replacement
 - keep the preload bridge narrow and explicit
 
 ### Renderer model

@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 import socketserver
 from threading import Thread
+from urllib.parse import urlencode
 from wsgiref.simple_server import WSGIServer
 
 import django
@@ -15,6 +17,7 @@ from django.core.servers.basehttp import WSGIRequestHandler
 from .runtime import HOST, WORKER_ID, django_environment, ensure_project_imports
 
 SMOKE_EXIT_DELAY_SECONDS = 0.75
+AUTH_BOOTSTRAP_PATH = "/desktop-auth/bootstrap/"
 
 
 class ThreadedWSGIServer(socketserver.ThreadingMixIn, WSGIServer):
@@ -27,6 +30,7 @@ class DesktopDjangoStarterPositron(toga.App):
         self._task_worker = None
         self._task_worker_thread: Thread | None = None
         self._smoke_exit_scheduled = False
+        self.auth_token = secrets.token_hex(32)
         self.server_ready: asyncio.Future[int] = asyncio.Future()
 
         self.web_view = toga.WebView(on_webview_load=self.on_webview_load)
@@ -40,8 +44,12 @@ class DesktopDjangoStarterPositron(toga.App):
     async def on_running(self) -> None:
         port = await self.server_ready
         self.start_task_worker()
-        self.web_view.url = f"http://{HOST}:{port}"
+        self.web_view.url = self.bootstrap_url(port)
         self.main_window.show()
+
+    def bootstrap_url(self, port: int) -> str:
+        query = urlencode({"token": self.auth_token, "next": "/"})
+        return f"http://{HOST}:{port}{AUTH_BOOTSTRAP_PATH}?{query}"
 
     def on_webview_load(self, _widget, **_kwargs) -> None:
         if os.environ.get("DESKTOP_DJANGO_SMOKE_TEST") != "1" or self._smoke_exit_scheduled:
@@ -76,6 +84,7 @@ class DesktopDjangoStarterPositron(toga.App):
             app_data_dir=self.paths.data,
             bundle_dir=self.bundle_dir(),
             port=port,
+            auth_token=self.auth_token,
         )
 
     def configure_django(self) -> None:

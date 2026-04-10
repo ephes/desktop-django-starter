@@ -66,6 +66,7 @@ def django_environment(
     app_data_dir: Path,
     bundle_dir: Path,
     port: int | None = None,
+    auth_token: str | None = None,
 ) -> dict[str, str]:
     app_data_dir.mkdir(parents=True, exist_ok=True)
     bundle_dir.mkdir(parents=True, exist_ok=True)
@@ -81,5 +82,7 @@ def django_environment(
     }
     if port is not None:
         environment["DESKTOP_DJANGO_PORT"] = str(port)
+    if auth_token is not None:
+        environment["DESKTOP_DJANGO_AUTH_TOKEN"] = auth_token
 
     return environment

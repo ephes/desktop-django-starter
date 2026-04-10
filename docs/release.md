@@ -268,8 +268,8 @@ This slice is intentionally incomplete in a few areas:
 
 - no auto-update feed or release manifest
 - no GitHub Release publication automation, signed-release publication automation, or in-app promotion workflow
-- Electron now adds a per-session shell-to-Django auth token for the localhost request channel, but this is still a starter-level baseline rather than a full production localhost-hardening story
-- Tauri and Positron do not yet have Electron-equivalent per-session shell-to-Django auth token support for their external-localhost request paths
+- Electron now adds a per-session shell-to-Django auth token for the localhost request channel through exact-origin header injection, but this is still a starter-level baseline rather than a full production localhost-hardening story
+- Tauri and Positron now add comparable per-session shell-to-Django request authentication through a Django bootstrap URL that sets an HttpOnly same-origin cookie, because their current public web view APIs do not expose Electron's external-localhost per-request header injection hook
 - Electron on Windows currently relies on explicit forced child-process tree termination via `taskkill /t /f`, which is acceptable for this starter slice but is not equivalent to graceful drain or broader production orphan-control work
 - no Linux signing baseline and no Linux verification expectation for this slice
 - no opinionated Windows EV-token or self-hosted-runner guidance
