@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 from importlib.resources import files
@@ -19,6 +21,168 @@ SKILL_PATH = ASSETS_PATH / "skills" / "wrap-existing-django-in-electron" / "SKIL
 # The token in prompt.md that references the starter repo.  The CLI replaces
 # it with the absolute path to the installed assets so the agent can read files.
 _STARTER_TOKEN = "../desktop-django-starter"
+
+
+def _summarize_claude_tool_use(content: dict[str, object]) -> str | None:
+    """Return a compact, human-readable description for a Claude tool call."""
+    name = content.get("name")
+    if not isinstance(name, str):
+        return None
+
+    raw_input = content.get("input")
+    input_data = raw_input if isinstance(raw_input, dict) else {}
+    target = input_data.get("file_path") or input_data.get("path") or input_data.get("pattern")
+
+    if isinstance(target, str) and target.strip():
+        first_line = target.strip().splitlines()[0]
+        if len(first_line) > 160:
+            first_line = f"{first_line[:157]}..."
+        return f"claude tool: {name} {first_line}"
+
+    return f"claude tool: {name}"
+
+
+def _terminate_claude_process(process: subprocess.Popen[str]) -> None:
+    if process.poll() is not None:
+        return
+
+    if os.name == "nt":
+        process.terminate()
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+        except ProcessLookupError:
+            return
+        except OSError:
+            process.terminate()
+
+    try:
+        process.wait(timeout=5)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+
+    if os.name == "nt":
+        process.kill()
+    else:
+        try:
+            os.killpg(process.pid, signal.SIGKILL)
+        except ProcessLookupError:
+            return
+        except OSError:
+            process.kill()
+    process.wait()
+
+
+def _format_claude_stream_event(line: str) -> list[str]:
+    """Format one Claude stream-json event into concise progress lines."""
+    try:
+        event = json.loads(line)
+    except json.JSONDecodeError:
+        stripped = line.strip()
+        return [stripped] if stripped else []
+
+    event_type = event.get("type")
+    if event_type == "system" and event.get("subtype") == "init":
+        session_id = event.get("session_id")
+        model = event.get("model")
+        if session_id and model:
+            return [f"claude session: {session_id} ({model})"]
+        return []
+
+    if event_type == "assistant":
+        message = event.get("message")
+        if not isinstance(message, dict):
+            return []
+
+        lines = []
+        content_items = message.get("content")
+        if not isinstance(content_items, list):
+            return []
+
+        for content in content_items:
+            if not isinstance(content, dict):
+                continue
+            content_type = content.get("type")
+            if content_type == "text":
+                text = content.get("text")
+                if isinstance(text, str) and text.strip():
+                    lines.append(text.strip())
+            elif content_type == "tool_use":
+                summary = _summarize_claude_tool_use(content)
+                if summary:
+                    lines.append(summary)
+        return lines
+
+    if event_type == "user":
+        message = event.get("message")
+        if not isinstance(message, dict):
+            return []
+        content_items = message.get("content")
+        if not isinstance(content_items, list):
+            return []
+
+        lines = []
+        for content in content_items:
+            if (
+                isinstance(content, dict)
+                and content.get("type") == "tool_result"
+                and content.get("is_error") is True
+            ):
+                result = content.get("content", "")
+                result_text = str(result).strip().splitlines()[0] if result else "unknown error"
+                lines.append(f"claude tool error: {result_text}")
+        return lines
+
+    if event_type == "result":
+        if event.get("is_error"):
+            error = event.get("subtype") or event.get("stop_reason") or "unknown error"
+            return [f"claude failed: {error}"]
+
+        duration_ms = event.get("duration_ms")
+        if isinstance(duration_ms, int):
+            return [f"claude finished in {duration_ms / 1000:.1f}s"]
+        return ["claude finished"]
+
+    return []
+
+
+def _run_claude(resolved_prompt: str, assets_str: str) -> None:
+    """Run Claude with streaming progress and exit with Claude's return code."""
+    command = [
+        "claude",
+        "--dangerously-skip-permissions",
+        "-p",
+        resolved_prompt,
+        "--add-dir",
+        assets_str,
+        "--output-format",
+        "stream-json",
+        "--verbose",
+    ]
+
+    print("Starting Claude. Progress will stream below.")
+    with subprocess.Popen(  # noqa: S603
+        command,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        start_new_session=os.name != "nt",
+        text=True,
+    ) as process:
+        if process.stdout is None:
+            raise RuntimeError("Claude stdout pipe was not created.")
+        try:
+            for line in process.stdout:
+                for formatted in _format_claude_stream_event(line):
+                    print(formatted, flush=True)
+        except KeyboardInterrupt:
+            _terminate_claude_process(process)
+            raise
+
+        returncode = process.wait()
+
+    if returncode != 0:
+        sys.exit(returncode)
 
 
 def _generate_prompt() -> str:
@@ -42,10 +206,7 @@ def _find_manage_py() -> list[str]:
     exclude = {".git", ".venv", "venv", "env", "node_modules", "__pycache__"}
     for dirpath, dirnames, filenames in os.walk("."):
         # Prune excluded directories in-place
-        dirnames[:] = [
-            d for d in dirnames
-            if d not in exclude and not d.startswith(".")
-        ]
+        dirnames[:] = [d for d in dirnames if d not in exclude and not d.startswith(".")]
         if "manage.py" in filenames:
             results.append(os.path.join(dirpath, "manage.py"))
     results.sort()
@@ -178,17 +339,7 @@ def run_wrap(
         assets_str = str(ASSETS_PATH)
 
         if agent == "claude":
-            os.execvp(
-                "claude",
-                [
-                    "claude",
-                    "--dangerously-skip-permissions",
-                    "-p",
-                    resolved_prompt,
-                    "--add-dir",
-                    assets_str,
-                ],
-            )
+            _run_claude(resolved_prompt, assets_str)
         elif agent == "pi":
             # pi doesn't support --add-dir; absolute paths in prompt are sufficient
             os.execvp(
