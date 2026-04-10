@@ -26,6 +26,10 @@ dds wrap --run --agent codex
 Run from inside a Django project directory. By default, runs preflight checks
 and prints the agent command. Add `--run` to invoke the agent.
 
+When using the default `claude` agent, `--run` streams concise progress lines
+while Claude works. Older `dds` builds delegated to Claude's default text
+output, which could look idle until the agent finished.
+
 Options:
 - `--run` — invoke the agent after preflight passes
 - `--agent NAME` — agent to use: `claude` (default), `pi`, `codex`
@@ -51,3 +55,16 @@ npm --prefix electron test  # node-side tests
 
 Every wrap is stamped with the `dds` version so you can reproduce results.
 The package version tracks the starter repo release.
+
+## Maintainer release
+
+Build and publish the PyPI wrapper package from the repo root:
+
+```bash
+just cli-publish
+```
+
+The `cli-publish` recipe runs `cli-test` and `cli-build` first. The PyPI wrapper
+package is the `cli/` subproject. Use `just cli-build` or `just cli-publish`
+instead of the root `just build` recipe for `uvx desktop-django-starter ...`
+releases.

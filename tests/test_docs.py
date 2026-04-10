@@ -161,7 +161,10 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "BL-002: Tauri Connected Auto-Update" in backlog
     assert "tauri-plugin-updater" in backlog
     assert "BL-003: Positron Update Strategy and Auto-Update Path" in backlog
-    assert "Briefcase's development update workflow is not the same thing as an end-user auto-updater" in backlog
+    assert (
+        "Briefcase's development update workflow is not the same thing as an end-user auto-updater"
+        in backlog
+    )
     assert "implementation handoff" in backlog
     assert "done.md" in backlog
     assert "No backlog entries have been completed" in done
@@ -230,13 +233,13 @@ def test_tauri_packaging_workflow_mentions_tauri_action_and_checksums() -> None:
     assert "releaseName:" not in workflow
     assert "releaseId:" not in workflow
     assert "ubuntu-22.04 # pinned for libwebkit2gtk-4.1-dev availability" in workflow
-    assert 'gh workflow run tauri-packages.yml' in justfile
-    assert 'gh run list --workflow tauri-packages.yml' in justfile
-    assert 'gh run list --workflow desktop-packages.yml' in justfile
+    assert "gh workflow run tauri-packages.yml" in justfile
+    assert "gh run list --workflow tauri-packages.yml" in justfile
+    assert "gh run list --workflow desktop-packages.yml" in justfile
     assert 'ln -s "$run_id" dist/github-actions/latest' in justfile
     assert 'ln -s "$run_id" dist/github-actions/tauri/latest' in justfile
-    assert 'readlink dist/github-actions/latest' in justfile
-    assert 'readlink dist/github-actions/tauri/latest' in justfile
+    assert "readlink dist/github-actions/latest" in justfile
+    assert "readlink dist/github-actions/tauri/latest" in justfile
     assert "desktop-django-starter-tauri-macos-checksums" in justfile
 
 

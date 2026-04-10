@@ -61,7 +61,14 @@ cd ~/projects/my-django-app
 ~/projects/desktop-django-starter/scripts/wrap --run   # preflight + invoke agent
 ```
 
-This requires an existing checkout of this starter. See [`docs/agent-use.md`](docs/agent-use.md) for details.
+Or use the packaged CLI:
+
+```bash
+uvx desktop-django-starter wrap --run
+```
+
+Current `dds` builds stream concise Claude progress during `--run`; older builds
+could look idle until Claude finished. See [`docs/agent-use.md`](docs/agent-use.md) for details.
 
 ## Agent Consumers
 
@@ -118,6 +125,7 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 - `just loc`: print a `cloc` summary plus a per-directory code breakdown, with a Python fallback when `cloc` is absent
 - `just test`: run the Django and docs test suite
 - `just build`: build the Python package metadata scaffold
+- `just cli-build`: build the PyPI wrapper package used by `uvx desktop-django-starter ...`
 
 ## Quickstart
 

@@ -25,9 +25,11 @@ CANONICAL_ASSETS: list[str] = [
     "shells/electron/scripts/launch-electron.cjs",
     "shells/electron/scripts/bundled-python.cjs",
     "shells/electron/scripts/electron-builder-config.cjs",
+    "shells/electron/scripts/auth-token.cjs",
     "shells/electron/scripts/materialize-symlinks.cjs",
     "shells/electron/scripts/bundled-python.test.cjs",
     "shells/electron/scripts/electron-builder-config.test.cjs",
+    "shells/electron/scripts/auth-token.test.cjs",
     "shells/electron/scripts/materialize-symlinks.test.cjs",
     # Signing entitlements
     "shells/electron/signing/entitlements.mac.plist",

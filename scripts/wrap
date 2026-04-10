@@ -222,6 +222,8 @@ if [[ "${run_agent}" == true ]]; then
 
     case "${agent}" in
         claude)
+            echo ""
+            echo "Starting claude. Its default text output may be quiet until the agent exits."
             exec claude --dangerously-skip-permissions \
                 -p "${resolved_prompt}" \
                 --add-dir "${starter_repo}"

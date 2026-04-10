@@ -54,6 +54,16 @@ repo is inferred from the script's location, or specified with `--starter`:
 ~/projects/desktop-django-starter/scripts/wrap --starter ~/projects/desktop-django-starter
 ```
 
+The packaged CLI can be run without a local starter checkout:
+
+```bash
+uvx desktop-django-starter wrap --run
+```
+
+With the default `claude` agent, current `dds` builds stream concise progress
+while the agent works. Older builds delegated to Claude's default `-p` text
+output, which could make a long wrapping run look idle until Claude exited.
+
 After wrapping, the target repo has an `electron/` directory and justfile targets:
 
 ```bash
