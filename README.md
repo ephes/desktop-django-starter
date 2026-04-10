@@ -31,9 +31,9 @@ Runnable starter slices:
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally, including the supervised task worker
 - experimental packaged-like Tauri launcher plus local host-bundle build paths, including a prepared but unverified Windows NSIS installer path, a macOS DMG path, and a GitHub-hosted artifact-only packaging workflow
 - experimental Positron local start/smoke path plus a local macOS build/DMG path through Briefcase, with ad-hoc signing explicitly documented as local-only
-- on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, and `just` helpers for triggering and fetching them
+- on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, Electron updater metadata, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, optional draft GitHub Release publication for the Electron lane, and `just` helpers for triggering and fetching them
 
-Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
+Electron now has a connected updater path through `electron-updater` and `electron-builder` release metadata. The app exposes this as `Help > Check for Updates...` in the Electron main process, not through Django or a broader preload bridge. Full production release automation is still not claimed: signed/notarized macOS update validation and Windows NSIS update validation need real release dry runs. Tauri and Positron auto-update remain deferred, and manual installer replacement remains the baseline for air-gapped environments.
 
 Electron and Tauri load the Django UI over `http://127.0.0.1:<random-port>`, while Positron serves the same Django app from an in-process WSGI server on a random localhost port. That localhost-only bind plus a random port is a real baseline, and the shells now add a per-session shell-to-Django auth token. Electron passes `DESKTOP_DJANGO_AUTH_TOKEN` to Django and injects `X-Desktop-Django-Token` only for the exact local Django origin. Tauri and Positron pass the same setting to Django, then open their web views through `/desktop-auth/bootstrap/?token=...&next=/`; Django validates the token, sets an HttpOnly same-origin cookie, and redirects to the app URL without the token. The token does not replace CSRF and is not exposed through preload, a shell bridge, or normal page JavaScript. Tauri and Positron use the bootstrap cookie path because their current web view APIs do not provide the same Electron-style external-localhost per-request header injection hook. On Windows, Electron currently shuts down Django and `db_worker` with explicit forced child-process tree termination via `taskkill /t /f`, which is acceptable for this starter slice but is not the same as a graceful drain or a more advanced production cleanup strategy.
 
@@ -184,19 +184,19 @@ When signing credentials are present, `electron-builder` now uses them directly:
 - macOS notarization is enabled only when a complete Apple credential set is present; the recommended path is `APPLE_API_KEY` plus `APPLE_API_KEY_ID` and `APPLE_API_ISSUER`
 - Windows signing is optional and secret-driven; `WIN_CSC_LINK` plus `WIN_CSC_KEY_PASSWORD` is the baseline path, with optional publisher/timestamp inputs documented in [`docs/release.md`](docs/release.md)
 
-Primary installer artifacts in this starter:
+Primary Electron installer and updater artifacts in this starter:
 
-- macOS: signed/notarized DMG when secrets are configured, otherwise an unsigned DMG
+- macOS: signed/notarized DMG when secrets are configured, otherwise an unsigned DMG; the Electron workflow also builds a ZIP artifact for the updater feed
 - Windows: NSIS `.exe` installer, optionally signed
 - Linux: AppImage output remains available, but Linux signing and verification are still out of scope for this slice
 
-GitHub Actions packaging also writes SHA-256 manifests per platform artifact set.
+GitHub Actions packaging also writes SHA-256 manifests per platform artifact set and uploads Electron updater metadata such as `latest-mac.yml`, `latest.yml`, `latest-linux.yml`, and blockmap files.
 
 Electron workflow manifests:
 
-- macOS: `desktop-django-starter-macos-sha256.txt` for the DMG artifact upload
-- Windows: `desktop-django-starter-windows-sha256.txt` for the NSIS `.exe` artifact upload
-- Linux: `desktop-django-starter-linux-sha256.txt` for the AppImage artifact upload
+- macOS: `desktop-django-starter-macos-sha256.txt` for the DMG, ZIP, updater metadata, and blockmap upload set
+- Windows: `desktop-django-starter-windows-sha256.txt` for the NSIS `.exe`, updater metadata, and blockmap upload set
+- Linux: `desktop-django-starter-linux-sha256.txt` for the AppImage, updater metadata, and blockmap upload set
 
 Tauri workflow manifests:
 
@@ -206,9 +206,10 @@ Tauri workflow manifests:
 
 Those checksum files are uploaded as separate workflow artifacts so an admin can verify the downloaded installer before promoting it into a connected release channel or transferring it through an offline/manual flow.
 
-Manual update model for this repo:
+Connected and manual update model for this repo:
 
-- connected installs: download the installer plus its matching SHA-256 file from GitHub Actions artifacts, a GitHub Release, or your internal release channel, verify the checksum, then run the installer manually
+- connected Electron installs: publish the Electron artifacts and `latest*.yml` updater metadata to the configured update feed, then use `Help > Check for Updates...` inside the packaged app to check, download, and restart into the update
+- connected manual installs: download the installer plus its matching SHA-256 file from GitHub Actions artifacts, a GitHub Release, or your internal release channel, verify the checksum, then run the installer manually
 - air-gapped installs: transfer the DMG or `.exe` plus its matching SHA-256 file through the approved offline channel, verify version and integrity, then run the installer manually
 - local writable state survives reinstall/update because packaged mode keeps it under Electron's per-user app-data directory, with the SQLite database stored as `app.sqlite3` and packaged SQLite tuned for desktop use with `transaction_mode=IMMEDIATE`, WAL, `synchronous=NORMAL`, a 20-second timeout, and modest cache/mmap pragmas
 
@@ -253,8 +254,9 @@ Packaged mode still sets a small runtime environment at launch time:
 
 ## Production Gaps
 
-- No auto-update feed, update server, or in-app updater is included.
-- No GitHub Release publishing automation is wired yet; checksum generation exists, but promotion remains manual.
+- Electron has a minimal connected updater path, but a real signed/notarized macOS update and Windows NSIS update dry run are still required before calling it production-ready.
+- No Tauri or Positron auto-update path is included yet.
+- GitHub Release publication for Electron is an explicit `desktop-packages.yml` workflow-dispatch option; normal workflow artifact promotion can still remain manual.
 - Linux packaging still exists, but Linux signing and verification are not a baseline in this slice.
 - Windows public-distribution hardening beyond optional signing inputs is still follow-on work.
 - Tauri now has an experimental GitHub-hosted artifact workflow, but it still does not publish Releases, does not claim signing/notarization parity with Electron, and still needs real Windows install/run validation.

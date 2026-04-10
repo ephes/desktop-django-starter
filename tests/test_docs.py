@@ -156,8 +156,6 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/positron.html" in docs_llms
     assert "backlog.html" in docs_llms
     assert "done.html" in docs_llms
-    assert "BL-001: Electron Connected Auto-Update" in backlog
-    assert "electron-updater" in backlog
     assert "BL-002: Tauri Connected Auto-Update" in backlog
     assert "tauri-plugin-updater" in backlog
     assert "BL-003: Positron Update Strategy and Auto-Update Path" in backlog
@@ -167,7 +165,11 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     )
     assert "implementation handoff" in backlog
     assert "done.md" in backlog
-    assert "No backlog entries have been completed" in done
+    assert "BL-001: Electron Connected Auto-Update" not in backlog
+    assert "BL-001: Electron Connected Auto-Update" in done
+    assert "electron-updater" in done
+    assert "Help > Check for Updates..." in done
+    assert "publish_release=true" in done
     assert "app.security.csp" in tauri_doc
     assert "Current minimal CSP posture" in tauri_doc
     assert "canonical written checklist" in tauri_doc
@@ -185,6 +187,15 @@ def test_packaging_workflow_mentions_signing_and_checksum_steps() -> None:
     assert "Prepare macOS notarization API key" in workflow
     assert "APPLE_API_KEY_ID" in workflow
     assert "WIN_CSC_LINK" in workflow
+    assert "publish_release" in workflow
+    assert "contents: write" in workflow
+    assert "GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}" in workflow
+    electron_publish_env = (
+        "ELECTRON_RELEASE_PUBLISH: "
+        "${{ inputs.publish_release && 'always' || 'never' }}"
+    )
+    assert electron_publish_env in workflow
+    assert 'npx electron-builder --publish "$ELECTRON_RELEASE_PUBLISH"' in workflow
     assert "APPLE_API_KEY_CONTENT: ${{ secrets.APPLE_API_KEY }}" in workflow
     assert "env.APPLE_API_KEY_CONTENT != ''" in workflow
     assert "secrets.APPLE_API_KEY != ''" not in workflow
@@ -193,8 +204,13 @@ def test_packaging_workflow_mentions_signing_and_checksum_steps() -> None:
     assert 'unset "$name"' in workflow
     assert "shells/electron/package-lock.json" in workflow
     assert "npm --prefix shells/electron ci" in workflow
-    assert "npm --prefix shells/electron run dist" in workflow
+    assert "npm --prefix shells/electron run stage-backend" in workflow
     assert "python scripts/write-checksums.py" in workflow
+    assert "latest-mac.yml" in workflow
+    assert "latest.yml" in workflow
+    assert "latest-linux.yml" in workflow
+    assert "*.blockmap" in workflow
+    assert "shells/electron/dist/*.zip" in workflow
     assert "Generate artifact checksums" in workflow
     assert "write-checksums.py" in workflow
     assert "Upload packaged desktop artifact checksums" in workflow

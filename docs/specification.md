@@ -1,7 +1,7 @@
 # Desktop Django Starter Specification
 
 Status: Draft 0.2  
-Scope: specification for the starter, with the runnable development slice, staged packaged-backend slice, and sign/notarization-aware packaged-build slice now implemented, while auto-update remains deferred
+Scope: specification for the starter, with the runnable development slice, staged packaged-backend slice, sign/notarization-aware packaged-build slice, and minimal Electron connected updater path now implemented, while Tauri and Positron auto-update remain deferred
 
 ## 1. Project Summary
 
@@ -108,7 +108,7 @@ Out of scope for starter v1:
 - AI or agent-specific capabilities as part of the core example
 - heavy frontend tooling unless the implementation later proves it is necessary
 - production-hardening beyond the documented baseline
-- fully automated cross-platform auto-update infrastructure
+- fully automated cross-shell auto-update infrastructure
 - broad background-job orchestration
 
 ## 8. Minimum Feature Set for v1
@@ -251,12 +251,13 @@ High-level release story for v1:
 - macOS public distribution should assume code signing and notarization are required
 - Windows code signing is recommended for public distribution, even if early workshop artifacts may be unsigned
 - Linux signing is not a baseline requirement for the first public starter release
-- connected environments may later add an auto-update path, but that is not required for starter v1
+- connected Electron environments now have a minimal auto-update path through `electron-updater`; connected Tauri and Positron auto-update remain deferred
 - starter v1 must still document a manual update path that works in air-gapped or tightly controlled environments
 
 Minimum update story to document:
 
-- connected installs: manually download and install a newer signed release artifact
+- connected Electron installs: check for updates from the packaged app after publishing the installer and updater metadata to the configured update feed
+- connected manual installs: manually download and install a newer signed release artifact
 - air-gapped installs: transfer a signed installer or zip through the approved offline channel and verify version/integrity before installation
 - the repo should describe where release artifacts live and what a user or admin must replace during an offline update
 
@@ -264,6 +265,7 @@ Current implementation direction:
 
 - macOS packaging uses `electron-builder` with hardened runtime, explicit entitlements, and env-driven notarization inputs
 - the GitHub Actions packaging workflow is ready to consume signing/notarization secrets on platform-native runners without making local unsigned builds mandatory
+- the Electron packaging workflow generates updater metadata and can optionally publish the artifact set to a draft GitHub Release when manually triggered for release validation
 - Windows signing remains optional and secret-driven rather than mandatory release automation
 
 The repo should document these expectations clearly, but it still does not need to automate the entire release process.

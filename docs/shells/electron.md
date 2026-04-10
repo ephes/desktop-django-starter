@@ -12,6 +12,15 @@ Current responsibilities:
 - keep using hidden exact-origin header injection rather than the bootstrap cookie flow used by the experimental Tauri and Positron shells
 - consume the shared staged backend from `.stage/backend/`
 - package desktop artifacts with `electron-builder`
+- generate Electron updater metadata and use `electron-updater` for connected update checks
+- expose update checks through `Help > Check for Updates...` without adding a Django update API or broadening the preload bridge
 - generate shell-local icon outputs in `shells/electron/assets/icons/` from the shared brand source under `assets/brand/`
 
 Use this shell when you need the most complete desktop path in the repo today.
+
+Current update scope:
+
+- default feed: GitHub Releases for this repo, configurable through the Electron builder config environment variables documented in the release guide
+- workflow support: `.github/workflows/desktop-packages.yml` uploads `latest*.yml` metadata and can publish to a draft GitHub Release when manually triggered with `publish_release=true`
+- local behavior: development runs show a harmless "updates unavailable" dialog instead of attempting a feed check
+- release-readiness boundary: a signed/notarized macOS update and Windows NSIS update still need live validation before claiming production updater readiness

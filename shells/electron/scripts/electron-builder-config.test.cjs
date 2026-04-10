@@ -3,6 +3,7 @@ const assert = require("node:assert/strict");
 
 const {
   buildConfig,
+  getElectronUpdatePublishConfig,
   getEnvList,
   getWindowsSigntoolOptions,
   hasMacosNotarizationCredentials
@@ -18,6 +19,7 @@ test("electron-builder config ships the staged backend as a packaged resource", 
     "preload.cjs",
     "scripts/auth-token.cjs",
     "scripts/bundled-python.cjs",
+    "scripts/updates.cjs",
     "assets/icons/app-icon.png",
     {
       from: "../../scripts",
@@ -37,6 +39,7 @@ test("electron-builder config ships the staged backend as a packaged resource", 
   assert.equal(config.mac.hardenedRuntime, true);
   assert.equal(config.mac.gatekeeperAssess, false);
   assert.equal(config.mac.icon, "assets/icons/app-icon.icns");
+  assert.deepEqual(config.mac.target, ["dmg", "zip"]);
   assert.equal(config.mac.notarize, false);
   assert.deepEqual(config.dmg, { sign: false });
   assert.equal(config.win.icon, "assets/icons/app-icon.png");
@@ -65,6 +68,52 @@ test("electron-builder config does not expose test helpers as enumerable keys", 
   assert.equal(Object.getOwnPropertyNames(config).includes("getEnvList"), false);
   assert.equal(Object.getOwnPropertyNames(config).includes("getWindowsSigntoolOptions"), false);
   assert.equal(Object.getOwnPropertyNames(config).includes("hasMacosNotarizationCredentials"), false);
+});
+
+test("electron-builder config includes a GitHub update feed by default", () => {
+  const config = buildConfig({});
+
+  assert.deepEqual(config.publish, [
+    {
+      provider: "github",
+      owner: "joww12",
+      repo: "desktop-django-starter",
+      releaseType: "draft",
+      publishAutoUpdate: true
+    }
+  ]);
+});
+
+test("electron-builder config allows generic update feed override", () => {
+  const publishConfig = getElectronUpdatePublishConfig({
+    DESKTOP_DJANGO_UPDATE_URL: "https://updates.example.test/desktop-django-starter/"
+  });
+
+  assert.deepEqual(publishConfig, [
+    {
+      provider: "generic",
+      url: "https://updates.example.test/desktop-django-starter/",
+      publishAutoUpdate: true
+    }
+  ]);
+});
+
+test("electron-builder config allows GitHub release feed override", () => {
+  const publishConfig = getElectronUpdatePublishConfig({
+    DESKTOP_DJANGO_UPDATE_GITHUB_OWNER: "example",
+    DESKTOP_DJANGO_UPDATE_GITHUB_REPO: "internal-desktop-django",
+    DESKTOP_DJANGO_UPDATE_GITHUB_RELEASE_TYPE: "release"
+  });
+
+  assert.deepEqual(publishConfig, [
+    {
+      provider: "github",
+      owner: "example",
+      repo: "internal-desktop-django",
+      releaseType: "release",
+      publishAutoUpdate: true
+    }
+  ]);
 });
 
 test("electron-builder enables macOS notarization when Apple credentials are present", () => {

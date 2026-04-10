@@ -1,6 +1,6 @@
 # Desktop Django Starter
 
-> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, a staged packaged-backend slice that exercises packaged settings plus a bundled Python runtime locally, a sign/notarization-aware Electron packaging slice that builds desktop artifacts in GitHub Actions, and experimental Tauri plus Positron shells for local comparison work. This repository is designed for both human readers and coding agents.
+> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, a staged packaged-backend slice that exercises packaged settings plus a bundled Python runtime locally, a sign/notarization-aware Electron packaging slice that builds desktop artifacts in GitHub Actions, a minimal Electron connected updater path, and experimental Tauri plus Positron shells for local comparison work. This repository is designed for both human readers and coding agents.
 
 Use this documentation when you need the smallest credible architecture for running Django as a local desktop app, or when you need a reusable workflow for wrapping an existing Django project in Electron without importing a product-sized codebase.
 
@@ -10,15 +10,15 @@ Important constraints:
 - Treat `djdesk` as reference material for packaging and lifecycle patterns only.
 - Electron uses exact-origin header injection for its per-session shell-to-Django auth token, while Tauri and Positron use a Django bootstrap URL that sets an HttpOnly same-origin auth cookie before redirecting to the app.
 - Windows support matters.
-- The update story must include air-gapped/manual installs, not only connected environments.
+- The update story must include air-gapped/manual installs, not only connected environments; Electron has a minimal connected updater path, while Tauri and Positron auto-update remain deferred.
 
 ## Docs
 
 - [Documentation index](index.html): Starting point for the published docs.
 - [Specification](specification.html): Main product and technical specification for the starter.
 - [Architecture](architecture.html): Runtime contract, repo shape, startup model, shutdown notes, and release/update direction.
-- [Release](release.html): Packaging secrets, Electron and Tauri artifact workflows, installer artifacts, and manual update guidance.
-- [Backlog](backlog.html): Explicit follow-on work, including Electron, Tauri, and Positron update entries structured for implementation handoff.
+- [Release](release.html): Packaging secrets, Electron and Tauri artifact workflows, installer artifacts, Electron updater metadata, and manual update guidance.
+- [Backlog](backlog.html): Explicit follow-on work, including Tauri and Positron update entries structured for implementation handoff.
 - [Done](done.html): Completed backlog entries after they are implemented.
 - [Decisions](decisions.html): Scope and tradeoff decisions captured locally for this repo.
 - [Agent use](agent-use.html): Guidance for coding agents consuming this repo.

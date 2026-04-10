@@ -1,4 +1,7 @@
 const WINDOWS_SIGNING_HASH_ALGORITHMS = ["sha256"];
+const DEFAULT_GITHUB_RELEASE_OWNER = "joww12";
+const DEFAULT_GITHUB_RELEASE_REPO = "desktop-django-starter";
+const DEFAULT_GITHUB_RELEASE_TYPE = "draft";
 
 function getTrimmedEnv(name, env = process.env) {
   const value = env[name];
@@ -70,6 +73,32 @@ function getWindowsSigntoolOptions(env = process.env) {
   };
 }
 
+function getElectronUpdatePublishConfig(env = process.env) {
+  const genericUpdateUrl = getTrimmedEnv("DESKTOP_DJANGO_UPDATE_URL", env);
+  if (genericUpdateUrl) {
+    return [
+      {
+        provider: "generic",
+        url: genericUpdateUrl,
+        publishAutoUpdate: true
+      }
+    ];
+  }
+
+  return [
+    {
+      provider: "github",
+      owner: getTrimmedEnv("DESKTOP_DJANGO_UPDATE_GITHUB_OWNER", env)
+        || DEFAULT_GITHUB_RELEASE_OWNER,
+      repo: getTrimmedEnv("DESKTOP_DJANGO_UPDATE_GITHUB_REPO", env)
+        || DEFAULT_GITHUB_RELEASE_REPO,
+      releaseType: getTrimmedEnv("DESKTOP_DJANGO_UPDATE_GITHUB_RELEASE_TYPE", env)
+        || DEFAULT_GITHUB_RELEASE_TYPE,
+      publishAutoUpdate: true
+    }
+  ];
+}
+
 function buildConfig(env = process.env) {
   const windowsSigntoolOptions = getWindowsSigntoolOptions(env);
 
@@ -81,12 +110,14 @@ function buildConfig(env = process.env) {
     directories: {
       output: "dist"
     },
+    publish: getElectronUpdatePublishConfig(env),
     files: [
       "main.js",
       "package.json",
       "preload.cjs",
       "scripts/auth-token.cjs",
       "scripts/bundled-python.cjs",
+      "scripts/updates.cjs",
       "assets/icons/app-icon.png",
       {
         from: "../../scripts",
@@ -104,7 +135,7 @@ function buildConfig(env = process.env) {
     mac: {
       icon: "assets/icons/app-icon.icns",
       category: "public.app-category.developer-tools",
-      target: ["dmg"],
+      target: ["dmg", "zip"],
       artifactName: "desktop-django-starter-macos-${version}-${arch}.${ext}",
       hardenedRuntime: true,
       gatekeeperAssess: false,
@@ -139,6 +170,7 @@ function buildConfig(env = process.env) {
 
 module.exports = {
   buildConfig,
+  getElectronUpdatePublishConfig,
   getEnvList,
   getWindowsSigntoolOptions,
   hasMacosNotarizationCredentials

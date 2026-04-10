@@ -1,4 +1,5 @@
-const { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } = require("electron");
+const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell } = require("electron");
+const { autoUpdater } = require("electron-updater");
 const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
@@ -15,6 +16,7 @@ const {
   desktopAuthHeadersForRequest,
   getDesktopAuthWebRequestFilter
 } = require("./scripts/auth-token.cjs");
+const { createElectronUpdateController } = require("./scripts/updates.cjs");
 
 const HOST = "127.0.0.1";
 const STARTUP_TIMEOUT_MS = 15000;
@@ -35,6 +37,7 @@ let currentAuthToken = null;
 let mainWindow = null;
 let splashWindow = null;
 let splashShownAt = null;
+let updateInstallInProgress = false;
 
 function focusExistingWindow() {
   const existingWindow = mainWindow || splashWindow || BrowserWindow.getAllWindows()[0];
@@ -94,6 +97,116 @@ function setApplicationIcon() {
   }
 
   app.dock.setIcon(icon);
+}
+
+function buildApplicationMenu(updateController) {
+  const template = [
+    ...(process.platform === "darwin"
+      ? [
+          {
+            label: app.name,
+            submenu: [
+              { role: "about" },
+              { type: "separator" },
+              { role: "services" },
+              { type: "separator" },
+              { role: "hide" },
+              { role: "hideOthers" },
+              { role: "unhide" },
+              { type: "separator" },
+              { role: "quit" }
+            ]
+          }
+        ]
+      : []),
+    {
+      label: "File",
+      submenu: [
+        process.platform === "darwin" ? { role: "close" } : { role: "quit" }
+      ]
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        ...(process.platform === "darwin"
+          ? [
+              { role: "pasteAndMatchStyle" },
+              { role: "delete" },
+              { role: "selectAll" },
+              { type: "separator" },
+              {
+                label: "Speech",
+                submenu: [
+                  { role: "startSpeaking" },
+                  { role: "stopSpeaking" }
+                ]
+              }
+            ]
+          : [
+              { role: "delete" },
+              { type: "separator" },
+              { role: "selectAll" }
+            ])
+      ]
+    },
+    {
+      label: "View",
+      submenu: [
+        { role: "reload" },
+        { role: "forceReload" },
+        { role: "toggleDevTools" },
+        { type: "separator" },
+        { role: "resetZoom" },
+        { role: "zoomIn" },
+        { role: "zoomOut" },
+        { type: "separator" },
+        { role: "togglefullscreen" }
+      ]
+    },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        ...(process.platform === "darwin"
+          ? [
+              { role: "zoom" },
+              { type: "separator" },
+              { role: "front" }
+            ]
+          : [
+              { role: "close" }
+            ])
+      ]
+    },
+    {
+      role: "help",
+      submenu: [
+        {
+          label: "Check for Updates...",
+          click: () => {
+            updateController.checkForUpdates().catch((error) => {
+              dialog.showErrorBox(
+                "Update Check Failed",
+                error instanceof Error ? error.message : "Unknown update failure."
+              );
+            });
+          }
+        }
+      ]
+    }
+  ];
+
+  return Menu.buildFromTemplate(template);
+}
+
+function installApplicationMenu(updateController) {
+  Menu.setApplicationMenu(buildApplicationMenu(updateController));
 }
 
 function sleep(ms) {
@@ -562,6 +675,12 @@ async function bootstrap() {
   createWindow(baseUrl, authToken);
 }
 
+async function prepareForUpdateInstall() {
+  await stopTaskWorker();
+  await stopDjango();
+  updateInstallInProgress = true;
+}
+
 ipcMain.handle("desktop:open-app-data-directory", async () => {
   const folderPath = app.getPath("userData");
   await shell.openPath(folderPath);
@@ -597,6 +716,12 @@ app.whenReady()
   .then(async () => {
     try {
       setApplicationIcon();
+      installApplicationMenu(createElectronUpdateController({
+        app,
+        autoUpdater,
+        dialog,
+        beforeInstall: prepareForUpdateInstall
+      }));
       await bootstrap();
     } catch (error) {
       closeSplashWindow();
@@ -609,6 +734,10 @@ app.whenReady()
   });
 
 app.on("will-quit", async (event) => {
+  if (updateInstallInProgress) {
+    return;
+  }
+
   event.preventDefault();
   try {
     await stopTaskWorker();

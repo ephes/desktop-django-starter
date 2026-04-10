@@ -2,9 +2,15 @@ name: Desktop Packages
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_release:
+        description: "Publish Electron artifacts and updater metadata to a draft GitHub Release."
+        required: false
+        type: boolean
+        default: false
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   package:
@@ -19,9 +25,18 @@ jobs:
           - os: macos-latest
             platform: macos
             build_flag: --mac
-            build_target: dmg
+            build_target: dmg zip
             artifact_name: desktop-django-starter-macos
-            artifact_glob: shells/electron/dist/*.dmg
+            artifact_paths: |
+              shells/electron/dist/*.dmg
+              shells/electron/dist/*.zip
+              shells/electron/dist/latest-mac.yml
+              shells/electron/dist/*.blockmap
+            checksum_args: >-
+              --glob "shells/electron/dist/*.dmg"
+              --glob "shells/electron/dist/*.zip"
+              --glob "shells/electron/dist/latest-mac.yml"
+              --glob "shells/electron/dist/*.blockmap"
             checksum_artifact_name: desktop-django-starter-macos-checksums
             checksum_path: shells/electron/dist/desktop-django-starter-macos-sha256.txt
           - os: windows-latest
@@ -29,7 +44,14 @@ jobs:
             build_flag: --win
             build_target: nsis
             artifact_name: desktop-django-starter-windows
-            artifact_glob: shells/electron/dist/*.exe
+            artifact_paths: |
+              shells/electron/dist/*.exe
+              shells/electron/dist/latest.yml
+              shells/electron/dist/*.blockmap
+            checksum_args: >-
+              --glob "shells/electron/dist/*.exe"
+              --glob "shells/electron/dist/latest.yml"
+              --glob "shells/electron/dist/*.blockmap"
             checksum_artifact_name: desktop-django-starter-windows-checksums
             checksum_path: shells/electron/dist/desktop-django-starter-windows-sha256.txt
           - os: ubuntu-latest
@@ -37,7 +59,14 @@ jobs:
             build_flag: --linux
             build_target: AppImage
             artifact_name: desktop-django-starter-linux
-            artifact_glob: shells/electron/dist/*.AppImage
+            artifact_paths: |
+              shells/electron/dist/*.AppImage
+              shells/electron/dist/latest-linux.yml
+              shells/electron/dist/*.blockmap
+            checksum_args: >-
+              --glob "shells/electron/dist/*.AppImage"
+              --glob "shells/electron/dist/latest-linux.yml"
+              --glob "shells/electron/dist/*.blockmap"
             checksum_artifact_name: desktop-django-starter-linux-checksums
             checksum_path: shells/electron/dist/desktop-django-starter-linux-sha256.txt
 
@@ -98,6 +127,8 @@ jobs:
           WIN_SIGN_CERT_SHA1: ${{ secrets.WIN_SIGN_CERT_SHA1 }}
           WIN_SIGN_TIMESTAMP_URL: ${{ secrets.WIN_SIGN_TIMESTAMP_URL }}
           WIN_SIGN_TIMESTAMP_RFC3161_URL: ${{ secrets.WIN_SIGN_TIMESTAMP_RFC3161_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ELECTRON_RELEASE_PUBLISH: ${{ inputs.publish_release && 'always' || 'never' }}
         run: |
           for name in \
             CSC_LINK \
@@ -117,22 +148,25 @@ jobs:
             WIN_SIGN_CERT_SUBJECT_NAME \
             WIN_SIGN_CERT_SHA1 \
             WIN_SIGN_TIMESTAMP_URL \
-            WIN_SIGN_TIMESTAMP_RFC3161_URL
+            WIN_SIGN_TIMESTAMP_RFC3161_URL \
+            GH_TOKEN
           do
             if [ -z "${!name:-}" ]; then
               unset "$name"
             fi
           done
-          npm --prefix shells/electron run dist -- ${{ matrix.build_flag }} ${{ matrix.build_target }}
+          npm --prefix shells/electron run stage-backend
+          cd shells/electron
+          npx electron-builder --publish "$ELECTRON_RELEASE_PUBLISH" --config ./electron-builder.config.cjs ${{ matrix.build_flag }} ${{ matrix.build_target }}
 
       - name: Generate artifact checksums
-        run: python scripts/write-checksums.py --glob "${{ matrix.artifact_glob }}" --output "${{ matrix.checksum_path }}"
+        run: python scripts/write-checksums.py ${{ matrix.checksum_args }} --output "${{ matrix.checksum_path }}"
 
       - name: Upload packaged desktop artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_glob }}
+          path: ${{ matrix.artifact_paths }}
           if-no-files-found: error
 
       - name: Upload packaged desktop artifact checksums

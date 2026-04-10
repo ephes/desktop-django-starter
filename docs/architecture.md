@@ -1,6 +1,6 @@
 # Architecture Notes
 
-Status: intended implementation shape, with the runnable development slice, staged bundled-runtime contract, sign/notarization-aware Electron packaging workflow, and experimental Tauri plus Positron shells now in place
+Status: intended implementation shape, with the runnable development slice, staged bundled-runtime contract, sign/notarization-aware Electron packaging workflow, minimal Electron connected updater path, and experimental Tauri plus Positron shells now in place
 
 ## Runtime Model
 
@@ -181,7 +181,7 @@ The first implementation does not need a full auto-update system, but it does ne
 - local packaging should still work without release credentials, producing unsigned artifacts for teaching and local validation
 - the GitHub Actions packaging workflow should consume signing credentials only when they are present, rather than making secrets a baseline requirement for every build
 
-For connected auto-update work after v1, the expected direction is an Electron-compatible update feed. For air-gapped environments, the baseline is manual signed artifact replacement rather than background update services.
+The current Electron connected updater path uses `electron-updater`, an `electron-builder` publish config, generated updater metadata, and a `Help > Check for Updates...` menu action in the Electron main process. It does not add a Django localhost update API or broaden the preload bridge. Tauri and Positron connected auto-update remain deferred. For air-gapped environments, the baseline is still manual signed artifact replacement rather than background update services.
 
 ## Native Surface Area
 
@@ -206,6 +206,6 @@ Shutdown handling must be treated as a cross-platform lifecycle concern, not as 
 These are expected later if needed, but not part of the first implementation:
 
 - production-grade task orchestration beyond the single supervised `db_worker` process used by `tasks_demo`
-- connected auto-update automation
+- Tauri and Positron connected auto-update automation
 - multiple windows
 - richer native integrations

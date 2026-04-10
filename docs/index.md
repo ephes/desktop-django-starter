@@ -1,8 +1,8 @@
 # Desktop Django Starter
 
-Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware Electron GitHub packaging slice, and experimental Tauri and Positron shells for local comparison work. Electron remains the baseline release-oriented shell, while Tauri now has an experimental GitHub-hosted artifact lane.
+Minimal documentation for `desktop-django-starter`, a teachable Django-plus-Electron reference with a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware Electron GitHub packaging slice, a minimal Electron connected updater path, and experimental Tauri and Positron shells for local comparison work. Electron remains the baseline release-oriented shell, while Tauri now has an experimental GitHub-hosted artifact lane.
 
-The current implementation includes a local Django app, an Electron shell that supervises it over localhost, a `/health/` readiness check, a tiny CRUD demo, a background task visualization demo with animated indicators and live polling, a packaged-like staging flow with a bundled Python runtime plus collected static assets, and on-demand GitHub Actions workflows that build desktop artifacts for macOS, Windows, and Linux. macOS signing/notarization scaffolding and optional Windows signing inputs are now documented and wired into packaging; auto-update is still deferred.
+The current implementation includes a local Django app, an Electron shell that supervises it over localhost, a `/health/` readiness check, a tiny CRUD demo, a background task visualization demo with animated indicators and live polling, a packaged-like staging flow with a bundled Python runtime plus collected static assets, and on-demand GitHub Actions workflows that build desktop artifacts for macOS, Windows, and Linux. macOS signing/notarization scaffolding, optional Windows signing inputs, Electron updater metadata, and optional draft GitHub Release publication are now documented and wired into packaging; Tauri and Positron auto-update are still deferred.
 
 ```{toctree}
 :maxdepth: 2
