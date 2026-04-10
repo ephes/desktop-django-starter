@@ -212,16 +212,20 @@ Compare the resulting digest with the line in the matching `*-sha256.txt` file. 
 
 Electron now includes a minimal connected updater path.
 
-Electron packages use `electron-updater` and an `electron-builder` publish config. The default update feed is GitHub Releases for `joww12/desktop-django-starter`; teams adapting the starter can override that feed with either `DESKTOP_DJANGO_UPDATE_GITHUB_OWNER` plus `DESKTOP_DJANGO_UPDATE_GITHUB_REPO`, or with `DESKTOP_DJANGO_UPDATE_URL` for a generic HTTPS feed.
+Electron packages use `electron-updater` and an `electron-builder` publish config. By default, the GitHub update feed is resolved from the build context: `DESKTOP_DJANGO_UPDATE_GITHUB_OWNER` plus `DESKTOP_DJANGO_UPDATE_GITHUB_REPO` override everything, otherwise the builder uses `GITHUB_REPOSITORY` in GitHub Actions, then falls back to the local `origin` Git remote. `DESKTOP_DJANGO_UPDATE_URL` remains available for a generic HTTPS feed.
 
 The packaged Electron app exposes the user action as `Help > Check for Updates...`. Update checks stay in the Electron main process; no Django localhost endpoint and no broader preload bridge is added. The app prompts before downloading an available update, prompts again before restart/install, and stops the supervised Django plus `db_worker` processes before handing off to `autoUpdater.quitAndInstall()`.
 
 The `.github/workflows/desktop-packages.yml` workflow always uploads updater metadata with the normal artifacts. When manually triggered with `publish_release=true`, it also runs `electron-builder --publish always` so the artifacts and `latest*.yml` metadata can be published to a draft GitHub Release. When `publish_release=false`, the workflow remains an artifact-only packaging run.
 
+Important GitHub Releases constraint:
+
+- Electron updater checks only see published GitHub releases. A draft release is useful for staging or review, but `Help > Check for Updates...` will not discover it until the release is published.
+
 For connected Electron auto-update validation:
 
 1. build a signed/notarized macOS artifact set and a signed Windows NSIS artifact set from GitHub Actions
-2. trigger the workflow with `publish_release=true` so the updater metadata is present in a draft GitHub Release, or publish the same artifact set to the configured generic feed
+2. trigger the workflow with `publish_release=true`, then publish the resulting GitHub Release so the updater metadata is visible to clients, or publish the same artifact set to the configured generic feed
 3. install an older packaged app on the target platform
 4. use `Help > Check for Updates...` to confirm the app detects, downloads, and restarts into the newer version
 5. confirm the SQLite app-data directory and `app.sqlite3` survive the update

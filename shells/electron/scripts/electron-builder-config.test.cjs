@@ -3,10 +3,12 @@ const assert = require("node:assert/strict");
 
 const {
   buildConfig,
+  detectGithubReleaseRepository,
   getElectronUpdatePublishConfig,
   getEnvList,
   getWindowsSigntoolOptions,
-  hasMacosNotarizationCredentials
+  hasMacosNotarizationCredentials,
+  parseGithubRepositorySlug
 } = require("./electron-builder-config.cjs");
 
 test("electron-builder config ships the staged backend as a packaged resource", () => {
@@ -71,12 +73,32 @@ test("electron-builder config does not expose test helpers as enumerable keys", 
 });
 
 test("electron-builder config includes a GitHub update feed by default", () => {
-  const config = buildConfig({});
+  const config = buildConfig(
+    { GITHUB_REPOSITORY: "example/desktop-django-starter" },
+    { readOriginUrl: () => "" }
+  );
 
   assert.deepEqual(config.publish, [
     {
       provider: "github",
-      owner: "joww12",
+      owner: "example",
+      repo: "desktop-django-starter",
+      releaseType: "draft",
+      publishAutoUpdate: true
+    }
+  ]);
+});
+
+test("electron-builder config falls back to the git origin remote for the update feed", () => {
+  const publishConfig = getElectronUpdatePublishConfig(
+    {},
+    { readOriginUrl: () => "git@github.com:ephes/desktop-django-starter.git" }
+  );
+
+  assert.deepEqual(publishConfig, [
+    {
+      provider: "github",
+      owner: "ephes",
       repo: "desktop-django-starter",
       releaseType: "draft",
       publishAutoUpdate: true
@@ -114,6 +136,49 @@ test("electron-builder config allows GitHub release feed override", () => {
       publishAutoUpdate: true
     }
   ]);
+});
+
+test("electron-builder config detects GitHub owner and repo from common repository formats", () => {
+  assert.deepEqual(parseGithubRepositorySlug("example/internal-desktop-django"), {
+    owner: "example",
+    repo: "internal-desktop-django"
+  });
+  assert.deepEqual(parseGithubRepositorySlug("git@github.com:example/internal-desktop-django.git"), {
+    owner: "example",
+    repo: "internal-desktop-django"
+  });
+  assert.deepEqual(
+    parseGithubRepositorySlug("https://github.com/example/internal-desktop-django.git"),
+    {
+      owner: "example",
+      repo: "internal-desktop-django"
+    }
+  );
+  assert.equal(parseGithubRepositorySlug("https://example.com/not-github/repo.git"), null);
+});
+
+test("electron-builder config prefers GITHUB_REPOSITORY over git origin detection", () => {
+  const detected = detectGithubReleaseRepository(
+    { GITHUB_REPOSITORY: "example/from-actions" },
+    { readOriginUrl: () => "git@github.com:ephes/from-origin.git" }
+  );
+
+  assert.deepEqual(detected, {
+    owner: "example",
+    repo: "from-actions"
+  });
+});
+
+test("electron-builder config falls back to the hardcoded repository default", () => {
+  const detected = detectGithubReleaseRepository(
+    {},
+    { readOriginUrl: () => "" }
+  );
+
+  assert.deepEqual(detected, {
+    owner: "ephes",
+    repo: "desktop-django-starter"
+  });
 });
 
 test("electron-builder enables macOS notarization when Apple credentials are present", () => {

@@ -119,6 +119,10 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "desktop-django-starter-windows-sha256.txt" in release
     assert "promote both files together" in release
     assert "Linux verification" in release
+    assert "GITHUB_REPOSITORY" in readme
+    assert "published GitHub releases" in readme
+    assert "local `origin` Git remote" in release
+    assert "draft release is useful for staging or review" in release
     assert "per-session shell-to-Django auth token" in release
     assert "Electron now adds a per-session shell-to-Django auth token" in release
     assert "Tauri and Positron now add comparable per-session shell-to-Django" in release

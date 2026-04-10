@@ -1,7 +1,12 @@
+const { execFileSync } = require("node:child_process");
+const path = require("node:path");
+
 const WINDOWS_SIGNING_HASH_ALGORITHMS = ["sha256"];
-const DEFAULT_GITHUB_RELEASE_OWNER = "joww12";
+const DEFAULT_GITHUB_RELEASE_OWNER = "ephes";
 const DEFAULT_GITHUB_RELEASE_REPO = "desktop-django-starter";
 const DEFAULT_GITHUB_RELEASE_TYPE = "draft";
+// This path is only used while evaluating the builder config during packaging.
+const REPO_ROOT = path.resolve(__dirname, "..", "..", "..");
 
 function getTrimmedEnv(name, env = process.env) {
   const value = env[name];
@@ -50,6 +55,62 @@ function hasWindowsSigningInputs(env = process.env) {
   );
 }
 
+function parseGithubRepositorySlug(value) {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const trimmed = value.trim().replace(/\.git$/u, "");
+  if (!trimmed) {
+    return null;
+  }
+
+  const match = /(?:^|github\.com[:/])(?<owner>[^/\s:]+)\/(?<repo>[^/\s]+)$/u.exec(trimmed);
+  if (!match || !match.groups) {
+    return null;
+  }
+
+  return {
+    owner: match.groups.owner,
+    repo: match.groups.repo
+  };
+}
+
+function readOriginGitRemote() {
+  try {
+    return execFileSync(
+      "git",
+      ["-C", REPO_ROOT, "config", "--get", "remote.origin.url"],
+      {
+        encoding: "utf8",
+        stdio: ["ignore", "pipe", "ignore"]
+      }
+    ).trim();
+  } catch (_error) {
+    return "";
+  }
+}
+
+function detectGithubReleaseRepository(
+  env = process.env,
+  { readOriginUrl = readOriginGitRemote } = {}
+) {
+  const fromGithubActions = parseGithubRepositorySlug(getTrimmedEnv("GITHUB_REPOSITORY", env));
+  if (fromGithubActions) {
+    return fromGithubActions;
+  }
+
+  const fromOrigin = parseGithubRepositorySlug(readOriginUrl());
+  if (fromOrigin) {
+    return fromOrigin;
+  }
+
+  return {
+    owner: DEFAULT_GITHUB_RELEASE_OWNER,
+    repo: DEFAULT_GITHUB_RELEASE_REPO
+  };
+}
+
 function getWindowsSigntoolOptions(env = process.env) {
   if (!hasWindowsSigningInputs(env)) {
     return undefined;
@@ -73,7 +134,10 @@ function getWindowsSigntoolOptions(env = process.env) {
   };
 }
 
-function getElectronUpdatePublishConfig(env = process.env) {
+function getElectronUpdatePublishConfig(
+  env = process.env,
+  detectionOptions = {}
+) {
   const genericUpdateUrl = getTrimmedEnv("DESKTOP_DJANGO_UPDATE_URL", env);
   if (genericUpdateUrl) {
     return [
@@ -85,13 +149,15 @@ function getElectronUpdatePublishConfig(env = process.env) {
     ];
   }
 
+  const detectedRepository = detectGithubReleaseRepository(env, detectionOptions);
+
   return [
     {
       provider: "github",
       owner: getTrimmedEnv("DESKTOP_DJANGO_UPDATE_GITHUB_OWNER", env)
-        || DEFAULT_GITHUB_RELEASE_OWNER,
+        || detectedRepository.owner,
       repo: getTrimmedEnv("DESKTOP_DJANGO_UPDATE_GITHUB_REPO", env)
-        || DEFAULT_GITHUB_RELEASE_REPO,
+        || detectedRepository.repo,
       releaseType: getTrimmedEnv("DESKTOP_DJANGO_UPDATE_GITHUB_RELEASE_TYPE", env)
         || DEFAULT_GITHUB_RELEASE_TYPE,
       publishAutoUpdate: true
@@ -99,7 +165,7 @@ function getElectronUpdatePublishConfig(env = process.env) {
   ];
 }
 
-function buildConfig(env = process.env) {
+function buildConfig(env = process.env, detectionOptions = {}) {
   const windowsSigntoolOptions = getWindowsSigntoolOptions(env);
 
   return {
@@ -110,7 +176,7 @@ function buildConfig(env = process.env) {
     directories: {
       output: "dist"
     },
-    publish: getElectronUpdatePublishConfig(env),
+    publish: getElectronUpdatePublishConfig(env, detectionOptions),
     files: [
       "main.js",
       "package.json",
@@ -170,8 +236,10 @@ function buildConfig(env = process.env) {
 
 module.exports = {
   buildConfig,
+  detectGithubReleaseRepository,
   getElectronUpdatePublishConfig,
   getEnvList,
+  parseGithubRepositorySlug,
   getWindowsSigntoolOptions,
   hasMacosNotarizationCredentials
 };
