@@ -147,8 +147,23 @@ Minimum boundary:
 
 - Electron main process starts Django
 - Django binds to `127.0.0.1` on a random port
+- Electron generates a fresh per-session shell-to-Django auth token, passes it to
+  Django as `DESKTOP_DJANGO_AUTH_TOKEN`, and injects `X-Desktop-Django-Token`
+  only for the exact local Django origin
 - Electron waits on a health endpoint before loading the window
 - Electron owns shutdown behavior
+
+Use the starter's Electron token pattern as a copy/adapt requirement, not an
+optional hardening idea. The token authenticates the localhost request channel
+between Electron and Django. It is separate from desktop auto-auth: auto-auth,
+when used, sets `request.user` for a single-user local app; the shell token
+proves that a request came through the desktop shell path.
+
+Do not put the shell token in preload, expose it to normal page JavaScript, place
+it in query strings, or use cookies for the Electron path. Do not apply the
+header to `<all_urls>` or to broad localhost patterns; scope it to the exact
+`http://127.0.0.1:<port>/*` Django origin and keep an in-listener origin check.
+Do not remove CSRF middleware or claim the shell token replaces CSRF.
 
 3. Make the Django runtime desktop-safe.
 
@@ -325,6 +340,10 @@ Django-side additions (paths depend on the target project's layout):
   Optional: only create this if the packaged settings need helper functions that
   don't belong inline. If the runtime logic is simple enough to live directly in
   `packaged_settings.py`, a separate `runtime.py` is not required
+- shell-token middleware and setting — add a small Django middleware that no-ops
+  when `DESKTOP_DJANGO_AUTH_TOKEN` is unset and otherwise compares
+  `X-Desktop-Django-Token` with `secrets.compare_digest()`. Place it early in
+  `MIDDLEWARE`, after `SecurityMiddleware` is a reasonable default
 - health endpoint view at `/health/`. If the target app has a catch-all URL pattern
   (e.g., `re_path(r"", include(...))`), place the health URL before it in `urlpatterns`
   so it isn't shadowed
@@ -446,11 +465,20 @@ bounded — no long-running processes.
    action that matches the app's primary purpose — e.g., confirm the auto-auth user
    can reach an edit or create page, not just view the landing page.
 4. Run `npm --prefix electron test` to confirm the Node-side test harness passes.
-5. Verify packaged settings work with the Django test client. Using
+5. Verify shell-token behavior. With `DESKTOP_DJANGO_AUTH_TOKEN` unset, the
+   health endpoint and entry URL should behave as before. With the setting
+   configured, missing and wrong `X-Desktop-Django-Token` headers must return
+   403, while the correct header returns 200 for `/health/` and the entry URL.
+   Also verify Electron's health polling includes the header, since Node
+   `http.get()` calls are not covered by the BrowserWindow `webRequest` hook.
+   Confirm the token is not referenced by preload or normal page JavaScript, and
+   that any Electron header injection filter is scoped to the exact Django
+   origin rather than `<all_urls>`.
+6. Verify packaged settings work with the Django test client. Using
    `DJANGO_SETTINGS_MODULE` set to the packaged settings module, confirm
    `Client().get("/health/")` returns 200. If it returns 400, `testserver` is
    missing from `ALLOWED_HOSTS` — add it and re-check.
-6. If the target repo has committed seed media (e.g., uploaded images referenced by
+7. If the target repo has committed seed media (e.g., uploaded images referenced by
    seeded data), verify the media bootstrap under packaged settings with two checks:
    **a.** Clean app-data: delete or use a fresh app-data directory, then use the Django
    test client to load a detail page that references a media file and GET the media
@@ -464,14 +492,14 @@ bounded — no long-running processes.
    If probe (b) fails, inspect the runtime helper for a bare `target.exists()` early
    return — that is the most common cause. Replace it with `shutil.copytree` using
    `dirs_exist_ok=True` and re-check both cases.
-7. Check that seed assets are not dirtied. If the target repo has a committed
+8. Check that seed assets are not dirtied. If the target repo has a committed
    `db.sqlite3` or media directory, run `git status --short` scoped to those paths
    (e.g., `git status --short -- path/to/db.sqlite3 path/to/media/`) and verify no
    modifications or untracked files appear. If the verification steps modified or
    created files there (e.g., by running migrations against the committed database or
    writing uploads), fix the settings so the writable copy goes to a separate location
    (app-data or a gitignored path) and restore the original with `git checkout`.
-8. If any check fails, report what failed and do not continue past the failed step.
+9. If any check fails, report what failed and do not continue past the failed step.
 
 Packaged-mode verification (`just desktop-smoke`) is a separate concern — do not
 attempt it in the same unattended run unless explicitly requested.

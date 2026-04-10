@@ -28,6 +28,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "desktop_django_starter.middleware.DesktopAuthTokenMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -84,3 +85,4 @@ SECRET_KEY = os.environ.get(
 
 DEBUG = False
 ALLOWED_HOSTS = _allowed_hosts()
+DESKTOP_DJANGO_AUTH_TOKEN = os.environ.get("DESKTOP_DJANGO_AUTH_TOKEN", "")

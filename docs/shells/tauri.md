@@ -28,6 +28,7 @@ Scope boundaries:
 - Tauri is still experimental in this slice
 - `.github/workflows/tauri-packages.yml` now provides an artifact-only GitHub Actions workflow for this shell
 - Electron remains the most complete shell path
+- comparable per-session shell-to-Django auth token support remains separate follow-up design work because this Tauri path does not currently have an Electron-equivalent external-localhost per-request header injection hook
 - the hosted Tauri lane uses build-only `tauri-action`, not GitHub Release publication
 - the current Tauri config now applies a minimal `app.security.csp` for Tauri-served shell assets, including the local splash window and localhost bootstrap surface
 - that CSP is intentionally narrow and should not be read as production-hardening for the Django pages loaded over `http://127.0.0.1:<random-port>`

@@ -45,3 +45,9 @@ Cross-platform validation should run on GitHub-hosted Linux, macOS, and Windows 
 ## D-011: Tasks demo uses the original-author task backport with one database-backed worker
 
 The `tasks_demo` app remains an optional post-v1 extension, but it now uses the `django_tasks` backport together with `django_tasks_db` and one supervised `db_worker` process. The UI contract stays starter-sized: the app keeps its own demo row, the renderer continues to poll, and Electron owns the worker lifecycle. Product-sized worker registries, cancellation flows, and broader orchestration remain out of scope.
+
+## D-012: Per-session shell-to-Django auth token for Electron
+
+Electron adds a per-session shell-to-Django auth token to the localhost request channel. The main process generates a random token at startup, passes it to Django as `DESKTOP_DJANGO_AUTH_TOKEN`, and injects `X-Desktop-Django-Token` only for the exact `http://127.0.0.1:<random-port>` Django origin. Django rejects requests with missing or wrong tokens only when that setting is configured.
+
+The token is not exposed through preload or normal page JavaScript, is not placed in query strings or cookies, and does not replace Django's CSRF middleware. Tauri and Positron do not implement parity in this decision because their current web view paths do not expose an Electron-equivalent external-localhost per-request header injection hook.

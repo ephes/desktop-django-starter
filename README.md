@@ -24,6 +24,7 @@ Runnable starter slices:
 - Tauri 2 shell under `shells/tauri/` for local experiment scope, using the same staged backend contract and child-process worker model
 - Positron shell under `shells/positron/` for local experiment scope, running Django plus the optional task worker in-process inside a Toga web view
 - localhost startup on `127.0.0.1` with a random port and `/health/` readiness polling
+- Electron per-session shell-to-Django auth token support, passed to Django through the child-process environment and injected only for the exact local Django origin
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally, including the supervised task worker
@@ -33,7 +34,7 @@ Runnable starter slices:
 
 Auto-update and full production release automation are still deferred. The current slice is intended to make release signing/notarization expectations explicit without making unsigned local packaging unusable.
 
-Electron and Tauri load the Django UI over `http://127.0.0.1:<random-port>`. That localhost-only bind plus a random port is a real baseline, but it is not presented here as full localhost hardening: the starter does not yet add a per-session shell-to-Django auth token. On Windows, Electron currently shuts down Django and `db_worker` with explicit forced child-process tree termination via `taskkill /t /f`, which is acceptable for this starter slice but is not the same as a graceful drain or a more advanced production cleanup strategy.
+Electron and Tauri load the Django UI over `http://127.0.0.1:<random-port>`. That localhost-only bind plus a random port is a real baseline, and Electron now adds a per-session shell-to-Django auth token: the main process passes `DESKTOP_DJANGO_AUTH_TOKEN` to Django and injects `X-Desktop-Django-Token` only for the exact local Django origin. The token does not replace CSRF and is not exposed through the preload bridge or normal page JavaScript. Tauri and Positron still need separate follow-up designs for comparable request authentication because their current web view paths do not provide the same Electron-style external-localhost per-request header injection hook. On Windows, Electron currently shuts down Django and `db_worker` with explicit forced child-process tree termination via `taskkill /t /f`, which is acceptable for this starter slice but is not the same as a graceful drain or a more advanced production cleanup strategy.
 
 The example app uses a branded presentation layer called "Flying Stable" (a Pegasus/pony theme) to demonstrate that the starter can carry a real visual identity while remaining a generic teaching scaffold underneath. The theme includes a dark topnav with logo and brand name, teal page headers with background images, a content panel with toolbar, a sticky footer, CSS custom-property design tokens, SVG empty-state illustrations, an in-page delete-confirmation modal, client-side form validation with themed error messages, a splash screen at `/splash/` that Electron now shows during backend startup, and packaged app icons generated in `shells/electron/assets/icons/` and `shells/tauri/src-tauri/icons/` from the shared source art under `assets/brand/`. Item statuses are themed as Grazing (backlog), Galloping (active), and Show Ready (done). Development mode includes `django-browser-reload` for auto-reload.
 
@@ -244,4 +245,5 @@ Packaged mode still sets a small runtime environment at launch time:
 - Linux packaging still exists, but Linux signing and verification are not a baseline in this slice.
 - Windows public-distribution hardening beyond optional signing inputs is still follow-on work.
 - Tauri now has an experimental GitHub-hosted artifact workflow, but it still does not publish Releases, does not claim signing/notarization parity with Electron, and still needs real Windows install/run validation.
+- Tauri and Positron do not yet have Electron-equivalent per-session shell-to-Django auth token support for the external-localhost request channel.
 - Positron remains an experimental local shell path with no GitHub Actions artifact lane, no splashscreen-parity claim on macOS, and no Windows packaged parity claim in this slice.

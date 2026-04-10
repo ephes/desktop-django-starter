@@ -85,6 +85,7 @@ function buildConfig(env = process.env) {
       "main.js",
       "package.json",
       "preload.cjs",
+      "scripts/auth-token.cjs",
       "scripts/bundled-python.cjs",
       "assets/icons/app-icon.png",
       {

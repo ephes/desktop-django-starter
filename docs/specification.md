@@ -190,8 +190,10 @@ Minimum expectation:
 
 - bind Django to `127.0.0.1` only
 - use a random port instead of a fixed public default
+- for Electron, require a per-session shell-to-Django auth token on localhost requests by passing the token through the child-process environment and injecting it as a request header only for the exact Django origin
 - keep host validation tight
 - keep CSRF protections enabled unless a specific implementation detail proves otherwise
+- document that the Electron shell token is not a CSRF replacement
 - keep the preload bridge narrow and explicit
 
 ### Renderer model

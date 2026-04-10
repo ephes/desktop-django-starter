@@ -1,5 +1,6 @@
 const { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } = require("electron");
 const { spawn } = require("node:child_process");
+const crypto = require("node:crypto");
 const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
@@ -9,6 +10,11 @@ const {
   getRuntimeManifestPath,
   resolveBundledPythonExecutable
 } = require("./scripts/bundled-python.cjs");
+const {
+  buildDesktopAuthHeaders,
+  desktopAuthHeadersForRequest,
+  getDesktopAuthWebRequestFilter
+} = require("./scripts/auth-token.cjs");
 
 const HOST = "127.0.0.1";
 const STARTUP_TIMEOUT_MS = 15000;
@@ -25,6 +31,7 @@ let djangoProcess = null;
 let taskWorkerProcess = null;
 let quitting = false;
 let currentAppUrl = null;
+let currentAuthToken = null;
 let mainWindow = null;
 let splashWindow = null;
 let splashShownAt = null;
@@ -117,12 +124,17 @@ function getOpenPort() {
   });
 }
 
-function getHealthStatus(url) {
+function getHealthStatus(url, authToken = "") {
   return new Promise((resolve, reject) => {
-    const request = http.get(`${url}/health/`, (response) => {
-      response.resume();
-      resolve(response.statusCode);
-    });
+    const healthUrl = new URL("/health/", url);
+    const request = http.get(
+      healthUrl,
+      { headers: buildDesktopAuthHeaders(authToken) },
+      (response) => {
+        response.resume();
+        resolve(response.statusCode);
+      }
+    );
 
     request.on("error", reject);
     request.setTimeout(1000, () => {
@@ -131,12 +143,12 @@ function getHealthStatus(url) {
   });
 }
 
-async function waitForDjango(url, timeoutMs = STARTUP_TIMEOUT_MS) {
+async function waitForDjango(url, authToken = "", timeoutMs = STARTUP_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
     try {
-      const statusCode = await getHealthStatus(url);
+      const statusCode = await getHealthStatus(url, authToken);
       if (statusCode === 200) {
         return;
       }
@@ -150,7 +162,7 @@ async function waitForDjango(url, timeoutMs = STARTUP_TIMEOUT_MS) {
   throw new Error(`Django did not become ready within ${timeoutMs}ms.`);
 }
 
-function getDjangoEnvironment(port, runtimeMode, backendRoot) {
+function getDjangoEnvironment(port, runtimeMode, backendRoot, authToken = "") {
   const settingsModule = runtimeMode === "packaged"
     ? "desktop_django_starter.settings.packaged"
     : process.env.DJANGO_SETTINGS_MODULE || "desktop_django_starter.settings.local";
@@ -159,6 +171,7 @@ function getDjangoEnvironment(port, runtimeMode, backendRoot) {
     ...process.env,
     DJANGO_SETTINGS_MODULE: settingsModule,
     DESKTOP_DJANGO_APP_DATA_DIR: app.getPath("userData"),
+    DESKTOP_DJANGO_AUTH_TOKEN: authToken,
     DESKTOP_DJANGO_BUNDLE_DIR: backendRoot,
     DESKTOP_DJANGO_HOST: HOST,
     DESKTOP_DJANGO_PORT: String(port),
@@ -228,13 +241,13 @@ function validatePackagedBackendRoot(backendRoot) {
   );
 }
 
-function runManageCommand(args, port, runtimeMode, backendRoot) {
+function runManageCommand(args, port, runtimeMode, backendRoot, authToken) {
   const invocation = buildManageInvocation(runtimeMode, backendRoot, args);
 
   return new Promise((resolve, reject) => {
     const child = spawn(invocation.command, invocation.args, {
       cwd: invocation.cwd,
-      env: getDjangoEnvironment(port, runtimeMode, backendRoot),
+      env: getDjangoEnvironment(port, runtimeMode, backendRoot, authToken),
       stdio: ["ignore", "pipe", "pipe"]
     });
 
@@ -260,12 +273,13 @@ function runManageCommand(args, port, runtimeMode, backendRoot) {
   });
 }
 
-function startDjangoServer(port, runtimeMode, backendRoot) {
+function startDjangoServer(port, runtimeMode, backendRoot, authToken) {
   return startManagedProcess({
     processName: "django",
     port,
     runtimeMode,
     backendRoot,
+    authToken,
     manageArgs: ["runserver", `${HOST}:${port}`, "--noreload"],
     exitTitle: "Django exited",
     exitMessage: (code, signal) => (
@@ -275,12 +289,13 @@ function startDjangoServer(port, runtimeMode, backendRoot) {
   });
 }
 
-function startTaskWorker(port, runtimeMode, backendRoot) {
+function startTaskWorker(port, runtimeMode, backendRoot, authToken) {
   return startManagedProcess({
     processName: "worker",
     port,
     runtimeMode,
     backendRoot,
+    authToken,
     manageArgs: ["db_worker", "--queue-name", "default", "--worker-id", "desktop-django-starter"],
     exitTitle: "Task worker exited",
     exitMessage: (code, signal) => (
@@ -295,6 +310,7 @@ function startManagedProcess({
   port,
   runtimeMode,
   backendRoot,
+  authToken,
   manageArgs,
   exitTitle,
   exitMessage
@@ -306,7 +322,7 @@ function startManagedProcess({
 
     const child = spawn(invocation.command, invocation.args, {
       cwd: invocation.cwd,
-      env: getDjangoEnvironment(port, runtimeMode, backendRoot),
+      env: getDjangoEnvironment(port, runtimeMode, backendRoot, authToken),
       stdio: ["ignore", "pipe", "pipe"]
     });
 
@@ -424,7 +440,18 @@ function createSplashWindow(backendRoot) {
   return win;
 }
 
-function createWindow(url) {
+function registerDesktopAuthHeaderInjection(win, url, authToken) {
+  win.webContents.session.webRequest.onBeforeSendHeaders(
+    getDesktopAuthWebRequestFilter(url),
+    (details, callback) => {
+      callback({
+        requestHeaders: desktopAuthHeadersForRequest(details, url, authToken)
+      });
+    }
+  );
+}
+
+function createWindow(url, authToken) {
   const win = new BrowserWindow({
     width: 1200,
     height: 840,
@@ -440,6 +467,7 @@ function createWindow(url) {
 
   mainWindow = win;
   currentAppUrl = url;
+  currentAuthToken = authToken;
 
   win.on("closed", () => {
     if (mainWindow === win) {
@@ -459,6 +487,7 @@ function createWindow(url) {
     }
   });
 
+  registerDesktopAuthHeaderInjection(win, url, authToken);
   win.loadURL(url);
 }
 
@@ -516,6 +545,7 @@ async function bootstrap() {
   const backendRoot = getBackendRoot(runtimeMode);
   const port = await getOpenPort();
   const baseUrl = `http://${HOST}:${port}`;
+  const authToken = crypto.randomBytes(32).toString("hex");
 
   createSplashWindow(backendRoot);
 
@@ -523,13 +553,13 @@ async function bootstrap() {
     validatePackagedBackendRoot(backendRoot);
   }
 
-  await runManageCommand(["migrate", "--noinput"], port, runtimeMode, backendRoot);
-  await startDjangoServer(port, runtimeMode, backendRoot);
-  await waitForDjango(baseUrl);
+  await runManageCommand(["migrate", "--noinput"], port, runtimeMode, backendRoot, authToken);
+  await startDjangoServer(port, runtimeMode, backendRoot, authToken);
+  await waitForDjango(baseUrl, authToken);
   // Start the worker only after Django is healthy so startup failures are
   // surfaced against a known-good migrated app database.
-  await startTaskWorker(port, runtimeMode, backendRoot);
-  createWindow(baseUrl);
+  await startTaskWorker(port, runtimeMode, backendRoot, authToken);
+  createWindow(baseUrl, authToken);
 }
 
 ipcMain.handle("desktop:open-app-data-directory", async () => {
@@ -559,7 +589,7 @@ app.on("window-all-closed", () => {
 
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0 && currentAppUrl) {
-    createWindow(currentAppUrl);
+    createWindow(currentAppUrl, currentAuthToken);
   }
 });
 

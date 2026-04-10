@@ -16,6 +16,7 @@ test("electron-builder config ships the staged backend as a packaged resource", 
     "main.js",
     "package.json",
     "preload.cjs",
+    "scripts/auth-token.cjs",
     "scripts/bundled-python.cjs",
     "assets/icons/app-icon.png",
     {

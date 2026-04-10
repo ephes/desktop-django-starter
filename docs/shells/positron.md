@@ -30,6 +30,7 @@ Scope boundaries:
 - GitHub Actions artifact generation remains out of scope
 - Electron remains the most complete shell path
 - packaged startup uses the same fallback `DJANGO_SECRET_KEY` value as Electron and Tauri when the environment does not provide one; this is only a local bootstrap convenience, not a release secret
+- comparable per-session shell-to-Django auth token support remains separate follow-up design work because this Positron path does not currently have an Electron-equivalent external-localhost per-request header injection hook
 - splashscreen parity is intentionally not required on macOS for Positron
 - Positron is not a release-parity path in this slice
 - Windows packaged-build parity is not claimed for Positron yet

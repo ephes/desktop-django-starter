@@ -84,6 +84,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "dist/github-actions/latest" in readme
     assert "dist/github-actions/tauri/latest" in readme
     assert "per-session shell-to-Django auth token" in readme
+    assert "Electron now adds a per-session shell-to-Django auth token" in readme
+    assert "Tauri and Positron still need separate follow-up designs" in readme
     assert "taskkill /t /f" in readme
     assert "transaction_mode=IMMEDIATE" in readme
     assert "APPLE_API_KEY_ID" in release
@@ -109,6 +111,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "promote both files together" in release
     assert "Linux verification" in release
     assert "per-session shell-to-Django auth token" in release
+    assert "Electron now adds a per-session shell-to-Django auth token" in release
+    assert "Tauri and Positron do not yet have Electron-equivalent" in release
     assert "taskkill /t /f" in release
     assert "transaction_mode=IMMEDIATE" in release
     assert "assets/brand/" in architecture
@@ -121,8 +125,11 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     expected = "fallback `DJANGO_SECRET_KEY` only when the environment does not provide one"
     assert expected in architecture
     assert "per-session shell-to-Django auth token" in architecture
+    assert "Tauri and Positron still need separate follow-up designs" in architecture
     assert "taskkill /t /f" in architecture
     assert "PRAGMA journal_mode=WAL;" in architecture
+    assert "per-session shell-to-Django auth token" in specification
+    assert "not a CSRF replacement" in specification
     assert "comparison paths in this repo" in specification
     assert "shells/electron/" in llms
     assert "shells/tauri/" in llms
@@ -132,6 +139,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "prepared, unverified Windows NSIS path" in llms
     assert "minimal localhost-aware CSP" in llms
     assert "per-session shell-to-Django auth token" in llms
+    assert "Tauri and Positron do not yet have comparable token support" in llms
     assert "taskkill /t /f" in llms
     assert "transaction_mode=IMMEDIATE" in llms
     assert "shells/electron.html" in docs_llms
@@ -141,8 +149,16 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "Current minimal CSP posture" in tauri_doc
     assert "canonical written checklist" in tauri_doc
     assert "not a release-parity path in this slice" in tauri_doc
+    expected_tauri_token_gap = (
+        "comparable per-session shell-to-Django auth token support remains separate"
+    )
+    assert expected_tauri_token_gap in tauri_doc
     assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in positron_doc
     assert "not a release-parity path in this slice" in positron_doc
+    expected_positron_token_gap = (
+        "comparable per-session shell-to-Django auth token support remains separate"
+    )
+    assert expected_positron_token_gap in positron_doc
     assert ".stage/" in gitignore
 
 
