@@ -1,33 +1,50 @@
 # Desktop Django Starter
 
-> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, a staged packaged-backend slice that exercises packaged settings plus a bundled Python runtime locally, a sign/notarization-aware Electron packaging slice that builds desktop artifacts in GitHub Actions, a minimal Electron connected updater path, and experimental Tauri plus Positron shells for local comparison work. This repository is designed for both human readers and coding agents.
+> Minimal reference starter for packaging a Django app inside Electron with a runnable development slice today, a staged packaged-backend slice for bundled-runtime validation, a sign/notarization-aware GitHub packaging slice for desktop artifacts, a minimal Electron connected updater path, plus experimental Tauri and Positron shells for local comparison work. This repository is designed for both human readers and coding agents.
 
 Use this documentation when you need the smallest credible architecture for running Django as a local desktop app, or when you need a reusable workflow for wrapping an existing Django project in Electron without importing a product-sized codebase.
 
 Important constraints:
 
-- Keep the example generic, minimal, and server-rendered.
+- Keep the example generic, minimal, and server-rendered. The current themed presentation layer ("Flying Stable") is a demo; the underlying architecture is what matters.
 - Treat `djdesk` as reference material for packaging and lifecycle patterns only.
-- Electron uses exact-origin header injection for its per-session shell-to-Django auth token, while Tauri and Positron use a Django bootstrap URL that sets an HttpOnly same-origin auth cookie before redirecting to the app.
-- Windows support matters.
-- The update story must include air-gapped/manual installs, not only connected environments; Electron has a minimal connected updater path, while Tauri and Positron auto-update remain deferred.
+- Windows support matters. Electron remains the baseline release lane; Tauri now has a GitHub-hosted Tauri artifact workflow plus a prepared, unverified Windows NSIS path, but it still does not claim release parity. Its Tauri-served shell assets use only a minimal localhost-aware CSP for the local splash/bootstrap surface, not a release-grade hardening claim for the Django UI. The hosted NSIS path still needs a real live Windows install/run test before making a stronger claim, and the current config keeps Tauri's default `downloadBootstrapper` WebView2 installer behavior rather than an offline-ready embedded runtime.
+- Electron and Tauri currently bind Django to `127.0.0.1` on a random port, while Positron serves the same Django app from an in-process WSGI server on a random localhost port. Electron uses a per-session shell-to-Django auth token by passing `DESKTOP_DJANGO_AUTH_TOKEN` to Django and injecting `X-Desktop-Django-Token` only for the exact local Django origin. Tauri and Positron pass the same setting to Django and open their web views through a bootstrap URL that validates the token, sets an HttpOnly same-origin cookie, and redirects to the app without the token. The token does not replace CSRF and is not exposed through preload, a shell bridge, or normal page JavaScript.
+- Packaged Django keeps SQLite under per-user app data as `app.sqlite3` and now teaches a stronger desktop baseline with `transaction_mode=IMMEDIATE`, a 20-second timeout, WAL, `synchronous=NORMAL`, and modest cache/mmap pragmas.
+- Electron on Windows currently shuts down backend child processes with explicit forced process-tree termination via `taskkill /t /f`, not a graceful drain or broader production orphan-control approach.
+- The update story must include air-gapped/manual installs, not only connected environments. Electron has a minimal connected updater path through `electron-updater`; Tauri and Positron auto-update remain deferred.
+- Electron lives under `shells/electron/`, the experimental Tauri port lives under `shells/tauri/`, and the experimental Positron port lives under `shells/positron/`, while shared icon source art lives under `assets/brand/`; regenerate the Electron PNG and macOS ICNS with `npm --prefix shells/electron run icons`, the Tauri icon set with `npm --prefix shells/tauri run icons`, and the Positron icons with `just positron-icons`.
 
 ## Docs
 
 - [Documentation index](index.html): Starting point for the published docs.
 - [Specification](specification.html): Main product and technical specification for the starter.
 - [Architecture](architecture.html): Runtime contract, repo shape, startup model, shutdown notes, and release/update direction.
-- [Release](release.html): Packaging secrets, Electron and Tauri artifact workflows, installer artifacts, Electron updater metadata, and manual update guidance.
+- [Decisions](decisions.html): Scope and tradeoff decisions captured locally for this repo.
+- [Release](release.html): Packaging secrets, Electron and Tauri artifact workflows, installer artifacts, Electron updater metadata, checksum files, and connected/offline promotion guidance.
 - [Backlog](backlog.html): Explicit follow-on work, including Tauri and Positron update entries structured for implementation handoff.
 - [Done](done.html): Completed backlog entries after they are implemented.
-- [Decisions](decisions.html): Scope and tradeoff decisions captured locally for this repo.
 - [Agent use](agent-use.html): Guidance for coding agents consuming this repo.
 - [Electron shell](shells/electron.html): Baseline shell scope and responsibilities.
 - [Tauri shell](shells/tauri.html): Experimental Tauri shell scope, commands, and support boundaries.
 - [Positron shell](shells/positron.html): Experimental Positron shell scope, commands, and support boundaries.
+- [Design guide](design-guide.html): Presentation-layer design decisions for the current Flying Stable demo.
 
-The optional `/tasks/` demo now uses the `django_tasks` backport plus `django_tasks_db` with a single supervised worker process instead of an in-process thread stub.
+## Wrapping
+
+- `scripts/wrap`: Front-door command for wrapping a target Django project. Run from inside the target repo; requires an existing checkout of this starter. Runs preflight checks by default; `--run` invokes the agent.
+- Packaged CLI: `uvx desktop-django-starter wrap --run` runs the same workflow without a local starter checkout. Current `dds` builds stream concise Claude progress during `--run`; older builds could look idle until Claude exited. Use `--harness` and `--model` to choose the agent harness and model, for example `--harness pi --model openai-codex/gpt-5.4`; `--agent` remains available as a backward-compatible alias.
+- `skills/wrap-existing-django-in-electron/SKILL.md`: Reusable workflow for adapting an existing Django project to run inside an Electron shell.
+- `skills/wrap-existing-django-in-electron/prompt.md`: Prompt template for unattended agent-driven wrapping.
+- `skills/wrap-existing-django-in-electron/run-log.md`: Run results from agent wrapping iterations, with git refs to the skill and prompt version used.
 
 ## Optional
 
-- [Project home](index.html): Top-level docs landing page.
+- `.github/workflows/ci.yml`: Current cross-platform CI scaffold using GitHub-hosted runners.
+- `.github/workflows/desktop-packages.yml`: On-demand GitHub Actions packaging workflow for macOS, Windows, and Linux artifacts, Electron updater metadata, checksum manifests, optional signing inputs, and optional draft GitHub Release publication.
+- `.github/workflows/tauri-packages.yml`: Experimental GitHub-hosted Tauri packaging workflow using `tauri-action` in build-only mode with artifact uploads and checksum manifests.
+- `tests/test_docs.py`: Minimal smoke tests for the documentation scaffold.
+- `tests/test_example_app.py`: Backend behavior checks for the demo CRUD slice ("My Ponies").
+- `tests/test_tasks_demo.py`: Backend tests for the real async task demo ("Stable Routines"), including enqueueing, reconciliation, and status transitions.
+- `tests/test_health.py`: Readiness endpoint coverage.
+- `src/tasks_demo/`: Background task visualization demo ("Stable Routines") with animated pulse-ring indicators, polling-based live updates, and a SQLite-backed `django_tasks` plus `django_tasks_db` worker flow (optional post-v1 extension).

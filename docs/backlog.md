@@ -4,64 +4,6 @@ This backlog tracks explicit follow-on work for the desktop shell lanes. It is n
 
 When an entry is implemented, move it to [`done.md`](done.md) in the same change as the implementation and docs updates. Keep the item id stable so old handoff prompts and review notes remain traceable.
 
-## BL-005: Documentation Consistency and Discoverability Cleanup
-
-Status: proposed
-
-### Context
-
-The docs are strong overall, but a few verified inconsistencies now reduce trust:
-
-- `docs/design-guide.md` still says the splash screen is not wired into Electron startup.
-- `docs/llms.txt` has drifted from the root `llms.txt` and now gives agents a materially thinner published entry point.
-- Supporting docs such as `design-guide.md` are built by Sphinx but are not linked from the main docs navigation.
-- `docs/architecture.md` still uses an intentionally illustrative repo tree that now omits several important areas readers may look for.
-
-These are not correctness bugs in runtime behavior, but they are code-quality issues for a repo that explicitly treats docs as part of the product.
-
-### Goal
-
-Bring the documentation back into alignment with the current implementation and make supporting docs easier to discover without over-claiming maturity or completeness.
-
-### Suggested Implementation Shape
-
-- Fix the stale splash-screen language in `docs/design-guide.md`.
-- Decide which supporting docs belong in the main docs navigation and add them intentionally, or explicitly mark them as supporting/reference material if they should stay out of the main flow.
-- Sync `docs/llms.txt` with the root `llms.txt`, or document a deliberate shorter published variant if that is the real goal.
-- Refresh the architecture repo tree and wording so it still reads as honest scaffolding rather than stale future-tense prose.
-- Add or update docs tests so the high-value consistency claims are checked automatically.
-
-### Likely File Areas
-
-- `docs/design-guide.md`
-- `docs/index.md`
-- `docs/architecture.md`
-- `docs/llms.txt`
-- `llms.txt`
-- `README.md`
-- `docs/backlog.md`
-- `docs/done.md`
-- `tests/test_docs.py`
-
-### Non-Goals
-
-- Do not rewrite the entire documentation set for tone alone.
-- Do not force every scratch or design artifact into the main docs navigation.
-- Do not hide real experimental limitations to make the docs sound cleaner.
-
-### Validation
-
-- Run `just docs-build`.
-- Run `uv run pytest tests/test_docs.py`.
-- Prefer `just check` for final handoff when feasible.
-
-### Done Criteria
-
-- Verified stale doc claims are corrected.
-- The published and repo-local agent entry points are intentionally aligned.
-- Any supporting docs that remain outside the main nav are excluded deliberately rather than by drift.
-- The implemented entry is moved from this file to [`done.md`](done.md) with a short implementation summary.
-
 ## BL-006: Electron Navigation and Window Hardening
 
 Status: proposed

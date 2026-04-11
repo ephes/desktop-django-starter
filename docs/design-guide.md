@@ -151,10 +151,11 @@ page.screenshot(path='/tmp/screenshot.png')
 
 ## Splash Screen
 
-Available at `/splash/` for future Electron integration. Standalone HTML with:
+Available at `/splash/` and now wired into Electron startup. Standalone HTML with:
 
 - Breathing logo animation
 - Three bouncing dots
 - "Saddling up..." status text
 - Dark background, teal-bright color scheme
-- Not yet wired into Electron startup (deferred)
+- Reused by Electron during backend startup before the main window is ready
+- Still separate from Tauri's shell-local splash window and Positron's current startup flow

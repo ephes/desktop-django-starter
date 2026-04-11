@@ -44,25 +44,31 @@ Current shell split note:
 - Tauri keeps the same staged-backend subprocess model locally
 - Positron keeps shell-local ownership of an in-process Django server plus an in-process worker thread
 
-## Draft Repo Shape
+## Current Repo Shape
 
-This structure is intentionally small and close to normal Django conventions:
+This structure stays intentionally small, but it now includes the extra shell, docs, and wrapping support files that make the current starter usable as both a teaching repo and an adaptation workflow:
 
 ```text
 desktop-django-starter/
 ├── README.md
 ├── assets/
 │   └── brand/
+├── cli/
+│   ├── src/dds/
+│   └── tests/
 ├── docs/
-│   ├── specification.md
+│   ├── shells/
 │   ├── architecture.md
-│   └── decisions.md
+│   ├── release.md
+│   ├── design-guide.md
+│   └── specification.md
 ├── scripts/
 │   ├── bundled-python.cjs
 │   └── stage-backend.cjs
 ├── shells/
 │   ├── electron/
 │   │   ├── assets/icons/
+│   │   ├── scripts/
 │   │   ├── main.js
 │   │   ├── preload.cjs
 │   │   └── package.json
@@ -76,11 +82,14 @@ desktop-django-starter/
 │       ├── scripts/
 │       ├── resources/
 │       └── src/
+├── skills/
+│   └── wrap-existing-django-in-electron/
 ├── manage.py
 ├── pyproject.toml
 ├── src/
 │   ├── desktop_django_starter/   # Django project package
-│   └── example_app/
+│   ├── example_app/
+│   └── tasks_demo/
 └── tests/
 ```
 
@@ -94,7 +103,7 @@ Notes:
 
 ## Startup Contract
 
-The eventual implementation should follow this sequence:
+The current implementation follows this sequence:
 
 1. Electron creates a local splash window immediately after `app.whenReady()`.
 2. Electron chooses an open localhost port.

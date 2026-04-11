@@ -6,6 +6,33 @@ Keep item ids stable. Do not renumber completed work.
 
 ## Completed Entries
 
+## BL-005: Documentation Consistency and Discoverability Cleanup
+
+Status: completed
+
+### Context
+
+The docs were already strong, but a few verified inconsistencies had started to undercut trust: the design guide still described the splash screen as deferred, the published `docs/llms.txt` had drifted from the root agent entry point, and supporting docs were being built without being intentionally linked from the main docs navigation.
+
+### Goal
+
+Bring the documentation back into alignment with the current implementation and make supporting docs easier to discover without over-claiming maturity or completeness.
+
+### Implemented Summary
+
+- Updated `docs/design-guide.md` so the splash-screen section reflects the current Electron startup flow instead of describing it as deferred.
+- Added the design guide and the tasks-demo frontend design spec to the main docs toctree so they are published intentionally instead of remaining orphaned.
+- Expanded `docs/llms.txt` so its constraints, wrapping guidance, and optional references stay aligned with the richer root `llms.txt` while preserving published-doc links.
+- Refreshed `docs/architecture.md` from an illustrative draft repo tree to a current repo-shape section that now includes the CLI package, wrapping skill, `tasks_demo`, and Electron script area.
+- Updated architecture wording so the startup contract describes the current implementation rather than an eventual future slice.
+- Added docs tests that lock in the new navigation, published agent-entry content, stale-claim fix, and backlog bookkeeping.
+
+### Validation Notes
+
+- Ran `uv run pytest tests/test_docs.py`.
+- Ran `just docs-build`.
+- Ran `just check`.
+
 ## BL-004: CI Validation Coverage for Electron and CLI
 
 Status: completed

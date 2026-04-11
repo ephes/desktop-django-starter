@@ -52,6 +52,8 @@ def test_docs_index_references_main_pages() -> None:
     assert "shells/electron" in index
     assert "shells/tauri" in index
     assert "shells/positron" in index
+    assert "Design Guide <design-guide>" in index
+    assert "Tasks Demo Design <superpowers/specs/2026-03-30-tasks-demo-frontend-design>" in index
     assert "multi-shell-plan" not in index
     assert "branch-integration-plan" not in index
     assert not (ROOT / "docs" / "multi-shell-plan.md").exists()
@@ -148,8 +150,17 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/electron/" in architecture
     assert "shells/tauri/" in architecture
     assert "shells/positron/" in architecture
+    assert "cli/" in architecture
+    assert "skills/" in architecture
+    assert "tasks_demo/" in architecture
+    assert "shells/electron/" in docs_llms
+    assert "assets/brand/" in docs_llms
+    assert "scripts/wrap" in docs_llms
+    assert "skills/wrap-existing-django-in-electron/SKILL.md" in docs_llms
+    assert "design-guide.html" in docs_llms
     assert "packaged-app copy first" in architecture
     assert "shell-local splash window" in architecture
+    assert "The current implementation follows this sequence" in architecture
     expected = "fallback `DJANGO_SECRET_KEY` only when the environment does not provide one"
     assert expected in architecture
     assert "per-session shell-to-Django auth token" in architecture
@@ -175,6 +186,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/positron.html" in docs_llms
     assert "backlog.html" in docs_llms
     assert "done.html" in docs_llms
+    assert "BL-005: Documentation Consistency and Discoverability Cleanup" not in backlog
+    assert "BL-005: Documentation Consistency and Discoverability Cleanup" in done
     assert "BL-004: CI Validation Coverage for Electron and CLI" not in backlog
     assert "BL-004: CI Validation Coverage for Electron and CLI" in done
     assert "BL-002: Tauri Connected Auto-Update" in backlog
@@ -200,6 +213,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "not a release-parity path in this slice" in positron_doc
     assert "Positron uses a bootstrap HttpOnly cookie" in positron_doc
     assert ".stage/" in gitignore
+    assert "now wired into Electron startup" in (ROOT / "docs" / "design-guide.md").read_text()
 
 
 def test_packaging_workflow_mentions_signing_and_checksum_steps() -> None:

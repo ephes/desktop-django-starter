@@ -18,6 +18,8 @@ agent-use
 shells/electron
 shells/tauri
 shells/positron
+Design Guide <design-guide>
+Tasks Demo Design <superpowers/specs/2026-03-30-tasks-demo-frontend-design>
 ```
 
 ## Local Development
