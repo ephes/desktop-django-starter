@@ -4,59 +4,6 @@ This backlog tracks explicit follow-on work for the desktop shell lanes. It is n
 
 When an entry is implemented, move it to [`done.md`](done.md) in the same change as the implementation and docs updates. Keep the item id stable so old handoff prompts and review notes remain traceable.
 
-## BL-006: Electron Navigation and Window Hardening
-
-Status: proposed
-
-### Context
-
-The Electron shell already keeps a narrow preload bridge, uses exact-origin auth-header injection, and documents its localhost threat model honestly. One remaining hardening gap is that the main `BrowserWindow` setup does not currently appear to guard navigation or pop-up creation explicitly.
-
-This is not a known exploit in the current teaching flow, but it is a straightforward best-practice improvement in the baseline shell.
-
-### Goal
-
-Harden the Electron renderer window against unexpected navigation and window-opening behavior while preserving the current server-rendered Django flow and narrow native surface area.
-
-### Suggested Implementation Shape
-
-- Add a `setWindowOpenHandler` policy that denies unexpected child windows by default.
-- Add a `will-navigate` guard that blocks navigation away from the expected local app origin unless the repo intentionally allows a narrow exception.
-- Keep any allowed external URLs opening through the OS shell rather than inside the Electron renderer.
-- Add focused Node-side tests for the new guard logic if the implementation extracts helper functions.
-- Update shell docs only if the behavior becomes user-visible or materially changes the stated security baseline.
-
-### Likely File Areas
-
-- `shells/electron/main.js`
-- `shells/electron/scripts/*.test.cjs`
-- `docs/shells/electron.md`
-- `README.md`
-- `llms.txt`
-- `docs/llms.txt`
-- `docs/backlog.md`
-- `docs/done.md`
-
-### Non-Goals
-
-- Do not broaden the preload bridge.
-- Do not replace the localhost Django renderer model with a bundled frontend.
-- Do not present this slice as full Electron security hardening beyond the repo's documented baseline.
-
-### Validation
-
-- Run `npm --prefix shells/electron test`.
-- Run `just packaged-smoke` if packaged Electron behavior changes.
-- Run `just docs-build` if docs change.
-- Prefer `just check` for final handoff when feasible.
-
-### Done Criteria
-
-- Unexpected pop-up creation is denied by default.
-- Unexpected top-level navigation away from the local app origin is blocked or handled intentionally.
-- Automated tests cover the added Electron guard behavior.
-- The implemented entry is moved from this file to [`done.md`](done.md) with a short implementation summary.
-
 ## BL-007: Experimental Shell Lifecycle and Runtime Clarity
 
 Status: proposed

@@ -10,6 +10,7 @@ Current responsibilities:
 - generate a fresh per-session shell-to-Django auth token and pass it to Django as `DESKTOP_DJANGO_AUTH_TOKEN`
 - inject `X-Desktop-Django-Token` only for the exact local Django origin, including the Electron health poll, without exposing the token through preload
 - keep using hidden exact-origin header injection rather than the bootstrap cookie flow used by the experimental Tauri and Positron shells
+- deny child-window creation from the renderer by default and block top-level navigation away from the local Django origin, opening safe external URLs through the OS shell instead
 - consume the shared staged backend from `.stage/backend/`
 - package desktop artifacts with `electron-builder`
 - generate Electron updater metadata and use `electron-updater` for connected update checks

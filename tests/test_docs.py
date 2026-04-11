@@ -86,6 +86,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     done = (ROOT / "docs" / "done.md").read_text()
     tauri_doc = (ROOT / "docs" / "shells" / "tauri.md").read_text()
     positron_doc = (ROOT / "docs" / "shells" / "positron.md").read_text()
+    electron_doc = (ROOT / "docs" / "shells" / "electron.md").read_text()
     gitignore = (ROOT / ".gitignore").read_text()
 
     assert "docs/release.md" in readme
@@ -188,6 +189,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "done.html" in docs_llms
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" not in backlog
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" in done
+    assert "BL-006: Electron Navigation and Window Hardening" not in backlog
+    assert "BL-006: Electron Navigation and Window Hardening" in done
     assert "BL-004: CI Validation Coverage for Electron and CLI" not in backlog
     assert "BL-004: CI Validation Coverage for Electron and CLI" in done
     assert "BL-002: Tauri Connected Auto-Update" in backlog
@@ -208,6 +211,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "Current minimal CSP posture" in tauri_doc
     assert "canonical written checklist" in tauri_doc
     assert "not a release-parity path in this slice" in tauri_doc
+    assert "deny child-window creation" in electron_doc
+    assert "block top-level navigation away from the local Django origin" in electron_doc
     assert "Tauri uses a bootstrap HttpOnly cookie" in tauri_doc
     assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in positron_doc
     assert "not a release-parity path in this slice" in positron_doc

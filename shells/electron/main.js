@@ -16,6 +16,10 @@ const {
   desktopAuthHeadersForRequest,
   getDesktopAuthWebRequestFilter
 } = require("./scripts/auth-token.cjs");
+const {
+  getNavigationGuardAction,
+  getWindowOpenGuardResponse
+} = require("./scripts/window-guards.cjs");
 const { createElectronUpdateController } = require("./scripts/updates.cjs");
 
 const HOST = "127.0.0.1";
@@ -564,6 +568,28 @@ function registerDesktopAuthHeaderInjection(win, url, authToken) {
   );
 }
 
+function registerWindowNavigationGuards(win, url) {
+  win.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
+    const guardResponse = getWindowOpenGuardResponse(targetUrl, url);
+    if (guardResponse.openExternal) {
+      shell.openExternal(targetUrl).catch(() => {});
+    }
+    return { action: guardResponse.action };
+  });
+
+  win.webContents.on("will-navigate", (event, targetUrl) => {
+    const navigationAction = getNavigationGuardAction(targetUrl, url);
+    if (navigationAction.allowNavigation) {
+      return;
+    }
+
+    event.preventDefault();
+    if (navigationAction.openExternal) {
+      shell.openExternal(targetUrl).catch(() => {});
+    }
+  });
+}
+
 function createWindow(url, authToken) {
   const win = new BrowserWindow({
     width: 1200,
@@ -601,6 +627,7 @@ function createWindow(url, authToken) {
   });
 
   registerDesktopAuthHeaderInjection(win, url, authToken);
+  registerWindowNavigationGuards(win, url);
   win.loadURL(url);
 }
 

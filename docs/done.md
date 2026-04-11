@@ -6,6 +6,34 @@ Keep item ids stable. Do not renumber completed work.
 
 ## Completed Entries
 
+## BL-006: Electron Navigation and Window Hardening
+
+Status: completed
+
+### Context
+
+The Electron shell already had a narrow preload bridge, exact-origin auth-header injection, and a documented localhost threat model. One remaining hardening gap was that the main window did not yet apply explicit navigation or popup guards.
+
+### Goal
+
+Harden the Electron renderer window against unexpected navigation and window-opening behavior while preserving the current server-rendered Django flow and narrow native surface area.
+
+### Implemented Summary
+
+- Added a shell-local `window-guards.cjs` helper that decides whether a navigation should remain in-app, be denied, or be handed off to the OS shell.
+- Added a `setWindowOpenHandler` policy in `main.js` that denies child-window creation by default.
+- Added a `will-navigate` guard in `main.js` that allows same-origin localhost navigation, blocks other top-level navigation, and opens safe external URLs through the OS shell instead of inside Electron.
+- Kept the preload bridge unchanged and left the Django renderer model on localhost.
+- Added focused Node-side tests for the new guard helper logic.
+- Updated the Electron shell docs and docs tests to reflect the hardened window behavior and completed backlog bookkeeping.
+
+### Validation Notes
+
+- Ran `npm --prefix shells/electron test`.
+- Ran `uv run pytest tests/test_docs.py`.
+- Ran `just docs-build`.
+- Ran `just check`.
+
 ## BL-005: Documentation Consistency and Discoverability Cleanup
 
 Status: completed
