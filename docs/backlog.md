@@ -4,6 +4,180 @@ This backlog tracks explicit follow-on work for the desktop shell lanes. It is n
 
 When an entry is implemented, move it to [`done.md`](done.md) in the same change as the implementation and docs updates. Keep the item id stable so old handoff prompts and review notes remain traceable.
 
+## BL-005: Documentation Consistency and Discoverability Cleanup
+
+Status: proposed
+
+### Context
+
+The docs are strong overall, but a few verified inconsistencies now reduce trust:
+
+- `docs/design-guide.md` still says the splash screen is not wired into Electron startup.
+- `docs/llms.txt` has drifted from the root `llms.txt` and now gives agents a materially thinner published entry point.
+- Supporting docs such as `design-guide.md` are built by Sphinx but are not linked from the main docs navigation.
+- `docs/architecture.md` still uses an intentionally illustrative repo tree that now omits several important areas readers may look for.
+
+These are not correctness bugs in runtime behavior, but they are code-quality issues for a repo that explicitly treats docs as part of the product.
+
+### Goal
+
+Bring the documentation back into alignment with the current implementation and make supporting docs easier to discover without over-claiming maturity or completeness.
+
+### Suggested Implementation Shape
+
+- Fix the stale splash-screen language in `docs/design-guide.md`.
+- Decide which supporting docs belong in the main docs navigation and add them intentionally, or explicitly mark them as supporting/reference material if they should stay out of the main flow.
+- Sync `docs/llms.txt` with the root `llms.txt`, or document a deliberate shorter published variant if that is the real goal.
+- Refresh the architecture repo tree and wording so it still reads as honest scaffolding rather than stale future-tense prose.
+- Add or update docs tests so the high-value consistency claims are checked automatically.
+
+### Likely File Areas
+
+- `docs/design-guide.md`
+- `docs/index.md`
+- `docs/architecture.md`
+- `docs/llms.txt`
+- `llms.txt`
+- `README.md`
+- `docs/backlog.md`
+- `docs/done.md`
+- `tests/test_docs.py`
+
+### Non-Goals
+
+- Do not rewrite the entire documentation set for tone alone.
+- Do not force every scratch or design artifact into the main docs navigation.
+- Do not hide real experimental limitations to make the docs sound cleaner.
+
+### Validation
+
+- Run `just docs-build`.
+- Run `uv run pytest tests/test_docs.py`.
+- Prefer `just check` for final handoff when feasible.
+
+### Done Criteria
+
+- Verified stale doc claims are corrected.
+- The published and repo-local agent entry points are intentionally aligned.
+- Any supporting docs that remain outside the main nav are excluded deliberately rather than by drift.
+- The implemented entry is moved from this file to [`done.md`](done.md) with a short implementation summary.
+
+## BL-006: Electron Navigation and Window Hardening
+
+Status: proposed
+
+### Context
+
+The Electron shell already keeps a narrow preload bridge, uses exact-origin auth-header injection, and documents its localhost threat model honestly. One remaining hardening gap is that the main `BrowserWindow` setup does not currently appear to guard navigation or pop-up creation explicitly.
+
+This is not a known exploit in the current teaching flow, but it is a straightforward best-practice improvement in the baseline shell.
+
+### Goal
+
+Harden the Electron renderer window against unexpected navigation and window-opening behavior while preserving the current server-rendered Django flow and narrow native surface area.
+
+### Suggested Implementation Shape
+
+- Add a `setWindowOpenHandler` policy that denies unexpected child windows by default.
+- Add a `will-navigate` guard that blocks navigation away from the expected local app origin unless the repo intentionally allows a narrow exception.
+- Keep any allowed external URLs opening through the OS shell rather than inside the Electron renderer.
+- Add focused Node-side tests for the new guard logic if the implementation extracts helper functions.
+- Update shell docs only if the behavior becomes user-visible or materially changes the stated security baseline.
+
+### Likely File Areas
+
+- `shells/electron/main.js`
+- `shells/electron/scripts/*.test.cjs`
+- `docs/shells/electron.md`
+- `README.md`
+- `llms.txt`
+- `docs/llms.txt`
+- `docs/backlog.md`
+- `docs/done.md`
+
+### Non-Goals
+
+- Do not broaden the preload bridge.
+- Do not replace the localhost Django renderer model with a bundled frontend.
+- Do not present this slice as full Electron security hardening beyond the repo's documented baseline.
+
+### Validation
+
+- Run `npm --prefix shells/electron test`.
+- Run `just packaged-smoke` if packaged Electron behavior changes.
+- Run `just docs-build` if docs change.
+- Prefer `just check` for final handoff when feasible.
+
+### Done Criteria
+
+- Unexpected pop-up creation is denied by default.
+- Unexpected top-level navigation away from the local app origin is blocked or handled intentionally.
+- Automated tests cover the added Electron guard behavior.
+- The implemented entry is moved from this file to [`done.md`](done.md) with a short implementation summary.
+
+## BL-007: Experimental Shell Lifecycle and Runtime Clarity
+
+Status: proposed
+
+### Context
+
+Electron is the most complete shell in the repo, but the experimental shells now have a few lifecycle and runtime-contract differences that deserve either cleanup or an explicit written decision:
+
+- Tauri currently uses a more abrupt Unix child-process shutdown path than Electron.
+- Positron does not currently enforce single-instance behavior.
+- Positron always prepares a packaged-style Django environment, even for local development, and currently runs `collectstatic` on startup.
+
+Some of these differences may be intentional. The quality issue is that the boundary between deliberate divergence and accidental drift is no longer clear.
+
+### Goal
+
+Tighten lifecycle behavior in the experimental shells where the fix is small, and document the remaining intentional differences so the repo's multi-shell story stays coherent.
+
+### Suggested Implementation Shape
+
+- For Tauri, evaluate whether child-process shutdown can match Electron's Unix `SIGTERM` then timeout/kill pattern without making the Rust shell harder to maintain.
+- For Positron, add single-instance enforcement if the shell is expected to share the same SQLite/app-data assumptions as the other shells.
+- Decide whether Positron should keep using packaged settings in local runs; if yes, document that more explicitly, and if not, add a clear dev/packaged mode split.
+- Revisit unconditional startup `collectstatic` in Positron and either narrow it, cache it, or document why the current cost is acceptable for this experiment.
+- Update shell docs and tests so the chosen behavior is explicit rather than inferred from code.
+
+### Likely File Areas
+
+- `shells/tauri/src-tauri/src/lib.rs`
+- `shells/positron/src/desktop_django_starter_positron/app.py`
+- `shells/positron/src/desktop_django_starter_positron/runtime.py`
+- `tests/test_tauri_shell.py`
+- `tests/test_positron_shell.py`
+- `docs/shells/tauri.md`
+- `docs/shells/positron.md`
+- `docs/architecture.md`
+- `README.md`
+- `llms.txt`
+- `docs/llms.txt`
+- `docs/backlog.md`
+- `docs/done.md`
+
+### Non-Goals
+
+- Do not force the experimental shells into artificial parity when their runtime models are intentionally different.
+- Do not add a large cross-shell abstraction layer just to remove a small amount of duplicated logic.
+- Do not strengthen release claims for Tauri or Positron as part of this cleanup alone.
+
+### Validation
+
+- Run `just tauri-test` if Tauri runtime code changes.
+- Run `just positron-check`.
+- Run `just positron-smoke` if Positron runtime behavior changes.
+- Run `just docs-build` if docs change.
+- Prefer `just check` for final handoff when feasible.
+
+### Done Criteria
+
+- The most important lifecycle differences between Electron, Tauri, and Positron are either narrowed or documented intentionally.
+- Positron's instance and runtime-mode behavior is explicit in code and docs.
+- Tests cover the chosen shell behavior where practical.
+- The implemented entry is moved from this file to [`done.md`](done.md) with a short implementation summary.
+
 ## BL-002: Tauri Connected Auto-Update
 
 Status: proposed

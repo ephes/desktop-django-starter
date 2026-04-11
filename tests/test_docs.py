@@ -58,6 +58,21 @@ def test_docs_index_references_main_pages() -> None:
     assert not (ROOT / "docs" / "branch-integration-plan.md").exists()
 
 
+def test_ci_workflow_covers_root_cli_and_electron_validation() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
+    readme = (ROOT / "README.md").read_text()
+
+    assert "actions/setup-node@v5" in workflow
+    assert "shells/electron/package-lock.json" in workflow
+    assert "npm --prefix shells/electron ci" in workflow
+    assert "npm --prefix shells/electron test" in workflow
+    assert "uv run python cli/sync_assets.py" in workflow
+    assert "working-directory: cli" in workflow
+    assert "uv run --with pytest python -m pytest tests/" in workflow
+    assert "npm --prefix shells/electron test" in readme
+    assert "just cli-test" in readme
+
+
 def test_release_docs_cover_signing_and_manual_updates() -> None:
     readme = (ROOT / "README.md").read_text()
     release = (ROOT / "docs" / "release.md").read_text()
@@ -160,6 +175,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/positron.html" in docs_llms
     assert "backlog.html" in docs_llms
     assert "done.html" in docs_llms
+    assert "BL-004: CI Validation Coverage for Electron and CLI" not in backlog
+    assert "BL-004: CI Validation Coverage for Electron and CLI" in done
     assert "BL-002: Tauri Connected Auto-Update" in backlog
     assert "tauri-plugin-updater" in backlog
     assert "BL-003: Positron Update Strategy and Auto-Update Path" in backlog

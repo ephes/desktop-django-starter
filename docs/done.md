@@ -6,6 +6,36 @@ Keep item ids stable. Do not renumber completed work.
 
 ## Completed Entries
 
+## BL-004: CI Validation Coverage for Electron and CLI
+
+Status: completed
+
+### Context
+
+Cross-platform CI originally covered Python lint, pytest, and docs build, but it did not run the Electron Node-side tests or the packaged CLI test suite. That left two important validation lanes unproved on pull requests even though both existed locally.
+
+### Goal
+
+Extend CI so the repo's default validation covers the Electron Node-side tests and the `cli/` test suite in a way that stays fast, cross-platform, and easy to understand.
+
+### Implemented Summary
+
+- Added Node setup and npm caching to `.github/workflows/ci.yml`.
+- Added `npm --prefix shells/electron ci` plus `npm --prefix shells/electron test` to pull-request CI.
+- Added explicit CLI asset staging in CI with `uv run python cli/sync_assets.py` before the CLI test step.
+- Added a dedicated CLI test step that runs under `cli/` so the wrapper package is validated in its own project context.
+- Added `cli/pytest.ini` so the CLI tests stop inheriting the root Django pytest configuration and run without unrelated config warnings.
+- Updated the root README development commands to mention the Electron Node-side tests and the CLI test suite.
+- Added docs tests that assert the broader CI coverage and completed backlog bookkeeping.
+
+### Validation Notes
+
+- Ran `npm --prefix shells/electron test`.
+- Ran `uv run python cli/sync_assets.py`.
+- Ran `uv run --with pytest python -m pytest tests/` from `cli/`.
+- Ran `uv run pytest tests/test_docs.py`.
+- Ran `just docs-build`.
+
 ## BL-001: Electron Connected Auto-Update
 
 Status: completed
