@@ -118,6 +118,19 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "APPLE_API_KEY_ID" in release
     assert "WIN_CSC_LINK" in release
     assert "shells/electron/signing/" in release
+    assert "GitHub Actions Signed Binary Release Setup" in release
+    assert "https://github.com/ephes/desktop-django-starter/settings/secrets/actions" in release
+    assert "https://developer.apple.com/account/resources/certificates/add" in release
+    assert "G2 Sub-CA (Xcode 11.4.1 or later)" in release
+    assert "CA Email Address`: leave this blank" in release
+    assert "https://appstoreconnect.apple.com/access/integrations/api" in release
+    assert "Team key, not an Individual key" in release
+    assert "role `App Manager`" in release
+    assert "gh workflow run desktop-packages.yml --ref <branch> -f publish_release=true" in release
+    assert "Download and install a specific macOS release" in release
+    assert "gh release download v<version>" in release
+    assert "~/Library/Application\\ Support/\"Desktop Django Starter\"" in release
+    assert "What counts as a successful macOS updater validation in this repo" in release
     assert "just tauri-build" in release
     assert "tauri-packages.yml" in release
     assert "official-style `tauri-action`" in release
@@ -143,8 +156,15 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "Linux verification" in release
     assert "GITHUB_REPOSITORY" in readme
     assert "published GitHub releases" in readme
+    assert "implemented connected updater path through `electron-updater`" in readme
+    assert "release-validated updater readiness" in readme
+    assert "prove detection, download, restart/install, and `app.sqlite3` persistence" in readme
     assert "local `origin` Git remote" in release
     assert "draft release is useful for staging or review" in release
+    assert "Current Electron proof boundary" in release
+    expected = "implemented minimal connected updater path, not a release-validated updater lane"
+    assert expected in release
+    assert "do not close `BL-008` in [`backlog.md`](backlog.md)" in release
     assert "per-session shell-to-Django auth token" in release
     assert "Electron now adds a per-session shell-to-Django auth token" in release
     assert "Tauri and Positron now add comparable per-session shell-to-Django" in release
@@ -169,6 +189,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     expected = "fallback `DJANGO_SECRET_KEY` only when the environment does not provide one"
     assert expected in architecture
     assert "per-session shell-to-Django auth token" in architecture
+    assert "release-validated updater lane" in architecture
+    expected = "prove detection, download, restart/install, and `app.sqlite3` persistence"
+    assert expected in architecture
     assert "Tauri and Positron use the same Django token setting" in architecture
     assert "taskkill /t /f" in architecture
     assert "PRAGMA journal_mode=WAL;" in architecture
@@ -183,6 +206,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "prepared, unverified Windows NSIS path" in llms
     assert "minimal localhost-aware CSP" in llms
     assert "tauri-plugin-updater" in llms
+    assert "implemented minimal connected updater path through `electron-updater`" in llms
+    assert "not yet a release-validated updater lane" in llms
     assert "Positron is manual-only for updates in this repo" in llms
     assert "per-session shell-to-Django auth token" in llms
     assert "Tauri and Positron pass the same setting to Django" in llms
@@ -193,6 +218,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/positron.html" in docs_llms
     assert "backlog.html" in docs_llms
     assert "done.html" in docs_llms
+    assert "implemented minimal connected updater path through `electron-updater`" in docs_llms
+    assert "not yet a release-validated updater lane" in docs_llms
     assert "Positron is manual-only for updates in this repo" in docs_llms
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" not in backlog
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" in done
@@ -203,8 +230,16 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "BL-004: CI Validation Coverage for Electron and CLI" not in backlog
     assert "BL-004: CI Validation Coverage for Electron and CLI" in done
     assert "BL-002: Tauri Connected Auto-Update" not in backlog
+    assert "BL-008: Electron Connected Updater Release Validation" in backlog
+    assert "Status: blocked on live release validation" in backlog
+    expected = (
+        "Artifact-only packaging runs, unsigned local packaging, "
+        "and draft GitHub Releases are not enough"
+    )
+    assert expected in backlog
+    assert "real signed/notarized macOS update dry run" in backlog
+    assert "real Windows NSIS update dry run" in backlog
     assert "BL-003: Positron Update Strategy and Auto-Update Path" not in backlog
-    assert "There are no open backlog entries at the moment." in backlog
     assert "implementation handoff" in backlog
     assert "done.md" in backlog
     assert "BL-001: Electron Connected Auto-Update" not in backlog
@@ -225,6 +260,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "2-second grace period" in tauri_doc
     assert "deny child-window creation" in electron_doc
     assert "block top-level navigation away from the local Django origin" in electron_doc
+    expected = "proves detection, download, restart/install, and `app.sqlite3` persistence"
+    assert expected in electron_doc
     assert "Tauri uses a bootstrap HttpOnly cookie" in tauri_doc
     assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in positron_doc
     assert "not a release-parity path in this slice" in positron_doc

@@ -186,6 +186,214 @@ Optional metadata or certificate-selection inputs that the starter now passes th
 
 This is enough for a typical starter-level secret-driven signing path without committing the repo to a specific EV-token workflow, self-hosted runner setup, or enterprise release pipeline.
 
+## GitHub Actions Signed Binary Release Setup
+
+This section explains how to provision the GitHub Actions secrets used by `.github/workflows/desktop-packages.yml` for signed binary releases.
+
+Repository secrets for this repo live at:
+
+- `https://github.com/ephes/desktop-django-starter/settings/secrets/actions`
+
+Add the secrets as GitHub Actions repository secrets, not environment secrets, because the current workflow reads them directly as `secrets.*`.
+
+### macOS
+
+The macOS Electron lane needs two credential groups:
+
+- a Developer ID Application signing certificate for `CSC_LINK` plus `CSC_KEY_PASSWORD`
+- an App Store Connect Team API key for `APPLE_API_KEY`, `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`
+
+#### 1. Create the certificate signing request on a Mac
+
+1. Open Keychain Access with Spotlight, or launch it directly from `/System/Applications/Utilities/Keychain Access.app`.
+2. In the menu bar, choose `Keychain Access` -> `Certificate Assistant` -> `Request a Certificate From a Certificate Authority...`.
+3. Fill the dialog as follows:
+   - `User Email Address`: your Apple Developer account email
+   - `Common Name`: any descriptive label, such as `desktop-django-starter release signing`
+   - `CA Email Address`: leave this blank
+   - choose `Saved to disk`
+4. Save the generated `.certSigningRequest` file somewhere you can upload from later.
+
+This repo does not use the email-submission path from Keychain Access. The CSR is uploaded manually in the Apple Developer portal.
+
+#### 2. Create the Developer ID Application certificate
+
+1. Open the Apple Developer certificates page:
+   - `https://developer.apple.com/account/resources/certificates/add`
+2. Sign in with the Apple Developer account that owns the team used for release signing.
+3. Choose `Developer ID Application`.
+4. Continue to the intermediary choice screen.
+5. Select `G2 Sub-CA (Xcode 11.4.1 or later)`.
+6. Upload the `.certSigningRequest` file from the previous step.
+7. Finish the flow and download the resulting `.cer` certificate file.
+
+#### 3. Import and export the signing certificate as `.p12`
+
+1. Double-click the downloaded `.cer` file on the same Mac that created the CSR so it imports into Keychain Access.
+2. Re-open Keychain Access and search for `Developer ID Application`.
+3. Confirm the imported certificate has a private key attached under the certificate entry.
+4. Select the certificate entry and export it as `.p12`.
+5. Choose an export password for the `.p12` file.
+
+The private key must be present. If the certificate imports without a matching private key, the CSR was created on a different machine or in a different keychain and the export will not work for GitHub Actions signing.
+
+#### 4. Convert the `.p12` into GitHub Actions secrets
+
+1. Base64-encode the exported `.p12` file on the Mac that exported it:
+
+   ```bash
+   base64 -i /path/to/developer-id-application.p12 | pbcopy
+   ```
+
+2. Open the repository secrets page:
+   - `https://github.com/ephes/desktop-django-starter/settings/secrets/actions`
+3. Add these repository secrets:
+   - `CSC_LINK`: the base64-encoded `.p12` contents
+   - `CSC_KEY_PASSWORD`: the password you set when exporting the `.p12`
+
+`CSC_NAME` remains optional in this repo. The GitHub Actions flow works with `CSC_LINK` plus `CSC_KEY_PASSWORD` and does not require `CSC_NAME`.
+
+#### 5. Create the App Store Connect Team API key for notarization
+
+1. Open App Store Connect:
+   - `https://appstoreconnect.apple.com/`
+2. Navigate to:
+   - `Users and Access` -> `Integrations` -> `App Store Connect API`
+   - direct URL: `https://appstoreconnect.apple.com/access/integrations/api`
+3. Stay on the `Team Keys` area. This repo should use a Team key, not an Individual key.
+4. Create a new Team key with role `App Manager`.
+5. Download the `.p8` key file immediately. Apple only allows the download once.
+6. Record these values from the same page:
+   - `Key ID`
+   - `Issuer ID`
+
+#### 6. Add the notarization secrets to GitHub
+
+Open the repository secrets page again:
+
+- `https://github.com/ephes/desktop-django-starter/settings/secrets/actions`
+
+Add these repository secrets:
+
+- `APPLE_API_KEY`: the raw contents of the downloaded `.p8` file, including the `BEGIN PRIVATE KEY` and `END PRIVATE KEY` lines
+- `APPLE_API_KEY_ID`: the App Store Connect API Key ID
+- `APPLE_API_ISSUER`: the App Store Connect Team Issuer ID
+
+Important repo-specific detail:
+
+- for local packaging, `APPLE_API_KEY` is expected to be a filesystem path to the `.p8` file
+- in GitHub Actions for this repo, `APPLE_API_KEY` must be the raw `.p8` file contents because the workflow writes that secret into a temporary file before invoking `electron-builder`
+
+#### 7. Trigger the signed GitHub Actions release
+
+Once those repository secrets are set, run the Electron packaging workflow with release publication enabled:
+
+```bash
+gh workflow run desktop-packages.yml --ref <branch> -f publish_release=true
+```
+
+Then confirm the macOS job shows all of the following:
+
+- `Prepare macOS notarization API key` succeeded
+- `Build packaged desktop artifact` succeeded
+- `signing` logged a `Developer ID Application` identity
+- `notarization successful` appears in the macOS job log
+- the resulting release contains:
+  - `desktop-django-starter-macos-<version>-<arch>.dmg`
+  - `desktop-django-starter-macos-<version>-<arch>.zip`
+  - `latest-mac.yml`
+  - macOS blockmap files
+
+The workflow creates a GitHub Release draft when `publish_release=true`. Electron updater checks still require you to publish that release afterward because draft releases are not visible to updater clients.
+
+#### 8. Download and install a specific macOS release
+
+After the release is published, download the exact DMG you want to test.
+
+Browser path:
+
+1. Open the published release page, for example:
+   - `https://github.com/ephes/desktop-django-starter/releases/tag/v0.1.0`
+2. Download the matching macOS DMG asset:
+   - `desktop-django-starter-macos-<version>-<arch>.dmg`
+
+GitHub CLI path:
+
+```bash
+mkdir -p ~/Downloads/desktop-django-starter-<version>
+gh release download v<version> \
+  -R ephes/desktop-django-starter \
+  -p 'desktop-django-starter-macos-<version>-<arch>.dmg' \
+  -D ~/Downloads/desktop-django-starter-<version>
+```
+
+Optional checksum verification before install:
+
+```bash
+shasum -a 256 ~/Downloads/desktop-django-starter-<version>/desktop-django-starter-macos-<version>-<arch>.dmg
+```
+
+Compare that digest with the corresponding line in the checksum manifest from the same workflow run.
+
+To install the downloaded release on macOS:
+
+1. Double-click the downloaded DMG.
+2. Drag `Desktop Django Starter.app` into `Applications`.
+3. Eject the DMG.
+4. Launch the app from `Applications`.
+
+#### 9. Run the macOS updater dry run
+
+Use a real two-version sequence. For example:
+
+- install `v0.1.0`
+- publish `v0.1.1`
+- run the updater from the installed `v0.1.0` app
+
+Recommended operator flow:
+
+1. Install the older published version from its DMG.
+2. Launch it once and create visible test data in the app.
+3. Confirm the packaged user-data directory exists:
+
+   ```bash
+   ls -lah ~/Library/Application\ Support/"Desktop Django Starter"
+   ```
+
+4. Confirm `app.sqlite3` exists in that directory.
+5. Build and publish the newer signed/notarized GitHub release with `publish_release=true`.
+6. Publish the resulting GitHub Release so it is no longer draft.
+7. Re-open the installed older app.
+8. Use `Help` -> `Check for Updates...`.
+9. Confirm this sequence in the packaged app:
+   - update detected
+   - download prompt appears
+   - download completes
+   - restart/install prompt appears
+   - the app restarts into the newer version
+10. After restart, confirm the previously created records are still present.
+11. Re-check the user-data directory and confirm `app.sqlite3` is still there.
+
+What counts as a successful macOS updater validation in this repo:
+
+- a signed/notarized older app was installed from a published release
+- `Help` -> `Check for Updates...` detected the newer published release
+- the app downloaded and installed the update
+- the app restarted into the newer version
+- the per-user app-data directory survived the update
+- `app.sqlite3` survived the update
+
+What does not count:
+
+- unsigned local packaging
+- a draft GitHub Release
+- artifact generation without a packaged install/update run
+- a run that shows crash dialogs during the update handoff without confirming the install completed cleanly
+
+### Windows
+
+### Linux
+
 ## Checksum Files and Minimal Release Promotion
 
 The Electron packaging workflow now uploads two artifact groups per platform:
@@ -250,6 +458,13 @@ For connected Electron auto-update validation:
 5. confirm the SQLite app-data directory and `app.sqlite3` survive the update
 
 That validation is required before strengthening the release-readiness claim beyond "minimal connected updater path."
+
+Current Electron proof boundary:
+
+- the updater implementation, metadata generation, and optional GitHub Release publication path are in place
+- this repo still does not record a real signed/notarized macOS update dry run or a real Windows NSIS update dry run from published updater metadata
+- Electron should therefore be described as having an implemented minimal connected updater path, not a release-validated updater lane
+- do not close `BL-008` in [`backlog.md`](backlog.md) until both platform runs prove detection, download, restart/install, and `app.sqlite3` persistence
 
 Tauri packages use `tauri-plugin-updater`. This repo keeps the updater transport outside Django: the packaged Tauri app checks its configured HTTPS endpoint after the first main-window load and prompts before it downloads or installs a newer signed payload.
 
@@ -343,7 +558,7 @@ This slice is intentionally incomplete in a few areas:
 
 - no default hosted Tauri updater manifest or release-publication path, and no Positron hosted artifact or connected updater feed
 - no always-on signed-release publication workflow; Electron GitHub Release publication is an explicit manual workflow-dispatch option
-- Electron updater readiness still needs real signed/notarized macOS and Windows NSIS update dry runs before being called production-ready
+- Electron updater readiness still needs real signed/notarized macOS and Windows NSIS update dry runs that prove detection, download, restart/install, and `app.sqlite3` persistence before being called production-ready
 - Electron now adds a per-session shell-to-Django auth token for the localhost request channel through exact-origin header injection, but this is still a starter-level baseline rather than a full production localhost-hardening story
 - Tauri and Positron now add comparable per-session shell-to-Django request authentication through a Django bootstrap URL that sets an HttpOnly same-origin cookie, because their current public web view APIs do not expose Electron's external-localhost per-request header injection hook
 - Electron on Windows currently relies on explicit forced child-process tree termination via `taskkill /t /f`, which is acceptable for this starter slice but is not equivalent to graceful drain or broader production orphan-control work

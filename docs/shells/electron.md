@@ -24,4 +24,4 @@ Current update scope:
 - default feed: GitHub Releases for this repo, configurable through the Electron builder config environment variables documented in the release guide
 - workflow support: `.github/workflows/desktop-packages.yml` uploads `latest*.yml` metadata and can publish to a draft GitHub Release when manually triggered with `publish_release=true`
 - local behavior: development runs show a harmless "updates unavailable" dialog instead of attempting a feed check
-- release-readiness boundary: a signed/notarized macOS update and Windows NSIS update still need live validation before claiming production updater readiness
+- release-readiness boundary: a signed/notarized macOS update and Windows NSIS update still need live validation that proves detection, download, restart/install, and `app.sqlite3` persistence before claiming production updater readiness
