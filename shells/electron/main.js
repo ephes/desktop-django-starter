@@ -20,6 +20,7 @@ const {
   getNavigationGuardAction,
   getWindowOpenGuardResponse
 } = require("./scripts/window-guards.cjs");
+const { shouldShowManagedProcessExitDialog } = require("./scripts/process-exit-policy.cjs");
 const { createElectronUpdateController } = require("./scripts/updates.cjs");
 
 const HOST = "127.0.0.1";
@@ -469,7 +470,11 @@ function startManagedProcess({
 
     child.once("exit", (code, signal) => {
       clearManagedProcess(processName, child);
-      if (quitting || spawnFailed) {
+      if (!shouldShowManagedProcessExitDialog({
+        quitting,
+        spawnFailed,
+        updateInstallInProgress
+      })) {
         return;
       }
 
@@ -703,9 +708,11 @@ async function bootstrap() {
 }
 
 async function prepareForUpdateInstall() {
+  // Mark the updater handoff before stopping child processes so their expected
+  // exits do not surface as false-positive crash dialogs.
+  updateInstallInProgress = true;
   await stopTaskWorker();
   await stopDjango();
-  updateInstallInProgress = true;
 }
 
 ipcMain.handle("desktop:open-app-data-directory", async () => {

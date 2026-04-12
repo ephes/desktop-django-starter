@@ -183,6 +183,7 @@ function buildConfig(env = process.env, detectionOptions = {}) {
       "preload.cjs",
       "scripts/auth-token.cjs",
       "scripts/bundled-python.cjs",
+      "scripts/process-exit-policy.cjs",
       "scripts/window-guards.cjs",
       "scripts/updates.cjs",
       "assets/icons/app-icon.png",
