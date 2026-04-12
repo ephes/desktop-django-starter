@@ -32,12 +32,12 @@ def test_tauri_package_scripts_cover_local_runtime_flows() -> None:
     assert "start:packaged" in package["scripts"]
     assert "build:dmg" in package["scripts"]
     assert "../../assets/brand/flying-stable-app-icon.svg" in package["scripts"]["icons"]
-    assert ".stage\", \"backend" in launcher
+    assert '.stage", "backend' in launcher
     assert "stage-backend" in builder
-    assert "\"build\"" in builder
-    assert "--bundles\", \"nsis" in builder
-    assert "--bundles\", \"appimage" in builder
-    assert "--bundles\", shouldSmokeTest ? \"app\" : \"dmg\"" in builder
+    assert '"build"' in builder
+    assert '--bundles", "nsis' in builder
+    assert '--bundles", "appimage' in builder
+    assert '--bundles", shouldSmokeTest ? "app" : "dmg"' in builder
     assert "bundle/nsis/" in builder
     assert "Windows bundle smoke testing is not automated" in builder
     assert "Windows NSIS validation checklist" in builder
@@ -63,6 +63,8 @@ def test_tauri_runtime_keeps_tasks_demo_subprocess_model() -> None:
     assert "build_bootstrap_url" in runtime
     assert "/desktop-auth/bootstrap/" in runtime
     assert "create_main_window(&app_handle, &bootstrap_url)" in runtime
+    assert "SHUTDOWN_GRACE_PERIOD_MS" in runtime
+    assert '["-TERM", &process.id().to_string()]' in runtime
     assert "supported" in docs
     assert ".github/workflows/tauri-packages.yml" in docs
     assert "artifact-only GitHub Actions workflow" in docs
@@ -76,3 +78,5 @@ def test_tauri_runtime_keeps_tasks_demo_subprocess_model() -> None:
     assert "create_splash_window" in runtime
     assert "MINIMUM_SPLASH_DURATION_MS" in runtime
     assert "splash window immediately" in docs
+    assert "SIGTERM" in docs
+    assert "2-second grace period" in docs

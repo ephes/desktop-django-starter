@@ -21,6 +21,7 @@ const HOST: &str = "127.0.0.1";
 const STARTUP_TIMEOUT_MS: u64 = 15_000;
 const POLL_INTERVAL_MS: u64 = 250;
 const MINIMUM_SPLASH_DURATION_MS: u64 = 2_400;
+const SHUTDOWN_GRACE_PERIOD_MS: u64 = 2_000;
 const PACKAGED_RUNTIME_SECRET_KEY: &str = "desktop-django-starter-packaged-runtime-secret";
 const RUNTIME_MANIFEST_FILENAME: &str = "runtime-manifest.json";
 const SPLASH_WINDOW_LABEL: &str = "splash";
@@ -681,6 +682,22 @@ fn stop_child(child: ManagedChild) {
             .args(["/pid", &process.id().to_string(), "/t", "/f"])
             .status();
     } else {
+        let _ = Command::new("kill")
+            .args(["-TERM", &process.id().to_string()])
+            .status();
+
+        let deadline = Instant::now() + Duration::from_millis(SHUTDOWN_GRACE_PERIOD_MS);
+        while Instant::now() < deadline {
+            match process.try_wait() {
+                Ok(Some(_status)) => {
+                    *child = None;
+                    return;
+                }
+                Ok(None) => thread::sleep(Duration::from_millis(POLL_INTERVAL_MS)),
+                Err(_) => break,
+            }
+        }
+
         let _ = process.kill();
     }
 

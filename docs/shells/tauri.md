@@ -11,6 +11,7 @@ Current responsibilities:
 - generate a fresh per-session shell-to-Django auth token, pass it to Django as `DESKTOP_DJANGO_AUTH_TOKEN`, and include `X-Desktop-Django-Token` in the readiness poll
 - load the web view through Django's `/desktop-auth/bootstrap/` URL so Django can set an HttpOnly same-origin auth cookie before redirecting to the app
 - supervise both `manage.py runserver` and `manage.py db_worker` as child processes
+- shut down Unix child processes with `SIGTERM` first, then force-kill only after a 2-second grace period
 - consume the shared staged backend from `.stage/backend/` for packaged-like runs and local bundle builds
 - bundle shell-local icon outputs generated into `shells/tauri/src-tauri/icons/` from the shared source art under `assets/brand/`
 - build hosted CI artifacts through [`.github/workflows/tauri-packages.yml`](../../.github/workflows/tauri-packages.yml)
@@ -34,6 +35,7 @@ Scope boundaries:
 - the hosted Tauri lane uses build-only `tauri-action`, not GitHub Release publication
 - the current Tauri config now applies a minimal `app.security.csp` for Tauri-served shell assets, including the local splash window and localhost bootstrap surface
 - that CSP is intentionally narrow and should not be read as production-hardening for the Django pages loaded over `http://127.0.0.1:<random-port>`
+- Tauri now matches Electron's Unix shutdown shape more closely, but Windows still uses forced process-tree teardown because that remains the most reliable packaged-app cleanup path in this repo
 - Tauri is not a release-parity path in this slice
 - the Windows support claim is limited to local plus CI-built NSIS installer generation, with manual install/run validation still required
 - the current Windows config keeps Tauri's default `downloadBootstrapper` WebView2 installer behavior rather than an offline-ready embedded runtime

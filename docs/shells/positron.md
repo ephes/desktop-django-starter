@@ -10,7 +10,10 @@ Current responsibilities:
 - validate that the shared Django source tree is present before configuring Django, so startup failures stay readable
 - start Django inside the Positron process with an in-process WSGI server bound to a random localhost port
 - generate a fresh per-session shell-to-Django auth token, pass it into Django as `DESKTOP_DJANGO_AUTH_TOKEN`, and load the web view through Django's `/desktop-auth/bootstrap/` URL so Django can set an HttpOnly same-origin auth cookie before redirecting to the app
+- enforce a single running instance per app-data directory with a lock file before the in-process server starts
 - run the optional `tasks_demo` worker in-process on a background thread
+- always boot Django with `desktop_django_starter.settings.packaged` so local Positron runs validate the packaged-style app-data and staticfiles contract
+- refresh collected static files on startup without clearing the cache-backed staticfiles tree on every launch
 - reuse the shared brand source under `assets/brand/` and generate shell-local icon outputs into `shells/positron/resources/`
 - keep Positron-specific runtime behavior under `shells/positron/src/desktop_django_starter_positron/`
 
@@ -32,6 +35,9 @@ Scope boundaries:
 - Electron remains the most complete shell path
 - packaged startup uses the same fallback `DJANGO_SECRET_KEY` value as Electron and Tauri when the environment does not provide one; this is only a local bootstrap convenience, not a release secret
 - Positron uses a bootstrap HttpOnly cookie instead of Electron's hidden per-request header injection because this Toga web view path does not currently have an Electron-equivalent external-localhost outgoing request header hook
+- Positron now enforces single-instance startup, but unlike Electron and Tauri it currently exits the second launch instead of focusing the existing window
+- Positron intentionally always uses the packaged Django settings module, even during local shell runs, so the experimental shell exercises the desktop-style SQLite location and collected-staticfiles path instead of Django's debug-oriented local settings
+- startup still refreshes collected static files locally without clearing the cache-backed staticfiles tree on every launch
 - splashscreen parity is intentionally not required on macOS for Positron
 - Positron is not a release-parity path in this slice
 - Windows packaged-build parity is not claimed for Positron yet

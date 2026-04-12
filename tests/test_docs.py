@@ -191,6 +191,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" in done
     assert "BL-006: Electron Navigation and Window Hardening" not in backlog
     assert "BL-006: Electron Navigation and Window Hardening" in done
+    assert "BL-007: Experimental Shell Lifecycle and Runtime Clarity" not in backlog
+    assert "BL-007: Experimental Shell Lifecycle and Runtime Clarity" in done
     assert "BL-004: CI Validation Coverage for Electron and CLI" not in backlog
     assert "BL-004: CI Validation Coverage for Electron and CLI" in done
     assert "BL-002: Tauri Connected Auto-Update" in backlog
@@ -211,12 +213,24 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "Current minimal CSP posture" in tauri_doc
     assert "canonical written checklist" in tauri_doc
     assert "not a release-parity path in this slice" in tauri_doc
+    assert "SIGTERM" in tauri_doc
+    assert "2-second grace period" in tauri_doc
     assert "deny child-window creation" in electron_doc
     assert "block top-level navigation away from the local Django origin" in electron_doc
     assert "Tauri uses a bootstrap HttpOnly cookie" in tauri_doc
     assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in positron_doc
     assert "not a release-parity path in this slice" in positron_doc
     assert "Positron uses a bootstrap HttpOnly cookie" in positron_doc
+    assert "single running instance per app-data directory with a lock file" in positron_doc
+    assert "always uses the packaged Django settings module" in positron_doc
+    assert "without clearing the cache-backed staticfiles tree on every launch" in positron_doc
+    assert "app-data lock file" in architecture
+    assert "For the experimental Positron shell" in readme
+    assert "single running instance per app-data directory with a lock file" in readme
+    assert (
+        "refreshes collected static files on startup without clearing the cache directory each time"
+        in readme
+    )
     assert ".stage/" in gitignore
     assert "now wired into Electron startup" in (ROOT / "docs" / "design-guide.md").read_text()
 
@@ -231,8 +245,7 @@ def test_packaging_workflow_mentions_signing_and_checksum_steps() -> None:
     assert "contents: write" in workflow
     assert "GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}" in workflow
     electron_publish_env = (
-        "ELECTRON_RELEASE_PUBLISH: "
-        "${{ inputs.publish_release && 'always' || 'never' }}"
+        "ELECTRON_RELEASE_PUBLISH: ${{ inputs.publish_release && 'always' || 'never' }}"
     )
     assert electron_publish_env in workflow
     assert 'npx electron-builder --publish "$ELECTRON_RELEASE_PUBLISH"' in workflow

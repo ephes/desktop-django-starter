@@ -118,7 +118,8 @@ The current implementation follows this sequence:
 Single-instance expectation:
 
 - packaged mode should behave as a single-instance desktop app
-- a second launch should focus the existing window instead of starting a second backend bootstrap path
+- Electron and Tauri currently focus the existing window instead of starting a second backend bootstrap path
+- Positron now enforces the same single-instance boundary with an app-data lock file, but currently exits the second launch instead of focusing the existing window
 - this avoids concurrent startup work against the same per-user SQLite database, including migration races during app launch
 
 Health endpoint expectation:

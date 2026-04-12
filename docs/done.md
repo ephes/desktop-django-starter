@@ -6,6 +6,36 @@ Keep item ids stable. Do not renumber completed work.
 
 ## Completed Entries
 
+## BL-007: Experimental Shell Lifecycle and Runtime Clarity
+
+Status: completed
+
+### Context
+
+Electron remains the most complete shell in the repo, but the experimental Tauri and Positron ports had started to drift in a few lifecycle details that were no longer clearly intentional: Tauri used a more abrupt Unix shutdown path, and Positron left its single-instance and packaged-style runtime choices mostly implicit.
+
+### Goal
+
+Tighten the small lifecycle gaps that are easy to fix, and document the remaining shell differences so the repo's multi-shell story stays deliberate instead of accidental.
+
+### Implemented Summary
+
+- Updated the Tauri shell to send `SIGTERM` first on Unix and only force-kill Django or the task worker after a 2-second grace period, bringing its shutdown behavior closer to Electron.
+- Added a lock-file based single-instance guard to Positron so a second launch no longer starts a second in-process Django runtime against the same app-data directory.
+- Made Positron's always-packaged runtime mode explicit in code by naming the packaged settings choice and exporting `DESKTOP_DJANGO_RUNTIME_MODE=packaged` in the shell environment.
+- Narrowed Positron startup static collection by keeping the refresh step but dropping `collectstatic --clear`, so repeated local launches stop rebuilding the cache-backed static tree from scratch.
+- Updated the Tauri, Positron, README, and architecture docs to describe the narrowed differences and the remaining intentional divergence.
+- Added shell tests and docs assertions that lock in the new Tauri shutdown language, Positron runtime contract, and completed backlog bookkeeping.
+
+### Validation Notes
+
+- Ran `just tauri-test`.
+- Ran `just positron-check`.
+- Ran `just positron-smoke`.
+- Ran `uv run pytest tests/test_tauri_shell.py tests/test_positron_shell.py tests/test_docs.py`.
+- Ran `just docs-build`.
+- Ran `just check`.
+
 ## BL-006: Electron Navigation and Window Hardening
 
 Status: completed

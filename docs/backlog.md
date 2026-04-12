@@ -4,69 +4,6 @@ This backlog tracks explicit follow-on work for the desktop shell lanes. It is n
 
 When an entry is implemented, move it to [`done.md`](done.md) in the same change as the implementation and docs updates. Keep the item id stable so old handoff prompts and review notes remain traceable.
 
-## BL-007: Experimental Shell Lifecycle and Runtime Clarity
-
-Status: proposed
-
-### Context
-
-Electron is the most complete shell in the repo, but the experimental shells now have a few lifecycle and runtime-contract differences that deserve either cleanup or an explicit written decision:
-
-- Tauri currently uses a more abrupt Unix child-process shutdown path than Electron.
-- Positron does not currently enforce single-instance behavior.
-- Positron always prepares a packaged-style Django environment, even for local development, and currently runs `collectstatic` on startup.
-
-Some of these differences may be intentional. The quality issue is that the boundary between deliberate divergence and accidental drift is no longer clear.
-
-### Goal
-
-Tighten lifecycle behavior in the experimental shells where the fix is small, and document the remaining intentional differences so the repo's multi-shell story stays coherent.
-
-### Suggested Implementation Shape
-
-- For Tauri, evaluate whether child-process shutdown can match Electron's Unix `SIGTERM` then timeout/kill pattern without making the Rust shell harder to maintain.
-- For Positron, add single-instance enforcement if the shell is expected to share the same SQLite/app-data assumptions as the other shells.
-- Decide whether Positron should keep using packaged settings in local runs; if yes, document that more explicitly, and if not, add a clear dev/packaged mode split.
-- Revisit unconditional startup `collectstatic` in Positron and either narrow it, cache it, or document why the current cost is acceptable for this experiment.
-- Update shell docs and tests so the chosen behavior is explicit rather than inferred from code.
-
-### Likely File Areas
-
-- `shells/tauri/src-tauri/src/lib.rs`
-- `shells/positron/src/desktop_django_starter_positron/app.py`
-- `shells/positron/src/desktop_django_starter_positron/runtime.py`
-- `tests/test_tauri_shell.py`
-- `tests/test_positron_shell.py`
-- `docs/shells/tauri.md`
-- `docs/shells/positron.md`
-- `docs/architecture.md`
-- `README.md`
-- `llms.txt`
-- `docs/llms.txt`
-- `docs/backlog.md`
-- `docs/done.md`
-
-### Non-Goals
-
-- Do not force the experimental shells into artificial parity when their runtime models are intentionally different.
-- Do not add a large cross-shell abstraction layer just to remove a small amount of duplicated logic.
-- Do not strengthen release claims for Tauri or Positron as part of this cleanup alone.
-
-### Validation
-
-- Run `just tauri-test` if Tauri runtime code changes.
-- Run `just positron-check`.
-- Run `just positron-smoke` if Positron runtime behavior changes.
-- Run `just docs-build` if docs change.
-- Prefer `just check` for final handoff when feasible.
-
-### Done Criteria
-
-- The most important lifecycle differences between Electron, Tauri, and Positron are either narrowed or documented intentionally.
-- Positron's instance and runtime-mode behavior is explicit in code and docs.
-- Tests cover the chosen shell behavior where practical.
-- The implemented entry is moved from this file to [`done.md`](done.md) with a short implementation summary.
-
 ## BL-002: Tauri Connected Auto-Update
 
 Status: proposed

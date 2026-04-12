@@ -5,6 +5,7 @@ import os
 import secrets
 import socketserver
 from threading import Thread
+from typing import BinaryIO
 from urllib.parse import urlencode
 from wsgiref.simple_server import WSGIServer
 
@@ -14,7 +15,14 @@ from django.core import management as django_manage
 from django.core.handlers.wsgi import WSGIHandler
 from django.core.servers.basehttp import WSGIRequestHandler
 
-from .runtime import HOST, WORKER_ID, django_environment, ensure_project_imports
+from .runtime import (
+    HOST,
+    WORKER_ID,
+    acquire_instance_lock,
+    django_environment,
+    ensure_project_imports,
+    release_instance_lock,
+)
 
 SMOKE_EXIT_DELAY_SECONDS = 0.75
 AUTH_BOOTSTRAP_PATH = "/desktop-auth/bootstrap/"
@@ -27,21 +35,39 @@ class ThreadedWSGIServer(socketserver.ThreadingMixIn, WSGIServer):
 class DesktopDjangoStarterPositron(toga.App):
     def startup(self) -> None:
         self._httpd: ThreadedWSGIServer | None = None
+        self._instance_lock: BinaryIO | None = None
         self._task_worker = None
         self._task_worker_thread: Thread | None = None
         self._smoke_exit_scheduled = False
+        self._startup_error_message: str | None = None
         self.auth_token = secrets.token_hex(32)
         self.server_ready: asyncio.Future[int] = asyncio.Future()
 
         self.web_view = toga.WebView(on_webview_load=self.on_webview_load)
-        self.server_thread = Thread(target=self.web_server, daemon=True)
-        self.server_thread.start()
-
         self.on_exit = self.cleanup
         self.main_window = toga.MainWindow(title=self.formal_name)
         self.main_window.content = self.web_view
 
+        self._instance_lock = acquire_instance_lock(self.paths.data)
+        if self._instance_lock is None:
+            self._startup_error_message = (
+                "Desktop Django Starter Positron is already running for this user data directory."
+            )
+            return
+
+        self.server_thread = Thread(target=self.web_server, daemon=True)
+        self.server_thread.start()
+
     async def on_running(self) -> None:
+        if self._startup_error_message is not None:
+            self.main_window.show()
+            self.main_window.error_dialog(
+                "Already running",
+                self._startup_error_message,
+                on_result=lambda *_args: self.exit(),
+            )
+            return
+
         port = await self.server_ready
         self.start_task_worker()
         self.web_view.url = self.bootstrap_url(port)
@@ -69,8 +95,11 @@ class DesktopDjangoStarterPositron(toga.App):
             self._httpd.shutdown()
             self._httpd.server_close()
 
-        if self.server_thread.is_alive():
+        if hasattr(self, "server_thread") and self.server_thread.is_alive():
             self.server_thread.join(timeout=5)
+
+        release_instance_lock(self._instance_lock)
+        self._instance_lock = None
 
         return True
 
@@ -93,7 +122,7 @@ class DesktopDjangoStarterPositron(toga.App):
         django.setup(set_prefix=False)
 
     def prepare_runtime(self) -> None:
-        django_manage.call_command("collectstatic", interactive=False, verbosity=0, clear=True)
+        django_manage.call_command("collectstatic", interactive=False, verbosity=0, clear=False)
         django_manage.call_command("migrate", interactive=False, verbosity=0)
 
     def web_server(self) -> None:
