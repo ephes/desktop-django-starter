@@ -60,6 +60,9 @@ def test_tauri_runtime_keeps_tasks_demo_subprocess_model() -> None:
 
     assert "db_worker" in runtime
     assert "wait_for_django" in runtime
+    assert "packaged_database_path" in runtime
+    assert 'join("app.sqlite3")' in runtime
+    assert '&["seed_demo_content"]' in runtime
     assert 'getrandom = "0.3.4"' in cargo_toml
     assert 'tauri-plugin-updater = "2.10.1"' in cargo_toml
     assert "generate_desktop_auth_token" in runtime

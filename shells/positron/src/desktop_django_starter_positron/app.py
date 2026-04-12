@@ -21,6 +21,7 @@ from .runtime import (
     acquire_instance_lock,
     django_environment,
     ensure_project_imports,
+    positron_runtime_mode,
     release_instance_lock,
 )
 
@@ -122,8 +123,14 @@ class DesktopDjangoStarterPositron(toga.App):
         django.setup(set_prefix=False)
 
     def prepare_runtime(self) -> None:
+        should_seed_demo_content = (
+            positron_runtime_mode() == "packaged"
+            and not (self.paths.data / "app.sqlite3").exists()
+        )
         django_manage.call_command("collectstatic", interactive=False, verbosity=0, clear=False)
         django_manage.call_command("migrate", interactive=False, verbosity=0)
+        if should_seed_demo_content:
+            django_manage.call_command("seed_demo_content", verbosity=0)
 
     def web_server(self) -> None:
         try:

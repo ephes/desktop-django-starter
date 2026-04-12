@@ -83,6 +83,7 @@ Key elements of the current themed UI:
 - teal page header with background images (a custom illustration for My Ponies)
 - content panel with a toolbar, sticky footer
 - Item statuses themed as Grazing (backlog), Galloping (active), Show Ready (done)
+- brand-new per-user desktop databases open with a small starter pony roster seeded once after first-run migrations, while later empty states stay empty until the user adds ponies again
 - in-page modal for delete confirmations instead of a separate page
 - client-side form validation with themed error messages (tooltip-style with warning icon)
 - SVG empty-state illustrations (stacked documents for My Ponies, interlocking gears for Stable Routines)

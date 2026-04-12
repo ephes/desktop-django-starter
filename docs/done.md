@@ -6,6 +6,36 @@ Keep item ids stable. Do not renumber completed work.
 
 ## Completed Entries
 
+### BL-009: First-Run Pony Demo Seeding
+
+Status: completed
+
+### Context
+
+The starter now carries a clear Flying Stable presentation layer, but a fresh app launch still opened to an empty "My Ponies" list. That left the branded CRUD demo visually flat until the user created content manually. At the same time, this repo treats the packaged SQLite database as real per-user local state, so the app could not surprise users by repopulating data after they had already started using or clearing their stable.
+
+All three desktop shells run Django migrations during startup before showing the app. That made migration-time or startup-hook seeding too blunt for this use case, because a seed path tied to `migrate`, `post_migrate`, or `AppConfig.ready()` could affect existing installs repeatedly instead of only improving the first-run experience.
+
+### Goal
+
+Show a small set of example ponies automatically for a brand-new per-user database, without mutating existing user data and without re-seeding after the user clears the list intentionally.
+
+### Implemented Summary
+
+- Added an explicit `seed_demo_content` management command plus a small local demo-pony data definition under `example_app/`.
+- Added a tiny `DemoContentState` record so the command stays conservative and does not repopulate ponies after a user clears the stable.
+- Updated Electron, Tauri, and Positron startup so each shell checks whether the packaged per-user `app.sqlite3` exists before `migrate`, then runs the seed command only when that database file is brand-new.
+- Refreshed the example-app tests to cover first-run seeding, the existing-data no-op, and the no-reseed-after-clear behavior, and added shell source-level assertions for the new startup integration.
+- Updated the README, specification, and agent entry points so the first-run pony roster is documented as explicit demo content rather than a background refresh mechanism.
+
+### Validation Notes
+
+- Ran `uv run pytest tests/test_example_app.py`.
+- Ran `uv run pytest tests/test_docs.py`.
+- Ran `uv run pytest tests/test_electron_shell.py tests/test_positron_shell.py tests/test_tauri_shell.py`.
+- Ran `just docs-build`.
+- Ran `just check`.
+
 ### BL-010: Stable Routines Theme Copy Pass
 
 Status: completed

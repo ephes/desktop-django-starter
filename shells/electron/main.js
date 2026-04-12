@@ -304,6 +304,14 @@ function getDjangoEnvironment(port, runtimeMode, backendRoot, authToken = "") {
   return environment;
 }
 
+function getPackagedDatabasePath(runtimeMode) {
+  if (runtimeMode !== "packaged") {
+    return null;
+  }
+
+  return path.join(app.getPath("userData"), "app.sqlite3");
+}
+
 function getPythonLaunchSpec(runtimeMode, backendRoot) {
   if (process.env.DESKTOP_DJANGO_PYTHON) {
     return {
@@ -695,6 +703,8 @@ async function bootstrap() {
   const port = await getOpenPort();
   const baseUrl = `http://${HOST}:${port}`;
   const authToken = crypto.randomBytes(32).toString("hex");
+  const packagedDatabasePath = getPackagedDatabasePath(runtimeMode);
+  const shouldSeedDemoContent = packagedDatabasePath !== null && !fs.existsSync(packagedDatabasePath);
 
   createSplashWindow(backendRoot);
 
@@ -703,6 +713,9 @@ async function bootstrap() {
   }
 
   await runManageCommand(["migrate", "--noinput"], port, runtimeMode, backendRoot, authToken);
+  if (shouldSeedDemoContent) {
+    await runManageCommand(["seed_demo_content"], port, runtimeMode, backendRoot, authToken);
+  }
   await startDjangoServer(port, runtimeMode, backendRoot, authToken);
   await waitForDjango(baseUrl, authToken);
   // Start the worker only after Django is healthy so startup failures are

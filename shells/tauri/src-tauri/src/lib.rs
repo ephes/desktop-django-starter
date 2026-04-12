@@ -269,6 +269,17 @@ fn resolve_app_data_dir(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app_data_dir)
 }
 
+fn packaged_database_path(
+    app: &AppHandle,
+    runtime_mode: RuntimeMode,
+) -> Result<Option<PathBuf>, String> {
+    if runtime_mode != RuntimeMode::Packaged {
+        return Ok(None);
+    }
+
+    Ok(Some(resolve_app_data_dir(app)?.join("app.sqlite3")))
+}
+
 fn resolve_bundled_python_executable(backend_root: &Path) -> Result<PathBuf, String> {
     let manifest_path = backend_root.join(RUNTIME_MANIFEST_FILENAME);
     if manifest_path.exists() {
@@ -758,6 +769,10 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
     let base_url = format!("http://{HOST}:{port}");
     let auth_token = generate_desktop_auth_token()?;
     let bootstrap_url = build_bootstrap_url(&base_url, &auth_token)?;
+    let should_seed_demo_content = match packaged_database_path(app, runtime_mode)? {
+        Some(database_path) => !database_path.exists(),
+        None => false,
+    };
 
     if runtime_mode == RuntimeMode::Packaged {
         validate_packaged_backend_root(&backend_root)?;
@@ -771,6 +786,17 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
         &auth_token,
         &["migrate", "--noinput"],
     )?;
+
+    if should_seed_demo_content {
+        run_manage_command(
+            app,
+            runtime_mode,
+            &backend_root,
+            port,
+            &auth_token,
+            &["seed_demo_content"],
+        )?;
+    }
 
     let django = start_managed_process(
         app,

@@ -22,3 +22,14 @@ class Item(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+
+class DemoContentState(models.Model):
+    class Key(models.TextChoices):
+        FIRST_RUN_PONY_SEED = "first_run_pony_seed", "First-run pony seed"
+
+    key = models.CharField(max_length=64, unique=True, choices=Key.choices)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self) -> str:
+        return self.get_key_display()

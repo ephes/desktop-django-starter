@@ -112,6 +112,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "per-session shell-to-Django auth token" in readme
     assert "the shells now add a per-session shell-to-Django auth token" in readme
     assert "Tauri and Positron pass the same setting to Django" in readme
+    assert "three starter ponies seeded on the first packaged launch" in readme
+    assert "seed_demo_content" in readme
+    assert 'using "Release All Ponies" keeps the stable empty on later launches' in readme
     assert "HttpOnly same-origin cookie" in readme
     assert "taskkill /t /f" in readme
     assert "transaction_mode=IMMEDIATE" in readme
@@ -206,6 +209,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "PRAGMA journal_mode=WAL;" in architecture
     assert "per-session shell-to-Django auth token" in specification
     assert "not a CSRF replacement" in specification
+    assert "starter pony roster seeded once after first-run migrations" in specification
     assert "comparison paths in this repo" in specification
     assert "shells/electron/" in llms
     assert "shells/tauri/" in llms
@@ -221,6 +225,11 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "still not a release-validated updater lane" in llms
     assert "Positron is manual-only for updates in this repo" in llms
     assert "per-session shell-to-Django auth token" in llms
+    expected = (
+        "seed a small Flying Stable pony roster only when the per-user "
+        "`app.sqlite3` does not exist yet"
+    )
+    assert expected in llms
     assert "Tauri and Positron pass the same setting to Django" in llms
     assert "taskkill /t /f" in llms
     assert "transaction_mode=IMMEDIATE" in llms
@@ -234,6 +243,11 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert expected in docs_llms
     assert "still not a release-validated updater lane" in docs_llms
     assert "Positron is manual-only for updates in this repo" in docs_llms
+    expected = (
+        "seed a small Flying Stable pony roster only when the per-user "
+        "`app.sqlite3` does not exist yet"
+    )
+    assert expected in docs_llms
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" not in backlog
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" in done
     assert "BL-006: Electron Navigation and Window Hardening" not in backlog
@@ -243,6 +257,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "BL-004: CI Validation Coverage for Electron and CLI" not in backlog
     assert "BL-004: CI Validation Coverage for Electron and CLI" in done
     assert "BL-002: Tauri Connected Auto-Update" not in backlog
+    assert "BL-009: First-Run Pony Demo Seeding" not in backlog
     assert "BL-008: Electron Connected Updater Release Validation" in backlog
     assert "Status: blocked on Windows live release validation" in backlog
     expected = (
@@ -261,6 +276,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "BL-001: Electron Connected Auto-Update" in done
     assert "BL-002: Tauri Connected Auto-Update" in done
     assert "BL-003: Positron Update Strategy and Auto-Update Path" in done
+    assert "BL-009: First-Run Pony Demo Seeding" in done
+    assert "seed_demo_content" in done
+    assert "checks whether the packaged per-user `app.sqlite3` exists before `migrate`" in done
     assert "manual-only Positron update strategy for now" in done
     assert "tauri-plugin-updater" in done
     assert "DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS" in done

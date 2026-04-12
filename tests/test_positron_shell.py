@@ -64,6 +64,8 @@ def test_positron_runtime_reuses_shared_django_and_brand_assets() -> None:
 
     assert "collectstatic" in app
     assert "clear=False" in app
+    assert "seed_demo_content" in app
+    assert '"app.sqlite3"' in app
     assert "acquire_instance_lock" in app
     assert "Worker(" in app
     assert "secrets.token_hex(32)" in app
