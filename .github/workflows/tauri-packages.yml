@@ -10,6 +10,11 @@ jobs:
   package:
     name: package (${{ matrix.platform }})
     runs-on: ${{ matrix.os }}
+    env:
+      DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS: ${{ vars.DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS }}
+      DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY: ${{ vars.DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     strategy:
       fail-fast: false
       matrix:
@@ -18,21 +23,37 @@ jobs:
             platform: macos
             bundle_args: --bundles dmg
             artifact_name: desktop-django-starter-tauri-macos
-            artifact_glob: shells/tauri/src-tauri/target/release/bundle/dmg/*.dmg
+            installer_glob: shells/tauri/src-tauri/target/release/bundle/dmg/*.dmg
+            updater_glob: shells/tauri/src-tauri/target/release/bundle/macos/*.app.tar.gz
+            signature_glob: shells/tauri/src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
+            artifact_paths: |
+              shells/tauri/src-tauri/target/release/bundle/dmg/*.dmg
+              shells/tauri/src-tauri/target/release/bundle/macos/*.app.tar.gz
+              shells/tauri/src-tauri/target/release/bundle/macos/*.app.tar.gz.sig
             checksum_artifact_name: desktop-django-starter-tauri-macos-checksums
             checksum_path: shells/tauri/src-tauri/target/release/bundle/desktop-django-starter-tauri-macos-sha256.txt
           - os: windows-latest
             platform: windows
             bundle_args: --bundles nsis
             artifact_name: desktop-django-starter-tauri-windows
-            artifact_glob: shells/tauri/src-tauri/target/release/bundle/nsis/*.exe
+            installer_glob: shells/tauri/src-tauri/target/release/bundle/nsis/*.exe
+            updater_glob: shells/tauri/src-tauri/target/release/bundle/nsis/*.exe
+            signature_glob: shells/tauri/src-tauri/target/release/bundle/nsis/*.exe.sig
+            artifact_paths: |
+              shells/tauri/src-tauri/target/release/bundle/nsis/*.exe
+              shells/tauri/src-tauri/target/release/bundle/nsis/*.exe.sig
             checksum_artifact_name: desktop-django-starter-tauri-windows-checksums
             checksum_path: shells/tauri/src-tauri/target/release/bundle/desktop-django-starter-tauri-windows-sha256.txt
           - os: ubuntu-22.04 # pinned for libwebkit2gtk-4.1-dev availability
             platform: linux
             bundle_args: --bundles appimage
             artifact_name: desktop-django-starter-tauri-linux
-            artifact_glob: shells/tauri/src-tauri/target/release/bundle/appimage/*.AppImage
+            installer_glob: shells/tauri/src-tauri/target/release/bundle/appimage/*.AppImage
+            updater_glob: shells/tauri/src-tauri/target/release/bundle/appimage/*.AppImage
+            signature_glob: shells/tauri/src-tauri/target/release/bundle/appimage/*.AppImage.sig
+            artifact_paths: |
+              shells/tauri/src-tauri/target/release/bundle/appimage/*.AppImage
+              shells/tauri/src-tauri/target/release/bundle/appimage/*.AppImage.sig
             checksum_artifact_name: desktop-django-starter-tauri-linux-checksums
             checksum_path: shells/tauri/src-tauri/target/release/bundle/desktop-django-starter-tauri-linux-sha256.txt
 
@@ -98,23 +119,28 @@ jobs:
         with:
           projectPath: shells/tauri
           # Tauri only emits linuxdeploy stderr at non-error log levels.
-          args: --verbose ${{ matrix.bundle_args }}
+          args: --verbose ${{ env.TAURI_SIGNING_PRIVATE_KEY != '' && matrix.bundle_args || format('--no-sign {0}', matrix.bundle_args) }}
 
       - name: Build packaged Tauri artifact
         if: matrix.platform != 'linux'
         uses: tauri-apps/tauri-action@v0
         with:
           projectPath: shells/tauri
-          args: ${{ matrix.bundle_args }}
+          args: ${{ env.TAURI_SIGNING_PRIVATE_KEY != '' && matrix.bundle_args || format('--no-sign {0}', matrix.bundle_args) }}
 
       - name: Generate artifact checksums
-        run: python scripts/write-checksums.py --glob "${{ matrix.artifact_glob }}" --output "${{ matrix.checksum_path }}"
+        run: |
+          python scripts/write-checksums.py \
+            --glob "${{ matrix.installer_glob }}" \
+            --glob "${{ matrix.updater_glob }}" \
+            --glob "${{ matrix.signature_glob }}" \
+            --output "${{ matrix.checksum_path }}"
 
       - name: Upload packaged Tauri artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact_name }}
-          path: ${{ matrix.artifact_glob }}
+          path: ${{ matrix.artifact_paths }}
           if-no-files-found: error
 
       - name: Upload packaged Tauri artifact checksums

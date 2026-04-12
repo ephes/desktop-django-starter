@@ -50,6 +50,10 @@ function defaultBundleArgs({ smokeTest: shouldSmokeTest }) {
   return [];
 }
 
+function shouldDisableUpdaterSigning(args) {
+  return !process.env.TAURI_SIGNING_PRIVATE_KEY && !args.includes("--no-sign");
+}
+
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
     stdio: "inherit",
@@ -175,9 +179,19 @@ function printWindowsValidationChecklist(artifacts) {
   process.stdout.write("- Confirm writable app data persists across relaunches under the per-user app-data directory.\n");
 }
 
-const buildArgs = hasBundleControlArg(forwardedArgs)
+const baseBuildArgs = hasBundleControlArg(forwardedArgs)
   ? forwardedArgs
   : [...defaultBundleArgs({ smokeTest }), ...forwardedArgs];
+const buildArgs = shouldDisableUpdaterSigning(baseBuildArgs)
+  ? ["--no-sign", ...baseBuildArgs]
+  : baseBuildArgs;
+
+if (buildArgs[0] === "--no-sign") {
+  process.stdout.write(
+    "Tauri updater signing is disabled for this local build because "
+      + "`TAURI_SIGNING_PRIVATE_KEY` is not set.\n"
+  );
+}
 
 run(npmCommand, ["run", "stage-backend"], {
   cwd: tauriRoot

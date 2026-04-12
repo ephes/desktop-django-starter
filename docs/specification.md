@@ -1,7 +1,7 @@
 # Desktop Django Starter Specification
 
 Status: Draft 0.2  
-Scope: specification for the starter, with the runnable development slice, staged packaged-backend slice, sign/notarization-aware packaged-build slice, and minimal Electron connected updater path now implemented, while Tauri and Positron auto-update remain deferred
+Scope: specification for the starter, with the runnable development slice, staged packaged-backend slice, sign/notarization-aware packaged-build slice, and minimal Electron plus experimental Tauri connected updater paths now implemented, while Positron auto-update remains deferred
 
 ## 1. Project Summary
 
@@ -251,12 +251,13 @@ High-level release story for v1:
 - macOS public distribution should assume code signing and notarization are required
 - Windows code signing is recommended for public distribution, even if early workshop artifacts may be unsigned
 - Linux signing is not a baseline requirement for the first public starter release
-- connected Electron environments now have a minimal auto-update path through `electron-updater`; connected Tauri and Positron auto-update remain deferred
+- connected Electron environments now have a minimal auto-update path through `electron-updater`; connected Tauri environments now have an experimental updater path through `tauri-plugin-updater`; Positron auto-update remains deferred
 - starter v1 must still document a manual update path that works in air-gapped or tightly controlled environments
 
 Minimum update story to document:
 
 - connected Electron installs: check for updates from the packaged app after publishing the installer and updater metadata to the configured update feed
+- connected Tauri installs: check for updates from the packaged app after publishing a signed updater payload plus `.sig` files to the configured HTTPS endpoint
 - connected manual installs: manually download and install a newer signed release artifact
 - air-gapped installs: transfer a signed installer or zip through the approved offline channel and verify version/integrity before installation
 - the repo should describe where release artifacts live and what a user or admin must replace during an offline update

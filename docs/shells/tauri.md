@@ -1,6 +1,6 @@
 # Tauri Shell
 
-Status: implemented as an experimental shell in this slice, now with local bundle commands plus an artifact-only GitHub Actions workflow.
+Status: implemented as an experimental shell in this slice, now with local bundle commands, an updater-capable GitHub Actions artifact workflow, and a packaged-only connected updater experiment.
 
 The current Tauri port lives under [`shells/tauri/`](../../shells/tauri/).
 
@@ -12,9 +12,10 @@ Current responsibilities:
 - load the web view through Django's `/desktop-auth/bootstrap/` URL so Django can set an HttpOnly same-origin auth cookie before redirecting to the app
 - supervise both `manage.py runserver` and `manage.py db_worker` as child processes
 - shut down Unix child processes with `SIGTERM` first, then force-kill only after a 2-second grace period
+- in packaged mode, check a configured HTTPS updater endpoint after the first main-window load and prompt before downloading/installing a newer signed update
 - consume the shared staged backend from `.stage/backend/` for packaged-like runs and local bundle builds
 - bundle shell-local icon outputs generated into `shells/tauri/src-tauri/icons/` from the shared source art under `assets/brand/`
-- build hosted CI artifacts through [`.github/workflows/tauri-packages.yml`](../../.github/workflows/tauri-packages.yml)
+- build hosted CI artifacts through [`.github/workflows/tauri-packages.yml`](../../.github/workflows/tauri-packages.yml), including updater payloads and `.sig` files when a signing key is configured
 
 Local commands:
 
@@ -29,9 +30,12 @@ Local commands:
 Scope boundaries:
 
 - Tauri is still experimental in this slice
-- `.github/workflows/tauri-packages.yml` now provides an artifact-only GitHub Actions workflow for this shell
+- `.github/workflows/tauri-packages.yml` now provides an updater-capable GitHub Actions workflow for this shell while still staying artifact-only
 - Electron remains the most complete shell path
 - Tauri uses a bootstrap HttpOnly cookie instead of Electron's hidden per-request header injection because this Tauri path does not currently have an Electron-equivalent external-localhost outgoing request header hook
+- the Tauri updater uses `tauri-plugin-updater`, not a Django localhost API or a broadened shell bridge
+- `tauri.conf.json` keeps a placeholder `plugins.updater` block because Tauri requires it when `bundle.createUpdaterArtifacts` is enabled; the real endpoint list and public key still come from `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS` plus `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY`
+- packaged update checks stay disabled unless `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS` and `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY` are set at build time or supplied at runtime
 - the hosted Tauri lane uses build-only `tauri-action`, not GitHub Release publication
 - the current Tauri config now applies a minimal `app.security.csp` for Tauri-served shell assets, including the local splash window and localhost bootstrap surface
 - that CSP is intentionally narrow and should not be read as production-hardening for the Django pages loaded over `http://127.0.0.1:<random-port>`
@@ -40,6 +44,7 @@ Scope boundaries:
 - the Windows support claim is limited to local plus CI-built NSIS installer generation, with manual install/run validation still required
 - the current Windows config keeps Tauri's default `downloadBootstrapper` WebView2 installer behavior rather than an offline-ready embedded runtime
 - the hosted Linux AppImage job currently applies `NO_STRIP=true` as an upstream `linuxdeploy` workaround rather than a claim of finished Linux release hardening
+- local `just tauri-build` runs now pass `--no-sign` automatically when `TAURI_SIGNING_PRIVATE_KEY` is absent so unsigned local bundles still build even though `createUpdaterArtifacts` is enabled in config
 - `just tauri-build` now also prints a Windows NSIS validation checklist when run on Windows, while `/docs/release.md` keeps the canonical written checklist
 - installer install/run validation still needs a real live Windows machine and is not automated in this repo
 

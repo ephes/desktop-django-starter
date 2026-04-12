@@ -123,6 +123,10 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "official-style `tauri-action`" in release
     assert "build-only mode" in release
     assert "desktop-django-starter-tauri-windows-sha256.txt" in release
+    assert "tauri-plugin-updater" in release
+    assert "DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS" in release
+    assert "DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY" in release
+    assert "TAURI_SIGNING_PRIVATE_KEY" in release
     assert "downloadBootstrapper" in release
     assert "real live Windows machine test" in release
     assert "Windows NSIS validation checklist" in release
@@ -178,6 +182,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "GitHub-hosted Tauri artifact workflow" in llms
     assert "prepared, unverified Windows NSIS path" in llms
     assert "minimal localhost-aware CSP" in llms
+    assert "tauri-plugin-updater" in llms
     assert "per-session shell-to-Django auth token" in llms
     assert "Tauri and Positron pass the same setting to Django" in llms
     assert "taskkill /t /f" in llms
@@ -195,8 +200,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "BL-007: Experimental Shell Lifecycle and Runtime Clarity" in done
     assert "BL-004: CI Validation Coverage for Electron and CLI" not in backlog
     assert "BL-004: CI Validation Coverage for Electron and CLI" in done
-    assert "BL-002: Tauri Connected Auto-Update" in backlog
-    assert "tauri-plugin-updater" in backlog
+    assert "BL-002: Tauri Connected Auto-Update" not in backlog
     assert "BL-003: Positron Update Strategy and Auto-Update Path" in backlog
     assert (
         "Briefcase's development update workflow is not the same thing as an end-user auto-updater"
@@ -206,6 +210,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "done.md" in backlog
     assert "BL-001: Electron Connected Auto-Update" not in backlog
     assert "BL-001: Electron Connected Auto-Update" in done
+    assert "BL-002: Tauri Connected Auto-Update" in done
+    assert "tauri-plugin-updater" in done
+    assert "DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS" in done
     assert "electron-updater" in done
     assert "Help > Check for Updates..." in done
     assert "publish_release=true" in done
@@ -293,11 +300,18 @@ def test_tauri_packaging_workflow_mentions_tauri_action_and_checksums() -> None:
     assert "file" in workflow
     assert 'NO_STRIP: "true"' in workflow
     assert "Build packaged Linux Tauri artifact" in workflow
-    assert "args: --verbose ${{ matrix.bundle_args }}" in workflow
+    assert "TAURI_SIGNING_PRIVATE_KEY" in workflow
+    assert "DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS" in workflow
+    assert "DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY" in workflow
+    assert "format('--no-sign {0}', matrix.bundle_args)" in workflow
+    assert "args: --verbose ${{ env.TAURI_SIGNING_PRIVATE_KEY != ''" in workflow
     assert "python scripts/write-checksums.py" in workflow
     assert "desktop-django-starter-tauri-macos-sha256.txt" in workflow
     assert "desktop-django-starter-tauri-windows-sha256.txt" in workflow
     assert "desktop-django-starter-tauri-linux-sha256.txt" in workflow
+    assert ".app.tar.gz" in workflow
+    assert ".AppImage.sig" in workflow
+    assert ".exe.sig" in workflow
     assert "tagName:" not in workflow
     assert "releaseName:" not in workflow
     assert "releaseId:" not in workflow

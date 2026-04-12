@@ -4,7 +4,7 @@ Minimal, attendee-facing starter for shipping a Django app inside Electron with 
 
 **Documentation: [desktop-django-starter.readthedocs.io](https://desktop-django-starter.readthedocs.io/en/latest/)**
 
-This repository now includes a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware GitHub packaging slice, plus experimental Tauri and Positron ports: a tiny Django app served locally and supervised by Electron or Tauri, plus an in-process Positron shell that keeps the shared Django core under `src/`. Electron remains the baseline release lane, while Tauri now also has a GitHub-hosted artifact-only packaging workflow built in the official `tauri-action` style.
+This repository now includes a runnable development slice, a staged packaged-backend slice, a sign/notarization-aware GitHub packaging slice, plus experimental Tauri and Positron ports: a tiny Django app served locally and supervised by Electron or Tauri, plus an in-process Positron shell that keeps the shared Django core under `src/`. Electron remains the baseline release lane, while Tauri now also has a GitHub-hosted artifact workflow and an experimental connected updater path built around the official Tauri updater plugin.
 
 ## Intent
 
@@ -29,11 +29,11 @@ Runnable starter slices:
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally, including the supervised task worker
-- experimental packaged-like Tauri launcher plus local host-bundle build paths, including a prepared but unverified Windows NSIS installer path, a macOS DMG path, and a GitHub-hosted artifact-only packaging workflow
+- experimental packaged-like Tauri launcher plus local host-bundle build paths, including a prepared but unverified Windows NSIS installer path, a macOS DMG path, a GitHub-hosted artifact workflow, and signed updater-bundle support when a Tauri updater signing key is configured
 - experimental Positron local start/smoke path plus a local macOS build/DMG path through Briefcase, with ad-hoc signing explicitly documented as local-only
 - on-demand GitHub Actions packaging for macOS, Windows, and Linux, with downloadable workflow artifacts, Electron updater metadata, per-platform SHA-256 checksum files, env-driven macOS signing/notarization scaffolding, optional Windows signing inputs, optional draft GitHub Release publication for the Electron lane, and `just` helpers for triggering and fetching them
 
-Electron now has a connected updater path through `electron-updater` and `electron-builder` release metadata. The app exposes this as `Help > Check for Updates...` in the Electron main process, not through Django or a broader preload bridge. By default, the packaged update feed follows the build context GitHub repo slug (`GITHUB_REPOSITORY` in Actions, otherwise the local `origin` remote) unless `DESKTOP_DJANGO_UPDATE_GITHUB_OWNER` plus `DESKTOP_DJANGO_UPDATE_GITHUB_REPO`, or `DESKTOP_DJANGO_UPDATE_URL`, override it. Electron updater checks only see published GitHub releases, not drafts. Full production release automation is still not claimed: signed/notarized macOS update validation and Windows NSIS update validation need real release dry runs. Tauri and Positron auto-update remain deferred, and manual installer replacement remains the baseline for air-gapped environments.
+Electron now has a connected updater path through `electron-updater` and `electron-builder` release metadata. The app exposes this as `Help > Check for Updates...` in the Electron main process, not through Django or a broader preload bridge. By default, the packaged update feed follows the build context GitHub repo slug (`GITHUB_REPOSITORY` in Actions, otherwise the local `origin` remote) unless `DESKTOP_DJANGO_UPDATE_GITHUB_OWNER` plus `DESKTOP_DJANGO_UPDATE_GITHUB_REPO`, or `DESKTOP_DJANGO_UPDATE_URL`, override it. Electron updater checks only see published GitHub releases, not drafts. Tauri now also has an experimental connected updater path through `tauri-plugin-updater`: packaged builds can check a configured HTTPS endpoint after the first main-window load when `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS`, `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY`, and signed updater artifacts are in place. Full production release automation is still not claimed: signed/notarized macOS update validation and Windows NSIS update validation need real release dry runs, and Tauri still does not claim release parity. Manual installer replacement remains the baseline for air-gapped environments.
 
 Electron and Tauri load the Django UI over `http://127.0.0.1:<random-port>`, while Positron serves the same Django app from an in-process WSGI server on a random localhost port. That localhost-only bind plus a random port is a real baseline, and the shells now add a per-session shell-to-Django auth token. Electron passes `DESKTOP_DJANGO_AUTH_TOKEN` to Django and injects `X-Desktop-Django-Token` only for the exact local Django origin. Tauri and Positron pass the same setting to Django, then open their web views through `/desktop-auth/bootstrap/?token=...&next=/`; Django validates the token, sets an HttpOnly same-origin cookie, and redirects to the app URL without the token. The token does not replace CSRF and is not exposed through preload, a shell bridge, or normal page JavaScript. Tauri and Positron use the bootstrap cookie path because their current web view APIs do not provide the same Electron-style external-localhost per-request header injection hook. On Windows, Electron currently shuts down Django and `db_worker` with explicit forced child-process tree termination via `taskkill /t /f`, which is acceptable for this starter slice but is not the same as a graceful drain or a more advanced production cleanup strategy.
 
@@ -141,7 +141,7 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 For backend-only work, use `just backend-dev`.
 When you need the real `/tasks/` demo outside Electron, run `just task-worker` in a second terminal.
 
-For the experimental Tauri shell, use `just tauri-install` once and then `just tauri-start`. The Tauri path keeps the same localhost Django plus `db_worker` subprocess model as Electron, now with a shell-local startup splash while backend bootstrap runs in the background. Tauri generates a per-session auth token, passes it to Django, uses `X-Desktop-Django-Token` for readiness polling, and opens the web view through Django's HttpOnly-cookie bootstrap URL because Tauri does not currently provide the same external-localhost outgoing request header hook that Electron uses. Its Tauri-side assets now use a minimal CSP for the local splash/bootstrap surface, not as a claim of release-grade hardening for the Django pages loaded over `http://127.0.0.1:<random-port>`. On Unix, Tauri now also follows Electron's shutdown shape more closely by sending `SIGTERM` first and only forcing the child process down after a 2-second grace period. This slice now also includes `.github/workflows/tauri-packages.yml`, an artifact-only GitHub-hosted packaging lane built around `tauri-action` without GitHub Release publication. Tauri is still not a release-parity path: Electron remains the more complete release lane, Tauri signing/notarization automation is not wired here, and Windows installer install/run validation still requires a real live Windows machine. The current Tauri NSIS config keeps Tauri's default `downloadBootstrapper` WebView2 behavior rather than claiming an offline-ready embedded runtime.
+For the experimental Tauri shell, use `just tauri-install` once and then `just tauri-start`. The Tauri path keeps the same localhost Django plus `db_worker` subprocess model as Electron, now with a shell-local startup splash while backend bootstrap runs in the background. Tauri generates a per-session auth token, passes it to Django, uses `X-Desktop-Django-Token` for readiness polling, and opens the web view through Django's HttpOnly-cookie bootstrap URL because Tauri does not currently provide the same external-localhost outgoing request header hook that Electron uses. Its Tauri-side assets now use a minimal CSP for the local splash/bootstrap surface, not as a claim of release-grade hardening for the Django pages loaded over `http://127.0.0.1:<random-port>`. On Unix, Tauri now also follows Electron's shutdown shape more closely by sending `SIGTERM` first and only forcing the child process down after a 2-second grace period. This slice now also includes `.github/workflows/tauri-packages.yml`, which uploads Tauri installer artifacts plus updater payloads and `.sig` files when `TAURI_SIGNING_PRIVATE_KEY` is configured. The packaged Tauri app checks its configured updater endpoint after the first main-window load, but only when `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS` plus `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY` were present at build time or are supplied at runtime. Tauri is still not a release-parity path: Electron remains the more complete release lane, Tauri does not publish GitHub Releases here, signing/notarization parity is not wired, and Windows installer install/run validation still requires a real live Windows machine. The current Tauri NSIS config keeps Tauri's default `downloadBootstrapper` WebView2 behavior rather than claiming an offline-ready embedded runtime.
 
 For the experimental Positron shell, use `just positron-install` once and then `just positron-start`. The Positron path intentionally keeps a different runtime model: Django and the optional `tasks_demo` worker run in-process on threads, the web view starts through Django's HttpOnly-cookie bootstrap URL, and there is no splashscreen-parity requirement on macOS. It now also enforces a single running instance per app-data directory with a lock file, always boots Django with the packaged settings module so the local shell exercises the desktop-style SQLite and staticfiles path, and refreshes collected static files on startup without clearing the cache directory each time. Packaged builds remain a local-only Briefcase experiment.
 
@@ -166,10 +166,10 @@ Local packaging remains usable without any signing secrets:
 The Tauri packaging path is explicitly narrower than Electron in this slice:
 
 - it reuses `.stage/backend` as bundled resources
-- it now includes `.github/workflows/tauri-packages.yml`, an official-style `tauri-action` workflow in build-only mode with explicit artifact uploads and checksum manifests
+- it now includes `.github/workflows/tauri-packages.yml`, an official-style `tauri-action` workflow in build-only mode with explicit artifact uploads, updater bundles, signatures, and checksum manifests
 - it now applies a minimal CSP to Tauri-served shell assets such as the local splash window, while the Django UI still loads over localhost and is not presented as production-hardening
 - it keeps Tauri's default Windows `downloadBootstrapper` WebView2 installer behavior rather than switching to the much larger `offlineInstaller`
-- it does not add GitHub Release publication, auto-update wiring, or signing/notarization parity with Electron
+- it does not add GitHub Release publication or signing/notarization parity with Electron
 - installer install/run validation still requires a real live Windows machine and is not proved by CI alone
 
 The Positron packaging path is also explicitly narrower than Electron:
@@ -203,15 +203,16 @@ Electron workflow manifests:
 
 Tauri workflow manifests:
 
-- macOS: `desktop-django-starter-tauri-macos-sha256.txt` for the DMG artifact upload
-- Windows: `desktop-django-starter-tauri-windows-sha256.txt` for the NSIS `.exe` artifact upload
-- Linux: `desktop-django-starter-tauri-linux-sha256.txt` for the AppImage artifact upload
+- macOS: `desktop-django-starter-tauri-macos-sha256.txt` for the DMG plus `.app.tar.gz` updater payload and `.sig` upload set
+- Windows: `desktop-django-starter-tauri-windows-sha256.txt` for the NSIS `.exe` plus `.sig` upload set
+- Linux: `desktop-django-starter-tauri-linux-sha256.txt` for the AppImage plus `.sig` upload set
 
 Those checksum files are uploaded as separate workflow artifacts so an admin can verify the downloaded installer before promoting it into a connected release channel or transferring it through an offline/manual flow.
 
 Connected and manual update model for this repo:
 
 - connected Electron installs: publish the Electron artifacts and `latest*.yml` updater metadata to the configured update feed, and if using GitHub Releases make sure the release is published rather than left as a draft, then use `Help > Check for Updates...` inside the packaged app to check, download, and restart into the update
+- connected Tauri installs: build with `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS`, `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY`, and `TAURI_SIGNING_PRIVATE_KEY`, host the generated updater bundle plus `.sig` files behind the configured HTTPS endpoint, then let the packaged app check on startup and prompt before download/install
 - connected manual installs: download the installer plus its matching SHA-256 file from GitHub Actions artifacts, a GitHub Release, or your internal release channel, verify the checksum, then run the installer manually
 - air-gapped installs: transfer the DMG or `.exe` plus its matching SHA-256 file through the approved offline channel, verify version and integrity, then run the installer manually
 - local writable state survives reinstall/update because packaged mode keeps it under Electron's per-user app-data directory, with the SQLite database stored as `app.sqlite3` and packaged SQLite tuned for desktop use with `transaction_mode=IMMEDIATE`, WAL, `synchronous=NORMAL`, a 20-second timeout, and modest cache/mmap pragmas
@@ -258,7 +259,8 @@ Packaged mode still sets a small runtime environment at launch time:
 ## Production Gaps
 
 - Electron has a minimal connected updater path, but a real signed/notarized macOS update and Windows NSIS update dry run are still required before calling it production-ready.
-- No Tauri or Positron auto-update path is included yet.
+- Tauri now has an experimental connected updater path, but it still needs a real hosted endpoint, signed updater artifacts, and live Windows validation before any stronger claim.
+- Positron still has no connected auto-update path.
 - GitHub Release publication for Electron is an explicit `desktop-packages.yml` workflow-dispatch option; normal workflow artifact promotion can still remain manual.
 - Linux packaging still exists, but Linux signing and verification are not a baseline in this slice.
 - Windows public-distribution hardening beyond optional signing inputs is still follow-on work.

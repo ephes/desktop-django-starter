@@ -1,6 +1,6 @@
 # Release and Update Guide
 
-This starter now includes the packaging scaffolding needed to make signing, notarization, a minimal Electron connected updater, and manual updates explicit without turning the repository into a full production release system.
+This starter now includes the packaging scaffolding needed to make signing, notarization, a minimal Electron connected updater, an experimental Tauri connected updater, and manual updates explicit without turning the repository into a full production release system.
 
 ## Packaging Workflow
 
@@ -28,9 +28,9 @@ The Tauri GitHub workflow is intentionally narrower than the Electron lane:
 
 - there is now a dedicated Tauri GitHub packaging workflow at `.github/workflows/tauri-packages.yml`
 - it uses the official-style `tauri-action` flow in build-only mode, rather than publishing a GitHub Release
-- it uploads per-platform Tauri artifacts and per-platform checksum manifests
+- it uploads per-platform Tauri installer artifacts, updater payloads, `.sig` files, and per-platform checksum manifests
 - it is still experimental and is not a release-parity path
-- it does not yet wire Tauri signing/notarization secrets or updater publication
+- it now consumes Tauri updater signing and runtime config when those env vars are present, but it still does not publish releases or claim signing/notarization parity with Electron
 - Tauri-served shell assets now use a minimal CSP for the local splash/bootstrap surface only; the localhost-served Django UI is not presented here as a hardened release renderer
 - the Windows claim is limited to a prepared, CI-built NSIS installer path plus a required manual Windows validation path
 - the current Windows bundle config keeps Tauri's default `downloadBootstrapper` WebView2 installer behavior rather than switching to `offlineInstaller`
@@ -55,9 +55,9 @@ Current checksum artifacts:
 - macOS: `desktop-django-starter-macos-sha256.txt`, containing SHA-256 lines for the DMG, updater ZIP, updater metadata, and blockmap upload set
 - Windows: `desktop-django-starter-windows-sha256.txt`, containing SHA-256 lines for the NSIS `.exe`, updater metadata, and blockmap upload set
 - Linux: `desktop-django-starter-linux-sha256.txt`, containing SHA-256 lines for the AppImage, updater metadata, and blockmap upload set
-- Tauri macOS: `desktop-django-starter-tauri-macos-sha256.txt`, containing SHA-256 lines for the DMG upload set
-- Tauri Windows: `desktop-django-starter-tauri-windows-sha256.txt`, containing SHA-256 lines for the NSIS `.exe` upload set
-- Tauri Linux: `desktop-django-starter-tauri-linux-sha256.txt`, containing SHA-256 lines for the AppImage upload set
+- Tauri macOS: `desktop-django-starter-tauri-macos-sha256.txt`, containing SHA-256 lines for the DMG plus `.app.tar.gz` updater payload and `.sig` upload set
+- Tauri Windows: `desktop-django-starter-tauri-windows-sha256.txt`, containing SHA-256 lines for the NSIS `.exe` plus `.sig` upload set
+- Tauri Linux: `desktop-django-starter-tauri-linux-sha256.txt`, containing SHA-256 lines for the AppImage plus `.sig` upload set
 
 Linux output remains available for parity, but Linux signing and Linux verification are not baseline requirements in this slice.
 
@@ -69,6 +69,9 @@ That path intentionally stays narrower than Electron:
 
 - it reuses the shared `.stage/backend` payload as bundled resources
 - it now pairs with `.github/workflows/tauri-packages.yml`, which builds hosted artifacts from the same shell tree
+- `tauri.conf.json` now enables `bundle.createUpdaterArtifacts`, while the local wrapper adds `--no-sign` automatically when `TAURI_SIGNING_PRIVATE_KEY` is absent so ordinary unsigned local builds still work
+- `tauri.conf.json` also keeps a placeholder `plugins.updater` block because the Tauri bundler requires it once updater artifacts are enabled; the real endpoint list and public key still come from environment-driven updater defaults
+- packaged update checks use `tauri-plugin-updater` and stay disabled unless `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS` plus `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY` are available at build time or runtime
 - it does not yet add signing automation, notarization scaffolding, or GitHub Release publication
 - it now applies a minimal CSP to Tauri-served shell assets such as the local splash window, without claiming production-hardening for the Django pages served over localhost
 - on Windows, the current scope is limited to generating the local NSIS installer path; install/run still needs a real live Windows machine test
@@ -85,6 +88,8 @@ The dedicated Tauri workflow under `.github/workflows/tauri-packages.yml` follow
 - it runs in build-only mode by omitting `tagName`, `releaseName`, and `releaseId`
 - it stages `.stage/backend` before bundling so the hosted build uses the same packaged-runtime contract as local Tauri packaging
 - it uploads explicit workflow artifacts and checksum manifests instead of publishing a GitHub Release
+- it passes `--no-sign` automatically when `TAURI_SIGNING_PRIVATE_KEY` is absent, so the workflow can stay usable for unsigned artifact builds
+- when `TAURI_SIGNING_PRIVATE_KEY`, `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY`, and `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS` are present, the packaged app is built with updater defaults and the workflow upload includes signed updater payloads
 
 Current hosted bundle targets:
 
@@ -97,6 +102,7 @@ Current workflow boundaries:
 - the workflow is artifact-only and does not publish releases
 - it is intentionally narrower than the Electron lane's signing/notarization posture
 - it should not be read as proof that Windows installer install/run behavior has been validated end to end
+- the workflow now uploads Tauri updater payloads alongside the installer output, but it does not generate or host a final public HTTPS manifest for you
 - the Windows NSIS artifacts currently rely on Tauri's default `downloadBootstrapper` WebView2 behavior, so they are not the repo's offline-ready installer story
 - the Linux AppImage job currently sets `NO_STRIP=true` as a workflow-level workaround for the current upstream `linuxdeploy` strip failure on hosted Ubuntu runners
 - the staged bundled Python runtime now prunes unused Tk/IDLE pieces before packaging so hosted AppImage builds do not have to resolve Tcl/Tk GUI dependencies the starter does not use
@@ -212,7 +218,7 @@ Compare the resulting digest with the line in the matching `*-sha256.txt` file. 
 
 ## Connected Release and Update Story
 
-Electron now includes a minimal connected updater path.
+Electron now includes a minimal connected updater path. Tauri now includes an experimental connected updater path.
 
 Electron packages use `electron-updater` and an `electron-builder` publish config. By default, the GitHub update feed is resolved from the build context: `DESKTOP_DJANGO_UPDATE_GITHUB_OWNER` plus `DESKTOP_DJANGO_UPDATE_GITHUB_REPO` override everything, otherwise the builder uses `GITHUB_REPOSITORY` in GitHub Actions, then falls back to the local `origin` Git remote. `DESKTOP_DJANGO_UPDATE_URL` remains available for a generic HTTPS feed.
 
@@ -233,6 +239,36 @@ For connected Electron auto-update validation:
 5. confirm the SQLite app-data directory and `app.sqlite3` survive the update
 
 That validation is required before strengthening the release-readiness claim beyond "minimal connected updater path."
+
+Tauri packages use `tauri-plugin-updater`. This repo keeps the updater transport outside Django: the packaged Tauri app checks its configured HTTPS endpoint after the first main-window load and prompts before it downloads or installs a newer signed payload.
+
+Tauri updater configuration inputs:
+
+- `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS`: one or more comma-separated or newline-separated HTTPS endpoints for the updater manifest
+- `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY`: the Minisign public key that matches the private key used to sign updater payloads
+- `TAURI_SIGNING_PRIVATE_KEY`: the private key used during packaging to sign updater payloads
+- `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`: optional password for that private key
+
+The packaged app can read the endpoint list and public key from build-time environment variables or runtime environment overrides. This keeps the default starter repo honest: there is no baked-in public production feed, but the updater path is real once an operator supplies one.
+
+The Tauri workflow now uploads the updater payloads needed by the plugin:
+
+- macOS: the `.app.tar.gz` updater payload plus `.sig`, alongside the DMG
+- Windows: the NSIS `.exe` plus `.sig`
+- Linux: the AppImage plus `.sig`
+
+The workflow does not publish a GitHub Release or host a final HTTPS manifest. You still need to promote those files into a connected channel such as your own static HTTPS host or a published GitHub Release asset set, then point `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS` at the corresponding manifest URL.
+
+For connected Tauri auto-update validation:
+
+1. build a packaged artifact set with `TAURI_SIGNING_PRIVATE_KEY`, `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY`, and `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS` configured
+2. host the updater payload plus `.sig` files behind the configured HTTPS manifest endpoint
+3. install an older packaged Tauri app that was built with the same updater public key and endpoint defaults
+4. launch the app, let the first packaged main-window load complete, and confirm the updater prompt appears for the newer version
+5. accept the install and confirm the app hands off cleanly to the update flow without leaving Django or `db_worker` behind
+6. confirm the SQLite app-data directory and `app.sqlite3` survive the update
+
+That validation is required before strengthening the Tauri release-readiness claim beyond "experimental connected updater path."
 
 Connected manual installation is still supported:
 
@@ -292,7 +328,7 @@ Local state is only lost if the user or administrator explicitly removes the app
 
 This slice is intentionally incomplete in a few areas:
 
-- no Tauri or Positron auto-update feed or release manifest
+- no default hosted Tauri updater manifest or release-publication path, and no Positron auto-update feed
 - no always-on signed-release publication workflow; Electron GitHub Release publication is an explicit manual workflow-dispatch option
 - Electron updater readiness still needs real signed/notarized macOS and Windows NSIS update dry runs before being called production-ready
 - Electron now adds a per-session shell-to-Django auth token for the localhost request channel through exact-origin header injection, but this is still a starter-level baseline rather than a full production localhost-hardening story

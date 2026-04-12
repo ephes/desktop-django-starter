@@ -6,6 +6,33 @@ Keep item ids stable. Do not renumber completed work.
 
 ## Completed Entries
 
+## BL-002: Tauri Connected Auto-Update
+
+Status: completed
+
+### Context
+
+Tauri is experimental in this repo. It reuses the shared staged backend and already had a GitHub-hosted packaging workflow through `tauri-action`, but it did not yet generate updater artifacts, check a configured endpoint, or document a real connected-update path.
+
+### Goal
+
+Add a connected auto-update experiment for the Tauri shell that matches Tauri 2's updater model while preserving the repo's statement that Tauri is not yet release parity with Electron.
+
+### Implemented Summary
+
+- Added `tauri-plugin-updater` to the Tauri shell and wired a packaged-only updater check in Rust that runs after the first main-window load, stays outside Django, and prompts before download/install.
+- Kept the Tauri bootstrap-cookie Django authentication flow unchanged so updater metadata and downloads do not depend on the localhost app.
+- Enabled `bundle.createUpdaterArtifacts` in the Tauri config and taught the local build wrapper to add `--no-sign` automatically when `TAURI_SIGNING_PRIVATE_KEY` is absent, so ordinary unsigned local builds still work.
+- Updated `.github/workflows/tauri-packages.yml` so the Tauri artifact uploads and checksum manifests include updater payloads and `.sig` files when available, while still keeping the workflow usable without signing secrets.
+- Documented the new Tauri updater inputs: `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS`, `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY`, `TAURI_SIGNING_PRIVATE_KEY`, and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
+- Updated the README, agent-entry docs, release docs, architecture notes, and Tauri shell docs to distinguish the updater experiment from full release parity.
+
+### Validation Notes
+
+- Ran `cargo test --manifest-path shells/tauri/src-tauri/Cargo.toml`.
+- Ran `uv run pytest tests/test_tauri_shell.py tests/test_docs.py`.
+- A real hosted updater-manifest validation run and a live Windows install/update test are still required before making a stronger Tauri release claim.
+
 ## BL-007: Experimental Shell Lifecycle and Runtime Clarity
 
 Status: completed

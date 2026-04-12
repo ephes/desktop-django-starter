@@ -9,6 +9,9 @@ def test_tauri_bundle_uses_shared_stage_and_icons() -> None:
     csp = config["app"]["security"]["csp"]
 
     assert config["bundle"]["active"] is True
+    assert config["bundle"]["createUpdaterArtifacts"] is True
+    assert config["plugins"]["updater"]["pubkey"] == "placeholder"
+    assert config["plugins"]["updater"]["endpoints"] == ["https://example.invalid/latest.json"]
     assert config["bundle"]["resources"] == {"../../../.stage/backend": "backend"}
     assert config["bundle"]["windows"]["webviewInstallMode"]["type"] == "downloadBootstrapper"
     assert "icons/icon.icns" in config["bundle"]["icon"]
@@ -35,6 +38,8 @@ def test_tauri_package_scripts_cover_local_runtime_flows() -> None:
     assert '.stage", "backend' in launcher
     assert "stage-backend" in builder
     assert '"build"' in builder
+    assert '"--no-sign"' in builder
+    assert "TAURI_SIGNING_PRIVATE_KEY" in builder
     assert '--bundles", "nsis' in builder
     assert '--bundles", "appimage' in builder
     assert '--bundles", shouldSmokeTest ? "app" : "dmg"' in builder
@@ -56,6 +61,7 @@ def test_tauri_runtime_keeps_tasks_demo_subprocess_model() -> None:
     assert "db_worker" in runtime
     assert "wait_for_django" in runtime
     assert 'getrandom = "0.3.4"' in cargo_toml
+    assert 'tauri-plugin-updater = "2.10.1"' in cargo_toml
     assert "generate_desktop_auth_token" in runtime
     assert "getrandom::fill" in runtime
     assert "DESKTOP_DJANGO_AUTH_TOKEN" in runtime
@@ -67,7 +73,11 @@ def test_tauri_runtime_keeps_tasks_demo_subprocess_model() -> None:
     assert '["-TERM", &process.id().to_string()]' in runtime
     assert "supported" in docs
     assert ".github/workflows/tauri-packages.yml" in docs
-    assert "artifact-only GitHub Actions workflow" in docs
+    assert "updater-capable GitHub Actions workflow" in docs
+    assert "packaged-only connected updater experiment" in docs
+    assert "tauri-plugin-updater" in docs
+    assert "DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS" in docs
+    assert "TAURI_SIGNING_PRIVATE_KEY" in docs
     assert "build-only `tauri-action`" in docs
     assert "downloadBootstrapper" in docs
     assert "minimal `app.security.csp`" in docs

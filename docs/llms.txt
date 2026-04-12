@@ -12,7 +12,7 @@ Important constraints:
 - Electron and Tauri currently bind Django to `127.0.0.1` on a random port, while Positron serves the same Django app from an in-process WSGI server on a random localhost port. Electron uses a per-session shell-to-Django auth token by passing `DESKTOP_DJANGO_AUTH_TOKEN` to Django and injecting `X-Desktop-Django-Token` only for the exact local Django origin. Tauri and Positron pass the same setting to Django and open their web views through a bootstrap URL that validates the token, sets an HttpOnly same-origin cookie, and redirects to the app without the token. The token does not replace CSRF and is not exposed through preload, a shell bridge, or normal page JavaScript.
 - Packaged Django keeps SQLite under per-user app data as `app.sqlite3` and now teaches a stronger desktop baseline with `transaction_mode=IMMEDIATE`, a 20-second timeout, WAL, `synchronous=NORMAL`, and modest cache/mmap pragmas.
 - Electron on Windows currently shuts down backend child processes with explicit forced process-tree termination via `taskkill /t /f`, not a graceful drain or broader production orphan-control approach.
-- The update story must include air-gapped/manual installs, not only connected environments. Electron has a minimal connected updater path through `electron-updater`; Tauri and Positron auto-update remain deferred.
+- The update story must include air-gapped/manual installs, not only connected environments. Electron has a minimal connected updater path through `electron-updater`, Tauri now has an experimental connected updater path through `tauri-plugin-updater`, and Positron auto-update remains deferred.
 - Electron lives under `shells/electron/`, the experimental Tauri port lives under `shells/tauri/`, and the experimental Positron port lives under `shells/positron/`, while shared icon source art lives under `assets/brand/`; regenerate the Electron PNG and macOS ICNS with `npm --prefix shells/electron run icons`, the Tauri icon set with `npm --prefix shells/tauri run icons`, and the Positron icons with `just positron-icons`.
 
 ## Docs
@@ -21,7 +21,7 @@ Important constraints:
 - [Specification](specification.html): Main product and technical specification for the starter.
 - [Architecture](architecture.html): Runtime contract, repo shape, startup model, shutdown notes, and release/update direction.
 - [Decisions](decisions.html): Scope and tradeoff decisions captured locally for this repo.
-- [Release](release.html): Packaging secrets, Electron and Tauri artifact workflows, installer artifacts, Electron updater metadata, checksum files, and connected/offline promotion guidance.
+- [Release](release.html): Packaging secrets, Electron and Tauri artifact workflows, installer artifacts, Electron updater metadata, Tauri updater payloads, checksum files, and connected/offline promotion guidance.
 - [Backlog](backlog.html): Explicit follow-on work, including Tauri and Positron update entries structured for implementation handoff.
 - [Done](done.html): Completed backlog entries after they are implemented.
 - [Agent use](agent-use.html): Guidance for coding agents consuming this repo.
@@ -42,7 +42,7 @@ Important constraints:
 
 - `.github/workflows/ci.yml`: Current cross-platform CI scaffold using GitHub-hosted runners.
 - `.github/workflows/desktop-packages.yml`: On-demand GitHub Actions packaging workflow for macOS, Windows, and Linux artifacts, Electron updater metadata, checksum manifests, optional signing inputs, and optional draft GitHub Release publication.
-- `.github/workflows/tauri-packages.yml`: Experimental GitHub-hosted Tauri packaging workflow using `tauri-action` in build-only mode with artifact uploads and checksum manifests.
+- `.github/workflows/tauri-packages.yml`: Experimental GitHub-hosted Tauri packaging workflow using `tauri-action` in build-only mode with installer artifacts, updater payloads, `.sig` files, and checksum manifests.
 - `tests/test_docs.py`: Minimal smoke tests for the documentation scaffold.
 - `tests/test_example_app.py`: Backend behavior checks for the demo CRUD slice ("My Ponies").
 - `tests/test_tasks_demo.py`: Backend tests for the real async task demo ("Stable Routines"), including enqueueing, reconciliation, and status transitions.

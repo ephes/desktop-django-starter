@@ -14,7 +14,8 @@ use std::time::{Duration, Instant};
 use tauri::{
     webview::PageLoadEvent, AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
-use tauri_plugin_dialog::{DialogExt, MessageDialogKind};
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+use tauri_plugin_updater::UpdaterExt;
 use url::Url;
 
 const HOST: &str = "127.0.0.1";
@@ -27,6 +28,8 @@ const RUNTIME_MANIFEST_FILENAME: &str = "runtime-manifest.json";
 const SPLASH_WINDOW_LABEL: &str = "splash";
 const DESKTOP_AUTH_HEADER: &str = "X-Desktop-Django-Token";
 const DESKTOP_AUTH_BOOTSTRAP_PATH: &str = "/desktop-auth/bootstrap/";
+const TAURI_UPDATE_ENDPOINTS_ENV: &str = "DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS";
+const TAURI_UPDATE_PUBLIC_KEY_ENV: &str = "DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY";
 
 type ManagedChild = Arc<Mutex<Option<Child>>>;
 
@@ -40,6 +43,7 @@ struct ProcessState {
 struct AppState {
     processes: Mutex<ProcessState>,
     quitting: AtomicBool,
+    update_check_started: AtomicBool,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -63,6 +67,11 @@ struct RuntimeManifestPython {
     executable: String,
 }
 
+struct UpdaterConfig {
+    endpoints: Vec<Url>,
+    pubkey: String,
+}
+
 #[tauri::command]
 fn open_app_data_directory(app: AppHandle) -> Result<OpenPathResponse, String> {
     let app_data_dir = resolve_app_data_dir(&app).map_err(|error| error.to_string())?;
@@ -79,6 +88,54 @@ fn get_runtime_mode() -> RuntimeMode {
         Some("development") => RuntimeMode::Development,
         _ if tauri::is_dev() => RuntimeMode::Development,
         _ => RuntimeMode::Packaged,
+    }
+}
+
+fn configured_updater_value(runtime_name: &str, build_time_value: Option<&str>) -> Option<String> {
+    env::var(runtime_name)
+        .ok()
+        .or_else(|| build_time_value.map(str::to_string))
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
+}
+
+fn parse_updater_endpoints(raw: &str) -> Result<Vec<Url>, String> {
+    let endpoints = raw
+        .split([',', '\n'])
+        .map(str::trim)
+        .filter(|entry| !entry.is_empty())
+        .map(|entry| Url::parse(entry).map_err(|error| error.to_string()))
+        .collect::<Result<Vec<_>, _>>()?;
+
+    if endpoints.is_empty() {
+        return Err("No updater endpoints were configured.".to_string());
+    }
+
+    Ok(endpoints)
+}
+
+fn resolve_updater_config() -> Result<Option<UpdaterConfig>, String> {
+    let endpoints = configured_updater_value(
+        TAURI_UPDATE_ENDPOINTS_ENV,
+        option_env!("DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS"),
+    );
+    let pubkey = configured_updater_value(
+        TAURI_UPDATE_PUBLIC_KEY_ENV,
+        option_env!("DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY"),
+    );
+
+    match (endpoints, pubkey) {
+        (None, None) => Ok(None),
+        (Some(_), None) => Err(format!(
+            "{TAURI_UPDATE_PUBLIC_KEY_ENV} must be configured when updater endpoints are enabled."
+        )),
+        (None, Some(_)) => Err(format!(
+            "{TAURI_UPDATE_ENDPOINTS_ENV} must be configured when the Tauri updater public key is set."
+        )),
+        (Some(endpoints), Some(pubkey)) => Ok(Some(UpdaterConfig {
+            endpoints: parse_updater_endpoints(&endpoints)?,
+            pubkey,
+        })),
     }
 }
 
@@ -482,6 +539,108 @@ window.desktop.openAppDataDirectory = () => window.__TAURI__.core.invoke("open_a
 "#
 }
 
+fn prompt_to_install_update(app: &AppHandle, current_version: &str, next_version: &str) -> bool {
+    let message = format!(
+        "Version {next_version} is available.\n\nCurrent version: {current_version}\nThe app may close to apply the update."
+    );
+
+    app.dialog()
+        .message(message)
+        .title("Update Available")
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::OkCancelCustom(
+            "Install".into(),
+            "Later".into(),
+        ))
+        .blocking_show()
+}
+
+fn show_update_error(app: AppHandle, message: String) {
+    thread::spawn(move || {
+        app.dialog()
+            .message(message)
+            .title("Update Failed")
+            .kind(MessageDialogKind::Error)
+            .blocking_show();
+    });
+}
+
+fn start_update_check(app: AppHandle) {
+    if get_runtime_mode() != RuntimeMode::Packaged || is_smoke_test() {
+        return;
+    }
+
+    if app
+        .state::<AppState>()
+        .update_check_started
+        .swap(true, Ordering::SeqCst)
+    {
+        return;
+    }
+
+    tauri::async_runtime::spawn(async move {
+        let Some(config) = (match resolve_updater_config() {
+            Ok(config) => config,
+            Err(error) => {
+                eprintln!("Tauri updater disabled: {error}");
+                return;
+            }
+        }) else {
+            return;
+        };
+
+        let updater_builder = match app
+            .updater_builder()
+            .pubkey(config.pubkey)
+            .endpoints(config.endpoints)
+        {
+            Ok(builder) => builder,
+            Err(error) => {
+                eprintln!("Tauri updater disabled: {error}");
+                return;
+            }
+        };
+
+        let updater = match updater_builder.build() {
+            Ok(updater) => updater,
+            Err(error) => {
+                eprintln!("Tauri updater disabled: {error}");
+                return;
+            }
+        };
+
+        let Some(update) = (match updater.check().await {
+            Ok(update) => update,
+            Err(error) => {
+                eprintln!("Tauri updater check failed: {error}");
+                return;
+            }
+        }) else {
+            return;
+        };
+
+        if !prompt_to_install_update(&app, &update.current_version, &update.version) {
+            return;
+        }
+
+        let app_for_exit = app.clone();
+        if let Err(error) = update
+            .download_and_install(
+                |_, _| {},
+                move || {
+                    stop_managed_processes(&app_for_exit);
+                },
+            )
+            .await
+        {
+            show_update_error(
+                app.clone(),
+                format!("Tauri could not download or install the update.\n\n{error}"),
+            );
+        }
+    });
+}
+
 fn create_splash_window(app: &AppHandle) -> Result<WebviewWindow, String> {
     if let Some(window) = app.get_webview_window(SPLASH_WINDOW_LABEL) {
         return Ok(window);
@@ -529,6 +688,7 @@ fn create_main_window(app: &AppHandle, url: &str) -> Result<WebviewWindow, Strin
                 close_splash_window(&handle);
                 let _ = window.show();
                 let _ = window.set_focus();
+                start_update_check(handle.clone());
 
                 if smoke_test {
                     thread::spawn(move || {
@@ -727,6 +887,7 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             focus_existing_window(app);
         }))
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![open_app_data_directory])
         .setup(|app| {
@@ -757,4 +918,33 @@ pub fn run() {
             stop_managed_processes(app);
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::parse_updater_endpoints;
+
+    #[test]
+    fn updater_endpoint_parser_accepts_commas_and_newlines() {
+        let endpoints = parse_updater_endpoints(
+            "https://updates.example.test/latest.json,\nhttps://updates.example.test/fallback.json",
+        )
+        .expect("expected valid updater endpoints");
+
+        assert_eq!(endpoints.len(), 2);
+        assert_eq!(
+            endpoints[0].as_str(),
+            "https://updates.example.test/latest.json"
+        );
+        assert_eq!(
+            endpoints[1].as_str(),
+            "https://updates.example.test/fallback.json"
+        );
+    }
+
+    #[test]
+    fn updater_endpoint_parser_rejects_invalid_urls() {
+        let error = parse_updater_endpoints("not-a-url").expect_err("expected invalid URL");
+        assert!(error.contains("relative URL without a base"));
+    }
 }

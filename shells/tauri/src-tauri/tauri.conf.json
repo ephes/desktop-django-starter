@@ -12,8 +12,17 @@
       "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost http://127.0.0.1:* http://localhost:*; img-src 'self' asset: data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; object-src 'none'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'"
     }
   },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://example.invalid/latest.json"
+      ],
+      "pubkey": "placeholder"
+    }
+  },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "icon": [
       "icons/32x32.png",
       "icons/128x128.png",
