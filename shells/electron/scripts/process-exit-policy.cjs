@@ -1,9 +1,10 @@
 function shouldShowManagedProcessExitDialog({
   quitting = false,
   spawnFailed = false,
-  updateInstallInProgress = false
+  updateInstallInProgress = false,
+  intentionalStopRequested = false
 } = {}) {
-  return !quitting && !spawnFailed && !updateInstallInProgress;
+  return !quitting && !spawnFailed && !updateInstallInProgress && !intentionalStopRequested;
 }
 
 module.exports = {

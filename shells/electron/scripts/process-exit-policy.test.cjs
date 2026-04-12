@@ -25,6 +25,18 @@ test("managed process exits stay quiet during update installation handoff", () =
   );
 });
 
+test("managed process exits stay quiet after Electron explicitly requests a stop", () => {
+  assert.equal(
+    shouldShowManagedProcessExitDialog({
+      quitting: false,
+      spawnFailed: false,
+      updateInstallInProgress: false,
+      intentionalStopRequested: true
+    }),
+    false
+  );
+});
+
 test("managed process exits stay quiet while quitting or after spawn failure", () => {
   assert.equal(
     shouldShowManagedProcessExitDialog({

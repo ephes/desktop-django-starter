@@ -43,6 +43,7 @@ let mainWindow = null;
 let splashWindow = null;
 let splashShownAt = null;
 let updateInstallInProgress = false;
+const intentionallyStoppedManagedProcesses = new WeakSet();
 
 function focusExistingWindow() {
   const existingWindow = mainWindow || splashWindow || BrowserWindow.getAllWindows()[0];
@@ -473,7 +474,8 @@ function startManagedProcess({
       if (!shouldShowManagedProcessExitDialog({
         quitting,
         spawnFailed,
-        updateInstallInProgress
+        updateInstallInProgress,
+        intentionalStopRequested: intentionallyStoppedManagedProcesses.has(child)
       })) {
         return;
       }
@@ -652,6 +654,8 @@ async function stopManagedProcess(processToStop) {
   if (!processToStop || processToStop.killed) {
     return;
   }
+
+  intentionallyStoppedManagedProcesses.add(processToStop);
 
   if (process.platform === "win32") {
     await new Promise((resolve) => {
