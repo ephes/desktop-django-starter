@@ -29,5 +29,6 @@ shells/positron/resources/app-icon.png
 cli/src/dds/_assets/*
 !cli/src/dds/_assets/.gitkeep
 cli/dist/
+.artifacts/
 .superpowers/
 docs/superpowers/

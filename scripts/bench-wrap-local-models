@@ -1,0 +1,260 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+STARTER_REPO="$(cd "${SCRIPT_DIR}/.." && pwd)"
+TARGET_REPO=""
+OUTPUT_DIR=""
+NUM_CTX=32768
+NUM_PREDICT=192
+REPO_FILE_LIMIT=200
+OLLAMA_API="${OLLAMA_HOST:-http://127.0.0.1:11434}"
+OLLAMA_CONNECT_TIMEOUT=10
+OLLAMA_MAX_TIME=600
+PULL_MODELS=false
+USE_THINKING=false
+
+MODELS=(
+    "qwen3-coder"
+    "glm-4.7-flash"
+)
+
+usage() {
+    cat <<'USAGE'
+Usage: scripts/bench-wrap-local-models [OPTIONS]
+
+Benchmark local Ollama coding models against the desktop-django-starter wrap prompt.
+
+Options:
+  --target PATH         Target Django repo to benchmark (required)
+  --starter PATH        desktop-django-starter checkout
+                        (default: inferred from this script)
+  --model NAME          Ollama model name to benchmark (repeatable)
+  --pull                Pull the requested models before benchmarking
+  --with-thinking       Leave model-native thinking enabled
+  --num-ctx N           Context window to request from Ollama (default: 32768)
+  --num-predict N       Max generated tokens for benchmark response (default: 192)
+  --repo-file-limit N   Number of repo files to include in the snapshot (default: 200)
+  --output-dir PATH     Directory for prompt, raw responses, and summary
+  -h, --help            Show this help
+
+Examples:
+  scripts/bench-wrap-local-models --target ../django-resume --pull
+  scripts/bench-wrap-local-models --target ../django-resume \
+    --model qwen3-coder --model glm-4.7-flash --num-ctx 65536
+USAGE
+}
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --target)
+            [[ $# -ge 2 ]] || { echo "error: --target requires a path" >&2; exit 1; }
+            TARGET_REPO="$2"
+            shift 2
+            ;;
+        --starter)
+            [[ $# -ge 2 ]] || { echo "error: --starter requires a path" >&2; exit 1; }
+            STARTER_REPO="$2"
+            shift 2
+            ;;
+        --model)
+            [[ $# -ge 2 ]] || { echo "error: --model requires a name" >&2; exit 1; }
+            if [[ "${MODELS[0]}" == "qwen3-coder" && "${#MODELS[@]}" -eq 2 && "${MODELS[1]}" == "glm-4.7-flash" ]]; then
+                MODELS=()
+            fi
+            MODELS+=("$2")
+            shift 2
+            ;;
+        --pull)
+            PULL_MODELS=true
+            shift
+            ;;
+        --with-thinking)
+            USE_THINKING=true
+            shift
+            ;;
+        --num-ctx)
+            [[ $# -ge 2 ]] || { echo "error: --num-ctx requires an integer" >&2; exit 1; }
+            NUM_CTX="$2"
+            shift 2
+            ;;
+        --num-predict)
+            [[ $# -ge 2 ]] || { echo "error: --num-predict requires an integer" >&2; exit 1; }
+            NUM_PREDICT="$2"
+            shift 2
+            ;;
+        --repo-file-limit)
+            [[ $# -ge 2 ]] || { echo "error: --repo-file-limit requires an integer" >&2; exit 1; }
+            REPO_FILE_LIMIT="$2"
+            shift 2
+            ;;
+        --output-dir)
+            [[ $# -ge 2 ]] || { echo "error: --output-dir requires a path" >&2; exit 1; }
+            OUTPUT_DIR="$2"
+            shift 2
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "error: unknown option: $1" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+done
+
+[[ -n "${TARGET_REPO}" ]] || { echo "error: --target is required" >&2; usage >&2; exit 1; }
+[[ -d "${TARGET_REPO}" ]] || { echo "error: target repo not found: ${TARGET_REPO}" >&2; exit 1; }
+[[ -d "${STARTER_REPO}" ]] || { echo "error: starter repo not found: ${STARTER_REPO}" >&2; exit 1; }
+
+TARGET_REPO="$(cd "${TARGET_REPO}" && pwd)"
+STARTER_REPO="$(cd "${STARTER_REPO}" && pwd)"
+OLLAMA_API="${OLLAMA_API%/}"
+
+command -v curl >/dev/null 2>&1 || { echo "error: curl not found" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "error: jq not found" >&2; exit 1; }
+
+if ! curl -fsS "${OLLAMA_API}/api/tags" >/dev/null; then
+    echo "error: Ollama is not reachable at ${OLLAMA_API}" >&2
+    echo "start it with: ollama serve" >&2
+    exit 1
+fi
+
+if [[ -z "${OUTPUT_DIR}" ]]; then
+    timestamp="$(date +%Y%m%d-%H%M%S)"
+    OUTPUT_DIR="${STARTER_REPO}/.artifacts/local-model-bench/${timestamp}"
+fi
+mkdir -p "${OUTPUT_DIR}"
+
+if [[ "${PULL_MODELS}" == true ]]; then
+    for model in "${MODELS[@]}"; do
+        echo "Pulling ${model}..."
+        ollama pull "${model}"
+    done
+fi
+
+generate_repo_snapshot() {
+    (
+        cd "${TARGET_REPO}"
+        echo "Target repo: ${TARGET_REPO}"
+        echo "Git branch: $(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown)"
+        echo "Git commit: $(git rev-parse --short HEAD 2>/dev/null || echo unknown)"
+        echo "Working tree: $(if [[ -z "$(git status --short 2>/dev/null)" ]]; then echo clean; else echo dirty; fi)"
+        echo "manage.py files:"
+        find . -name manage.py \
+            -not -path '*/.git/*' \
+            -not -path '*/node_modules/*' \
+            -not -path '*/.venv/*' \
+            -not -path '*/__pycache__/*' \
+            | sort | sed 's#^\./#- #'
+        echo
+        echo "Repo file sample:"
+        if git rev-parse --git-dir >/dev/null 2>&1; then
+            git ls-files | sed -n "1,${REPO_FILE_LIMIT}p" | sed 's#^#- #'
+        else
+            find . \
+                -path './.git' -prune -o \
+                -path './node_modules' -prune -o \
+                -path './.venv' -prune -o \
+                -path './__pycache__' -prune -o \
+                -type f -print \
+                | sed 's#^\./##' | sort | sed -n "1,${REPO_FILE_LIMIT}p" | sed 's#^#- #'
+        fi
+    )
+}
+
+wrap_prompt="$(
+    cd "${TARGET_REPO}"
+    "${STARTER_REPO}/scripts/wrap" --starter "${STARTER_REPO}" --emit-prompt
+)"
+
+repo_snapshot="$(generate_repo_snapshot)"
+
+benchmark_prompt="${wrap_prompt}
+
+Benchmark constraints:
+- Do not use tools.
+- Do not ask follow-up questions.
+- Assume the target repo snapshot below is accurate.
+- Return exactly 10 numbered steps.
+- Keep the whole answer under 180 tokens.
+
+Target repo snapshot:
+${repo_snapshot}"
+
+printf '%s\n' "${benchmark_prompt}" > "${OUTPUT_DIR}/benchmark-prompt.txt"
+
+sanitize_model_name() {
+    printf '%s' "$1" | tr '/:' '__'
+}
+
+printf 'model\tprompt_tokens\tprompt_tps\tgen_tokens\tgen_tps\tload_s\ttotal_s\toutput_file\n' > "${OUTPUT_DIR}/summary.tsv"
+
+for model in "${MODELS[@]}"; do
+    slug="$(sanitize_model_name "${model}")"
+    payload_file="${OUTPUT_DIR}/${slug}.request.json"
+    result_file="${OUTPUT_DIR}/${slug}.response.json"
+
+    jq -n \
+        --arg model "${model}" \
+        --arg prompt "${benchmark_prompt}" \
+        --argjson think "${USE_THINKING}" \
+        --argjson num_ctx "${NUM_CTX}" \
+        --argjson num_predict "${NUM_PREDICT}" \
+        '{
+            model: $model,
+            prompt: $prompt,
+            stream: false,
+            think: $think,
+            options: {
+                temperature: 0,
+                num_ctx: $num_ctx,
+                num_predict: $num_predict
+            }
+        }' > "${payload_file}"
+
+    echo "Benchmarking ${model}..."
+    curl -fsS \
+        --connect-timeout "${OLLAMA_CONNECT_TIMEOUT}" \
+        --max-time "${OLLAMA_MAX_TIME}" \
+        "${OLLAMA_API}/api/generate" \
+        -H 'Content-Type: application/json' \
+        --data @"${payload_file}" > "${result_file}"
+
+    metrics="$(
+        jq -r --arg out "${result_file}" '
+            def secs($n): ($n / 1000000000);
+            def tps($count; $dur):
+                if ($dur > 0) then ($count / secs($dur)) else 0 end;
+            [
+                .prompt_eval_count,
+                (tps(.prompt_eval_count; .prompt_eval_duration)),
+                .eval_count,
+                (tps(.eval_count; .eval_duration)),
+                (secs(.load_duration)),
+                (secs(.total_duration)),
+                $out
+            ] | @tsv
+        ' "${result_file}"
+    )"
+
+    printf '%s\t%s\n' "${model}" "${metrics}" >> "${OUTPUT_DIR}/summary.tsv"
+done
+
+{
+    echo "# Local Wrap Model Benchmark"
+    echo
+    echo "- target repo: ${TARGET_REPO}"
+    echo "- starter repo: ${STARTER_REPO}"
+    echo "- ollama api: ${OLLAMA_API}"
+    echo "- model-native thinking: ${USE_THINKING}"
+    echo "- requested context window: ${NUM_CTX}"
+    echo "- requested max output tokens: ${NUM_PREDICT}"
+    echo
+    column -t -s $'\t' "${OUTPUT_DIR}/summary.tsv"
+    echo
+    echo "Prompt saved to ${OUTPUT_DIR}/benchmark-prompt.txt"
+} | tee "${OUTPUT_DIR}/README.txt"

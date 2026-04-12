@@ -13,18 +13,19 @@
 - `docs/decisions.md`
 - `docs/agent-use.md`
 - `skills/wrap-existing-django-in-electron/SKILL.md` when the task is about adapting another Django app
+- `skills/wrap-existing-django-in-electron-staged/SKILL.md` when the task is about the staged wrapping workflow or smaller-model wrap experiments
 
 ## Repo Map
 - `src/desktop_django_starter/`: Django project, settings modules, base template, static assets
 - `src/example_app/`: minimal server-rendered CRUD demo app
 - `assets/brand/`: shared brand source-of-truth for shell-generated icons
-- `scripts/`: shared packaging and staged-backend helpers
+- `scripts/`: shared packaging, staged-backend helpers, and local-model benchmark helpers such as `scripts/bench-wrap-local-models`
 - `shells/electron/`: Electron shell, builder config, generated icons, Node-side tests
 - `shells/tauri/`: experimental Tauri shell, Rust-side runtime supervision, and local plus hosted-artifact bundle helpers
 - `shells/positron/`: experimental Positron shell, Briefcase config, and in-process runtime
 - `docs/`: Sphinx source docs published from Markdown
 - `tests/`: pytest coverage for backend behavior, packaged-runtime contract, static assets, and docs scaffold
-- `skills/`: reusable agent workflows (wrap-existing-django-in-electron)
+- `skills/`: reusable agent workflows, including the original `wrap-existing-django-in-electron` flow and the experimental `wrap-existing-django-in-electron-staged` flow
 
 ## Working Rules
 - Prefer server-rendered Django templates. Do not introduce a SPA or broaden the preload bridge unless the task explicitly requires it.

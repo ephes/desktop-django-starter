@@ -75,6 +75,85 @@ just desktop-dev-smoke    # headless boot + health check
 npm --prefix electron test  # node-side tests
 ```
 
+### Benchmarking local models with Ollama
+
+For local-model experiments, benchmark the real wrap prompt before running the
+agent. The repo includes a small helper script for this:
+
+```bash
+# Terminal 1
+ollama serve
+
+# Terminal 2
+~/projects/desktop-django-starter/scripts/bench-wrap-local-models \
+  --target ~/projects/django-resume \
+  --pull
+```
+
+By default the script compares `qwen3-coder` and `glm-4.7-flash`. It generates the
+resolved wrap prompt with `scripts/wrap --emit-prompt`, appends a snapshot of the
+target repo, sends the benchmark prompt to Ollama's `/api/generate`, and writes:
+
+- the exact prompt used
+- raw Ollama responses per model
+- a `summary.tsv` table with prompt tokens, prompt tokens/sec, generated tokens,
+  generated tokens/sec, model load time, and total wall time
+
+The helper disables model-native thinking by default so the generated-output
+comparison is visible and stable across models. If you want to include each
+model's native thinking behavior in the benchmark, add `--with-thinking`.
+
+The default context request is `32768`, which is a conservative starting point for
+64 GB shared-memory systems. Increase it only after the smaller context works:
+
+```bash
+~/projects/desktop-django-starter/scripts/bench-wrap-local-models \
+  --target ~/projects/django-resume \
+  --num-ctx 65536
+```
+
+When you are ready to try a real wrapping run with Pi through Ollama, configure Pi
+for Ollama first and then run the standard CLI from a clean target repo clone:
+
+```bash
+ollama launch pi --config --model qwen3-coder
+
+cd ~/projects/django-resume-clean
+time uvx desktop-django-starter wrap --run --harness pi --model ollama/qwen3-coder
+```
+
+Use a clean clone or disposable worktree for these tests. `wrap --run` edits the
+target repository.
+
+For smaller local models that drift on the one-shot wrap prompt, use the
+experimental staged workflow in
+`skills/wrap-existing-django-in-electron-staged/` instead of editing the
+original wrap skill. That path starts with a deterministic scaffold helper and
+then narrows the model work into separate Electron, Django, and fix-from-failures
+prompts.
+
+The scaffold prepares the wrapped target for those later stages by:
+
+- adapting the brittle Electron identity and wrapped-repo path boilerplate before Stage 2 starts, including `electron/package.json`
+- recording deterministic target facts in `electron/wrap-target.json`, including development and packaged manage/settings paths
+- laying down the common Django desktop baseline for Stage 3 so local models verify or narrowly adjust it instead of building packaged settings and middleware from scratch
+- appending explicit target-side `just` shortcuts such as `just desktop-install`, `just desktop-stage`, `just desktop-packaged-start`, and `just desktop-smoke`
+- enabling desktop auto-login defaults in the wrapped Electron runtime, with a single-user fallback when no username override is configured
+- adding a minimal native Home, Back, and Forward menu plus small in-page back-to-list links for known wrapped-template shapes such as `django_resume`'s `headwind` pages
+
+Stage 2 and Stage 3 are both verification-first and stop-early. Once the
+required checks for a stage pass, the model should end that stage instead of
+re-reading scaffolded files. If a target app still has no persistent in-page
+navigation after the native menu is in place, Stage 3 may add the smallest
+possible Django-side home/list link.
+
+The Django scaffold handles both flat settings modules and common `settings/`
+package layouts, including targets that need the desktop middleware inserted
+into a shared base settings file. It also covers targets with no committed seed
+SQLite database by generating a small runtime bootstrap that can run migrations
+on the first real desktop app request. It still assumes a recognizable
+`urlpatterns = [` layout rather than arbitrary project structure.
+
 ### Lab workflow (experiment harness)
 
 For iterating on the wrapping skill itself, the `desktop-django-lab` tooling
@@ -105,6 +184,14 @@ The lab tooling lives in dotfiles (`~/.config/desktop-django-lab/`), not in this
   `scripts/wrap` and the lab workflow
 - `skills/wrap-existing-django-in-electron/run-log.md` — results from each test run,
   with git refs linking to the skill/prompt version used
+- `skills/wrap-existing-django-in-electron-staged/SKILL.md` — experimental staged
+  alternative for smaller local models
+- `skills/wrap-existing-django-in-electron-staged/scripts/scaffold-target.sh` —
+  deterministic stage-1 scaffold helper
+- `skills/wrap-existing-django-in-electron-staged/prompt-stage-2-electron.md`,
+  `prompt-stage-3-django.md`, `prompt-stage-4-fix-from-failures.md` — narrower
+  stage prompts for reset-and-rerun experiments
+- `skills/wrap-existing-django-in-electron-staged/run-log.md` — staged experiment log
 
 ### Iteration loop
 

@@ -72,11 +72,53 @@ Current `dds` builds stream concise Claude progress during `--run`; older builds
 could look idle until Claude finished. Use `--harness` and `--model` to choose the
 agent harness and model. See [`docs/agent-use.md`](docs/agent-use.md) for details.
 
+For local-model experiments with Ollama, benchmark the real wrap prompt against a
+clean target repo before you run the agent:
+
+```bash
+ollama serve
+~/projects/desktop-django-starter/scripts/bench-wrap-local-models \
+  --target ~/projects/django-resume \
+  --pull
+```
+
+That script captures the resolved wrap prompt, adds a small repo snapshot, and
+reports prompt and generation tokens per second for each tested model. By
+default it disables model-native thinking so visible output is comparable across
+models.
+
+For smaller local models that drift on the one-shot wrap prompt, the repo also
+includes an experimental staged workflow under
+[`skills/wrap-existing-django-in-electron-staged/`](skills/wrap-existing-django-in-electron-staged/).
+It starts with a deterministic scaffold step and then runs narrower Electron,
+Django, and fix-from-failures prompts instead of one broad unattended run.
+
+The scaffold prepares the wrapped target for those later stages by:
+
+- adapting the brittle Electron identity and path boilerplate up front, including `electron/package.json`
+- recording deterministic target facts in `electron/wrap-target.json`, including development and packaged manage/settings paths
+- laying down the common Django desktop baseline for Stage 3 so the model verifies or narrows it instead of inventing it from scratch
+- enabling the wrapped Electron runtime's desktop auto-login defaults, with a single-user fallback when no username override is configured
+- appending target-side `just` recipes such as `just desktop-install`, `just desktop-stage`, `just desktop-packaged-start`, and `just desktop-smoke`
+- adding a small native Home, Back, and Forward menu, plus minimal in-page back-to-list links for known wrapped-template shapes such as `django_resume`'s `headwind` pages
+
+Stage 2 and Stage 3 are both verification-first and stop-early. Once the
+required checks for a stage pass, the model should end that stage instead of
+re-reading scaffolded files. If a wrapped app still has no persistent in-page
+navigation after the native menu is in place, Stage 3 may add the smallest
+possible Django-side home/list link.
+
+The Django-side scaffold handles common flat settings modules, common
+`settings/` package layouts, and targets with no committed seed SQLite
+database. It still assumes conventional Django settings and a recognizable
+`urlpatterns = [` layout rather than arbitrary project structure.
+
 ## Agent Consumers
 
 - `llms.txt`: concise repo entry point for coding agents
 - `scripts/wrap`: front-door command for agent-driven wrapping of a target Django project
 - `skills/wrap-existing-django-in-electron/SKILL.md`: reusable workflow for adapting an existing Django project to an Electron shell
+- `skills/wrap-existing-django-in-electron-staged/SKILL.md`: experimental staged workflow for smaller local models and reset-and-rerun wrap experiments
 - `docs/agent-use.md`: agent-oriented usage notes and guardrails
 
 ## Development
