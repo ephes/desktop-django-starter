@@ -1,5 +1,7 @@
 const test = require("node:test");
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 
 const {
   buildConfig,
@@ -11,6 +13,19 @@ const {
   parseGithubRepositorySlug
 } = require("./electron-builder-config.cjs");
 
+const MAIN_PROCESS_ENTRY_PATH = path.resolve(__dirname, "..", "main.js");
+
+function getPackagedMainProcessScriptFiles(config) {
+  return config.files.filter((entry) => typeof entry === "string" && entry.startsWith("scripts/"));
+}
+
+function getRequiredMainProcessScriptFiles() {
+  const source = fs.readFileSync(MAIN_PROCESS_ENTRY_PATH, "utf8");
+  return [...source.matchAll(/require\("\.\/(scripts\/[^"]+\.cjs)"\)/g)]
+    .map((match) => match[1])
+    .sort();
+}
+
 test("electron-builder config ships the staged backend as a packaged resource", () => {
   const config = buildConfig({});
 
@@ -21,6 +36,7 @@ test("electron-builder config ships the staged backend as a packaged resource", 
     "preload.cjs",
     "scripts/auth-token.cjs",
     "scripts/bundled-python.cjs",
+    "scripts/window-guards.cjs",
     "scripts/updates.cjs",
     "assets/icons/app-icon.png",
     {
@@ -47,6 +63,15 @@ test("electron-builder config ships the staged backend as a packaged resource", 
   assert.equal(config.win.icon, "assets/icons/app-icon.png");
   assert.equal(config.win.signtoolOptions, undefined);
   assert.equal(config.linux.icon, "assets/icons/app-icon.png");
+});
+
+test("electron-builder config packages every shell-local main-process helper", () => {
+  const config = buildConfig({});
+
+  assert.deepEqual(
+    getPackagedMainProcessScriptFiles(config).sort(),
+    getRequiredMainProcessScriptFiles()
+  );
 });
 
 test("electron-builder config keeps per-platform artifact names explicit", () => {

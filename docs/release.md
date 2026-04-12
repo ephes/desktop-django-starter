@@ -22,6 +22,8 @@ Local packaging remains usable when no release credentials are configured. In th
 
 The Electron GitHub Actions workflow uses the same `electron-builder` config and only turns on signing/notarization when the relevant secrets are present. It also generates Electron updater metadata and can publish the Electron artifacts to a draft GitHub Release when the manual `publish_release` workflow input is set to `true`. This keeps the starter teachable while still making the public-distribution requirements concrete.
 
+Electron packaging keeps an explicit `files` allowlist for shell-local main-process helpers under `shells/electron/scripts/`. When `main.js` starts requiring a new helper, add that file to the builder config in the same change or the packaged app will fail at startup even if local development still works.
+
 The Tauri GitHub workflow is intentionally narrower than the Electron lane:
 
 - there is now a dedicated Tauri GitHub packaging workflow at `.github/workflows/tauri-packages.yml`

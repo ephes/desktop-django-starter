@@ -21,6 +21,7 @@ format:
 check:
     just lint
     just test
+    npm --prefix shells/electron test
     just docs-build
 
 migrate:
