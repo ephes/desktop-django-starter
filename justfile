@@ -18,8 +18,13 @@ lint:
 format:
     uv run ruff format .
 
+typecheck:
+    uv run mypy src/
+    for f in shells/electron/main.js shells/electron/preload.cjs shells/electron/electron-builder.config.cjs shells/electron/scripts/*.cjs scripts/*.cjs shells/tauri/scripts/*.mjs; do node --check "$f" || exit 1; done
+
 check:
     just lint
+    just typecheck
     just test
     npm --prefix shells/electron test
     just docs-build

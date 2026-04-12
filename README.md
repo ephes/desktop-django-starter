@@ -169,7 +169,8 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 - `just loc`: print a `cloc` summary plus a per-directory code breakdown, with a Python fallback when `cloc` is absent
 - `just test`: run the Django and docs test suite
 - `npm --prefix shells/electron test`: run the Electron Node-side tests
-- `just check`: run the default full validation suite: lint, Python tests, Electron Node-side tests, and docs build
+- `just typecheck`: run mypy on Python source and `node --check` on all JavaScript files
+- `just check`: run the default full validation suite: lint, typecheck, Python tests, Electron Node-side tests, and docs build
 - `just cli-test`: run the packaged wrapper CLI test suite
 - `just build`: build the Python package metadata scaffold
 - `just cli-build`: build the PyPI wrapper package used by `uvx desktop-django-starter ...`

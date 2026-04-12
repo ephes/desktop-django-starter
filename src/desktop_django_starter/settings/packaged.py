@@ -42,7 +42,7 @@ DATABASES = {  # noqa: F405
         **base_settings.DATABASES["default"],
         "NAME": app_data_dir / "app.sqlite3",
         "OPTIONS": {
-            **base_settings.DATABASES["default"].get("OPTIONS", {}),
+            **base_settings.DATABASES["default"].get("OPTIONS", {}),  # type: ignore[dict-item]
             **PACKAGED_SQLITE_OPTIONS,
         },
     },

@@ -6,14 +6,15 @@ import shutil
 import subprocess
 import sys
 from collections import defaultdict
+from collections.abc import Sequence
 from pathlib import Path
 
 try:
     from rich.console import Console
     from rich.table import Table
 except ImportError:  # pragma: no cover - exercised only when rich is unavailable
-    Console = None
-    Table = None
+    Console = None  # type: ignore[misc,assignment]
+    Table = None  # type: ignore[misc,assignment]
 
 EXCLUDED_LANGUAGES = "JSON,Markdown"
 FALLBACK_LANGUAGE_BY_NAME = {
@@ -100,7 +101,7 @@ def _count_with_cloc() -> int:
         console.print("[blue]Overall Summary:[/blue]")
         if summary_info["metadata"]:
             console.print(f"[dim]{summary_info['metadata']}[/dim]")
-        _print_rich_cloc_summary_table(console, summary_info["rows"])
+        _print_rich_cloc_summary_table(console, summary_info["rows"])  # type: ignore[arg-type]
         console.print()
         _print_rich_directory_table(console, directory_stats)
         console.print("[green]Lines of code counted successfully with cloc![/green]")
@@ -108,7 +109,7 @@ def _count_with_cloc() -> int:
         print("Overall Summary:")
         if summary_info["metadata"]:
             print(summary_info["metadata"])
-        print(_render_cloc_summary_table(summary_info["rows"]))
+        print(_render_cloc_summary_table(summary_info["rows"]))  # type: ignore[arg-type]
         print()
         print(_render_directory_table(directory_stats))
         print("Lines of code counted successfully with cloc!")
@@ -378,7 +379,7 @@ def _print_rich_directory_table(
 
 def _render_table(
     first_column: str,
-    rows: list[tuple[str, ...]],
+    rows: Sequence[tuple[str, ...]],
     title: str | None = None,
     headers: tuple[str, ...] | None = None,
 ) -> str:

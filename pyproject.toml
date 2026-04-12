@@ -26,7 +26,9 @@ Documentation = "https://desktop-django-starter.readthedocs.io/en/latest/"
 
 [dependency-groups]
 dev = [
+    "django-stubs[compatible-mypy]>=5.2.0",
     "furo>=2024.8.6",
+    "mypy>=1.15.0",
     "myst-parser>=4.0.0",
     "pytest>=8.3",
     "pytest-django>=4.11.1",
@@ -44,6 +46,15 @@ packages = ["src/desktop_django_starter", "src/example_app", "src/tasks_demo"]
 DJANGO_SETTINGS_MODULE = "desktop_django_starter.settings.local"
 pythonpath = ["src"]
 testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "src"
+plugins = ["mypy_django_plugin.main"]
+disable_error_code = ["var-annotated"]
+
+[tool.django-stubs]
+django_settings_module = "desktop_django_starter.settings.local"
 
 [tool.ruff]
 line-length = 100

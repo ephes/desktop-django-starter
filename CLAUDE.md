@@ -39,7 +39,7 @@
 - Treat missing or stale docs as incomplete work.
 
 ## Validation
-- Full pre-push check: `just check` (lint + test + Electron Node-side tests + docs-build)
+- Full pre-push check: `just check` (lint + typecheck + test + Electron Node-side tests + docs-build)
 - Default validation for completion and handoff should be `just check`, not `just test` alone
 - `just test` is only a narrower loop while iterating locally
 - If docs changed: `just docs-build`

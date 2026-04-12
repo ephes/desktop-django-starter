@@ -104,13 +104,13 @@ def reconcile_task_with_backend(task_row: SimulatedTask) -> SimulatedTask:
         and task_row.status != SimulatedTask.Status.DONE
     ):
         payload = backend_result.return_value or {}
-        task_row.status = payload.get("status", SimulatedTask.Status.DONE)
-        task_row.result = payload.get("result") or task_row.result
+        task_row.status = payload.get("status", SimulatedTask.Status.DONE)  # type: ignore[assignment]
+        task_row.result = payload.get("result") or task_row.result  # type: ignore[assignment]
         duration = payload.get("duration")
-        task_row.duration = duration if duration is not None else task_row.duration
+        task_row.duration = duration if duration is not None else task_row.duration  # type: ignore[assignment]
         completed_at = payload.get("completed_at")
         task_row.completed_at = (
-            datetime.fromisoformat(completed_at)
+            datetime.fromisoformat(completed_at)  # type: ignore[arg-type]
             if completed_at
             else (task_row.completed_at or backend_result.finished_at or timezone.now())
         )
