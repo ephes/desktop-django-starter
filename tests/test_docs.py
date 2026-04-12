@@ -183,6 +183,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "prepared, unverified Windows NSIS path" in llms
     assert "minimal localhost-aware CSP" in llms
     assert "tauri-plugin-updater" in llms
+    assert "Positron is manual-only for updates in this repo" in llms
     assert "per-session shell-to-Django auth token" in llms
     assert "Tauri and Positron pass the same setting to Django" in llms
     assert "taskkill /t /f" in llms
@@ -192,6 +193,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/positron.html" in docs_llms
     assert "backlog.html" in docs_llms
     assert "done.html" in docs_llms
+    assert "Positron is manual-only for updates in this repo" in docs_llms
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" not in backlog
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" in done
     assert "BL-006: Electron Navigation and Window Hardening" not in backlog
@@ -201,16 +203,15 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "BL-004: CI Validation Coverage for Electron and CLI" not in backlog
     assert "BL-004: CI Validation Coverage for Electron and CLI" in done
     assert "BL-002: Tauri Connected Auto-Update" not in backlog
-    assert "BL-003: Positron Update Strategy and Auto-Update Path" in backlog
-    assert (
-        "Briefcase's development update workflow is not the same thing as an end-user auto-updater"
-        in backlog
-    )
+    assert "BL-003: Positron Update Strategy and Auto-Update Path" not in backlog
+    assert "There are no open backlog entries at the moment." in backlog
     assert "implementation handoff" in backlog
     assert "done.md" in backlog
     assert "BL-001: Electron Connected Auto-Update" not in backlog
     assert "BL-001: Electron Connected Auto-Update" in done
     assert "BL-002: Tauri Connected Auto-Update" in done
+    assert "BL-003: Positron Update Strategy and Auto-Update Path" in done
+    assert "manual-only Positron update strategy for now" in done
     assert "tauri-plugin-updater" in done
     assert "DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS" in done
     assert "electron-updater" in done
@@ -228,16 +229,28 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in positron_doc
     assert "not a release-parity path in this slice" in positron_doc
     assert "Positron uses a bootstrap HttpOnly cookie" in positron_doc
+    assert "manual-only for now" in positron_doc
+    assert "current operator path" in positron_doc
     assert "single running instance per app-data directory with a lock file" in positron_doc
     assert "always uses the packaged Django settings module" in positron_doc
     assert "without clearing the cache-backed staticfiles tree on every launch" in positron_doc
     assert "app-data lock file" in architecture
     assert "For the experimental Positron shell" in readme
+    assert "manual-only for now" in readme
+    expected = (
+        "there is no connected updater, hosted artifact lane, checksum lane, "
+        "or GitHub Release publication flow for Positron"
+    )
+    assert expected in readme
     assert "single running instance per app-data directory with a lock file" in readme
     assert (
         "refreshes collected static files on startup without clearing the cache directory each time"
         in readme
     )
+    index = (ROOT / "docs" / "index.md").read_text()
+    assert "Positron remains a manual-only local replacement path" in index
+    assert "Positron currently stays manual-only" in architecture
+    assert "manual-only update strategy for now" in specification
     assert ".stage/" in gitignore
     assert "now wired into Electron startup" in (ROOT / "docs" / "design-guide.md").read_text()
 

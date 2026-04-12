@@ -6,7 +6,36 @@ Keep item ids stable. Do not renumber completed work.
 
 ## Completed Entries
 
-## BL-002: Tauri Connected Auto-Update
+### BL-003: Positron Update Strategy and Auto-Update Path
+
+Status: completed
+
+### Context
+
+Positron is a local-only experiment in this repo. It uses Briefcase/Toga, runs Django plus the optional task worker in-process, and currently supports local macOS build and DMG packaging with ad-hoc signing. It has no GitHub Actions packaging lane, checksum-artifact lane, release publication flow, Windows packaged-build proof, or release-parity claim.
+
+Briefcase's development update workflow is not the same thing as an end-user auto-updater. For this repo, Positron first needed an explicit strategy decision before any broader updater work would be justified.
+
+### Goal
+
+Define an honest Positron update strategy that fits the current Briefcase/Toga scope without pretending Positron already has Electron or Tauri release parity in this repo.
+
+### Implemented Summary
+
+- Chose an explicit manual-only Positron update strategy for now instead of inventing a custom updater or hosted release lane.
+- Documented the actual current operator path: build a local macOS DMG with `just positron-package-dmg`, quit the installed app, then replace it manually from that DMG.
+- Documented the real boundaries of that path: Briefcase ad-hoc signing makes the artifact suitable only for local validation on the machine that built it, not for a hosted end-user release lane.
+- Updated the Positron shell docs, release guide, README, and agent-entry docs so they consistently say Positron has no connected updater, no hosted artifact lane, no checksum lane, and no GitHub release-publication flow in this repo.
+- Documented the prerequisites for any future broader Positron updater work: hosted artifacts, checksum generation, release publication, platform signing/notarization, and Windows packaged install/run proof.
+
+### Validation Notes
+
+- Ran `just positron-check`.
+- Ran `uv run pytest tests/test_positron_shell.py tests/test_docs.py`.
+- Ran `just docs-build`.
+- Ran `just check`.
+
+### BL-002: Tauri Connected Auto-Update
 
 Status: completed
 
@@ -33,7 +62,7 @@ Add a connected auto-update experiment for the Tauri shell that matches Tauri 2'
 - Ran `uv run pytest tests/test_tauri_shell.py tests/test_docs.py`.
 - A real hosted updater-manifest validation run and a live Windows install/update test are still required before making a stronger Tauri release claim.
 
-## BL-007: Experimental Shell Lifecycle and Runtime Clarity
+### BL-007: Experimental Shell Lifecycle and Runtime Clarity
 
 Status: completed
 
@@ -63,7 +92,7 @@ Tighten the small lifecycle gaps that are easy to fix, and document the remainin
 - Ran `just docs-build`.
 - Ran `just check`.
 
-## BL-006: Electron Navigation and Window Hardening
+### BL-006: Electron Navigation and Window Hardening
 
 Status: completed
 
@@ -91,7 +120,7 @@ Harden the Electron renderer window against unexpected navigation and window-ope
 - Ran `just docs-build`.
 - Ran `just check`.
 
-## BL-005: Documentation Consistency and Discoverability Cleanup
+### BL-005: Documentation Consistency and Discoverability Cleanup
 
 Status: completed
 
@@ -118,7 +147,7 @@ Bring the documentation back into alignment with the current implementation and 
 - Ran `just docs-build`.
 - Ran `just check`.
 
-## BL-004: CI Validation Coverage for Electron and CLI
+### BL-004: CI Validation Coverage for Electron and CLI
 
 Status: completed
 
@@ -148,7 +177,7 @@ Extend CI so the repo's default validation covers the Electron Node-side tests a
 - Ran `uv run pytest tests/test_docs.py`.
 - Ran `just docs-build`.
 
-## BL-001: Electron Connected Auto-Update
+### BL-001: Electron Connected Auto-Update
 
 Status: completed
 

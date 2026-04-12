@@ -45,7 +45,7 @@ The example app uses a branded presentation layer called "Flying Stable" (a Pega
 - [`docs/architecture.md`](docs/architecture.md): intended runtime model and draft repo shape
 - [`docs/decisions.md`](docs/decisions.md): repo-local decisions captured from the initial planning pass
 - [`docs/release.md`](docs/release.md): packaging secrets, installer artifacts, and connected/offline manual update guidance
-- [`docs/backlog.md`](docs/backlog.md): explicit follow-on work, including shell-specific auto-update entries ready for implementation handoff
+- [`docs/backlog.md`](docs/backlog.md): explicit follow-on work ready for implementation handoff
 - [`docs/done.md`](docs/done.md): completed backlog entries after they are implemented
 - [`docs/agent-use.md`](docs/agent-use.md): how coding agents should consume this repo and reuse its skill
 
@@ -143,7 +143,7 @@ When you need the real `/tasks/` demo outside Electron, run `just task-worker` i
 
 For the experimental Tauri shell, use `just tauri-install` once and then `just tauri-start`. The Tauri path keeps the same localhost Django plus `db_worker` subprocess model as Electron, now with a shell-local startup splash while backend bootstrap runs in the background. Tauri generates a per-session auth token, passes it to Django, uses `X-Desktop-Django-Token` for readiness polling, and opens the web view through Django's HttpOnly-cookie bootstrap URL because Tauri does not currently provide the same external-localhost outgoing request header hook that Electron uses. Its Tauri-side assets now use a minimal CSP for the local splash/bootstrap surface, not as a claim of release-grade hardening for the Django pages loaded over `http://127.0.0.1:<random-port>`. On Unix, Tauri now also follows Electron's shutdown shape more closely by sending `SIGTERM` first and only forcing the child process down after a 2-second grace period. This slice now also includes `.github/workflows/tauri-packages.yml`, which uploads Tauri installer artifacts plus updater payloads and `.sig` files when `TAURI_SIGNING_PRIVATE_KEY` is configured. The packaged Tauri app checks its configured updater endpoint after the first main-window load, but only when `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS` plus `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY` were present at build time or are supplied at runtime. Tauri is still not a release-parity path: Electron remains the more complete release lane, Tauri does not publish GitHub Releases here, signing/notarization parity is not wired, and Windows installer install/run validation still requires a real live Windows machine. The current Tauri NSIS config keeps Tauri's default `downloadBootstrapper` WebView2 behavior rather than claiming an offline-ready embedded runtime.
 
-For the experimental Positron shell, use `just positron-install` once and then `just positron-start`. The Positron path intentionally keeps a different runtime model: Django and the optional `tasks_demo` worker run in-process on threads, the web view starts through Django's HttpOnly-cookie bootstrap URL, and there is no splashscreen-parity requirement on macOS. It now also enforces a single running instance per app-data directory with a lock file, always boots Django with the packaged settings module so the local shell exercises the desktop-style SQLite and staticfiles path, and refreshes collected static files on startup without clearing the cache directory each time. Packaged builds remain a local-only Briefcase experiment.
+For the experimental Positron shell, use `just positron-install` once and then `just positron-start`. The Positron path intentionally keeps a different runtime model: Django and the optional `tasks_demo` worker run in-process on threads, the web view starts through Django's HttpOnly-cookie bootstrap URL, and there is no splashscreen-parity requirement on macOS. It now also enforces a single running instance per app-data directory with a lock file, always boots Django with the packaged settings module so the local shell exercises the desktop-style SQLite and staticfiles path, and refreshes collected static files on startup without clearing the cache directory each time. Its update strategy in this repo is manual-only for now: build a newer local macOS DMG with Briefcase and replace the installed app manually. This repo does not treat Briefcase development refresh commands as end-user auto-update.
 
 For the packaged-mode staging slice, use `just packaged-start`.
 The `.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
@@ -178,6 +178,8 @@ The Positron packaging path is also explicitly narrower than Electron:
 - it uses Briefcase rather than the Electron/Tauri staged-backend subprocess model
 - local macOS DMG packaging currently depends on `briefcase package macOS app --packaging-format dmg --adhoc-sign`
 - the ad-hoc-signed app is suitable only for the local machine that built it and is not a release-grade artifact
+- Positron updates are manual-only for now: build a newer local macOS DMG and replace the app manually
+- there is no connected updater, hosted artifact lane, checksum lane, or GitHub Release publication flow for Positron
 - it is not a release-parity path in this slice
 - Windows packaged-build parity is not claimed for Positron in this slice
 
@@ -260,7 +262,7 @@ Packaged mode still sets a small runtime environment at launch time:
 
 - Electron has a minimal connected updater path, but a real signed/notarized macOS update and Windows NSIS update dry run are still required before calling it production-ready.
 - Tauri now has an experimental connected updater path, but it still needs a real hosted endpoint, signed updater artifacts, and live Windows validation before any stronger claim.
-- Positron still has no connected auto-update path.
+- Positron is manual-only for updates in this repo and still has no connected updater, hosted artifact lane, or checksum lane.
 - GitHub Release publication for Electron is an explicit `desktop-packages.yml` workflow-dispatch option; normal workflow artifact promotion can still remain manual.
 - Linux packaging still exists, but Linux signing and verification are not a baseline in this slice.
 - Windows public-distribution hardening beyond optional signing inputs is still follow-on work.

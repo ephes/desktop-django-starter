@@ -1,7 +1,7 @@
 # Desktop Django Starter Specification
 
 Status: Draft 0.2  
-Scope: specification for the starter, with the runnable development slice, staged packaged-backend slice, sign/notarization-aware packaged-build slice, and minimal Electron plus experimental Tauri connected updater paths now implemented, while Positron auto-update remains deferred
+Scope: specification for the starter, with the runnable development slice, staged packaged-backend slice, sign/notarization-aware packaged-build slice, and minimal Electron plus experimental Tauri connected updater paths now implemented, while Positron stays on a manual-only update strategy for now
 
 ## 1. Project Summary
 
@@ -251,7 +251,7 @@ High-level release story for v1:
 - macOS public distribution should assume code signing and notarization are required
 - Windows code signing is recommended for public distribution, even if early workshop artifacts may be unsigned
 - Linux signing is not a baseline requirement for the first public starter release
-- connected Electron environments now have a minimal auto-update path through `electron-updater`; connected Tauri environments now have an experimental updater path through `tauri-plugin-updater`; Positron auto-update remains deferred
+- connected Electron environments now have a minimal auto-update path through `electron-updater`; connected Tauri environments now have an experimental updater path through `tauri-plugin-updater`; Positron currently uses manual installer replacement only and does not treat Briefcase development refresh flows as end-user auto-update
 - starter v1 must still document a manual update path that works in air-gapped or tightly controlled environments
 
 Minimum update story to document:

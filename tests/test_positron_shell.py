@@ -34,11 +34,21 @@ def test_positron_docs_and_commands_state_scope_honestly() -> None:
     assert "GitHub Actions artifact generation remains out of scope" in shell_doc
     assert "Windows packaged-build parity is not claimed" in shell_doc
     assert "ad-hoc signing" in shell_doc
+    assert "manual-only for now" in shell_doc
+    expected = (
+        "there is no connected updater, hosted artifact lane, checksum lane, "
+        "or GitHub release-publication flow"
+    )
+    assert expected in shell_doc
+    assert "Briefcase development refresh flows" in shell_doc
     assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in shell_doc
     assert "not a release-parity path in this slice" in shell_doc
     assert "no dedicated Positron GitHub packaging workflow" in release
     assert "just positron-package-dmg" in release
+    assert "Positron updates are manual-only for now" in release
+    assert "local manual replacement only" in release
     assert "not a release-parity path in this slice" in release
+    assert "manual-only for now" in readme
     assert "positron-start" in justfile
     assert "positron-smoke" in justfile
     assert "positron-build" in justfile

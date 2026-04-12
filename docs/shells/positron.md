@@ -28,6 +28,17 @@ Local commands:
 - `just positron-build`
 - `just positron-package-dmg`
 
+Update strategy in this repo:
+
+- manual-only for now
+- current install/update artifact: a local macOS DMG produced by `just positron-package-dmg`
+- current operator path: build the newer DMG locally on a macOS machine with the Briefcase prerequisites, quit the installed app, then replace the app manually from that newer DMG
+- current artifact boundary: `just positron-package-dmg` uses Briefcase ad-hoc signing, so the resulting app is only suitable for local validation on the machine that built it rather than a hosted end-user release lane
+- local Positron updates should leave per-user app data in place because the app bundle is replaced separately from the writable app-data directory
+- Briefcase development refresh flows such as `briefcase update` or `briefcase build --update-resources` are not presented here as end-user auto-update
+- there is no connected updater, hosted artifact lane, checksum lane, or GitHub release-publication flow for Positron in this repo
+- a broader Positron updater path would first need a real hosted artifact lane, checksum generation, release publication, platform signing/notarization, and Windows packaged install/run proof
+
 Scope boundaries:
 
 - Positron is still experimental and local-only in this slice

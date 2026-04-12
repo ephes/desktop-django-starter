@@ -41,6 +41,8 @@ Positron is explicitly out of that release lane as well:
 - there is no Positron checksum-artifact lane
 - local Positron bundles are for experiment validation, not release parity
 - local macOS packaging currently depends on Briefcase ad-hoc signing
+- Positron updates are manual-only for now, using local installer replacement rather than any connected updater
+- Briefcase development refresh commands are not treated here as an end-user auto-update path
 - Positron is not a release-parity path in this slice
 - Windows packaged proof for Positron is still deferred
 
@@ -129,6 +131,15 @@ That path intentionally stays narrower than Electron:
 - splashscreen parity is intentionally not required on macOS for this shell
 - it is not a release-parity path in this slice
 - it should be described as local-only experiment scope until a dedicated release lane exists
+
+Current Positron update strategy:
+
+- manual-only for now
+- current artifact: the local macOS DMG produced by `just positron-package-dmg`
+- current operator flow: on a macOS machine with the local Briefcase prerequisites, build a newer DMG, quit the installed Positron app, then replace it manually from that DMG
+- current trust boundary: because the DMG is built with Briefcase ad-hoc signing, this is a local validation flow rather than a hosted end-user distribution lane
+- current missing infrastructure: no GitHub Actions packaging workflow, no hosted artifact download path, no checksum manifest, no GitHub release publication flow, and no Windows packaged install/run proof
+- connected auto-update would only be justified after that release infrastructure exists; this repo does not present `briefcase update` or other developer-side refresh commands as an app updater
 
 ## macOS Signing and Notarization Inputs
 
@@ -277,6 +288,8 @@ Connected manual installation is still supported:
 3. promote the resulting DMG or `.exe` plus its `*-sha256.txt` file into your normal release channel
 4. have the user or administrator download, verify, and run the newer installer manually
 
+Positron is intentionally outside that connected-manual lane today. Its current update story is local manual replacement only: build a newer macOS DMG locally, then replace the installed app from that DMG on the same machine. There is no hosted Positron artifact set or checksum file to promote through the Electron or Tauri release flows described above.
+
 ## Air-Gapped and Manual Installs
 
 For air-gapped or tightly controlled environments, the update model is still manual:
@@ -328,7 +341,7 @@ Local state is only lost if the user or administrator explicitly removes the app
 
 This slice is intentionally incomplete in a few areas:
 
-- no default hosted Tauri updater manifest or release-publication path, and no Positron auto-update feed
+- no default hosted Tauri updater manifest or release-publication path, and no Positron hosted artifact or connected updater feed
 - no always-on signed-release publication workflow; Electron GitHub Release publication is an explicit manual workflow-dispatch option
 - Electron updater readiness still needs real signed/notarized macOS and Windows NSIS update dry runs before being called production-ready
 - Electron now adds a per-session shell-to-Django auth token for the localhost request channel through exact-origin header injection, but this is still a starter-level baseline rather than a full production localhost-hardening story
