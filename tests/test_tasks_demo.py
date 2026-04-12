@@ -25,10 +25,10 @@ def enqueue_demo_task(task: SimulatedTask) -> DBTaskResult:
 
 class TestSimulatedTaskModel:
     def test_create_task_with_defaults(self):
-        task = SimulatedTask.objects.create(label="Crunching numbers")
+        task = SimulatedTask.objects.create(label="Restocking hay loft")
 
         assert task.pk is not None
-        assert task.label == "Crunching numbers"
+        assert task.label == "Restocking hay loft"
         assert task.backend_task_id == ""
         assert task.status == SimulatedTask.Status.PENDING
         assert task.result is None
@@ -58,13 +58,13 @@ class TestRunSimulatedTask:
                 with mock.patch("tasks_demo.tasks.random.uniform", return_value=4.0):
                     with mock.patch(
                         "tasks_demo.tasks.random.choice",
-                        return_value="Generated 3 summary tables",
+                        return_value="Routine complete: supplies are counted and stowed.",
                     ):
                         result = run_simulated_task.call(task.pk)
 
         task.refresh_from_db()
         assert task.status == SimulatedTask.Status.DONE
-        assert task.result == "Generated 3 summary tables"
+        assert task.result == "Routine complete: supplies are counted and stowed."
         assert task.duration == 4.0
         assert task.completed_at is not None
         assert result["status"] == SimulatedTask.Status.DONE
@@ -77,14 +77,14 @@ class TestRunSimulatedTask:
                 with mock.patch("tasks_demo.tasks.random.uniform", return_value=3.0):
                     with mock.patch(
                         "tasks_demo.tasks.random.choice",
-                        return_value="Failed: simulated random error",
+                        return_value="Routine failed: the hay cart lost a wheel.",
                     ):
                         with pytest.raises(SimulatedTaskFailure):
                             run_simulated_task.call(task.pk)
 
         task.refresh_from_db()
         assert task.status == SimulatedTask.Status.FAILED
-        assert task.result == "Failed: simulated random error"
+        assert task.result == "Routine failed: the hay cart lost a wheel."
         assert task.duration == 3.0
         assert task.completed_at is not None
 
@@ -117,12 +117,12 @@ class TestTaskViews:
         response = client.get(reverse("tasks_demo:task-list"))
 
         assert response.status_code == 200
-        assert "Run Task" in response.content.decode()
+        assert "Start Routine" in response.content.decode()
 
     def test_task_list_empty_state(self, client):
         response = client.get(reverse("tasks_demo:task-list"))
 
-        assert "No tasks yet" in response.content.decode()
+        assert "No routines underway" in response.content.decode()
 
     def test_task_status_empty(self, client):
         response = client.get(reverse("tasks_demo:task-status"))
@@ -132,7 +132,7 @@ class TestTaskViews:
         assert data == {"tasks": []}
 
     def test_task_create_returns_201_and_enqueues_backend_task(self, client):
-        with mock.patch("tasks_demo.views.random.choice", return_value="Crunching numbers"):
+        with mock.patch("tasks_demo.views.random.choice", return_value="Restocking hay loft"):
             response = client.post(reverse("tasks_demo:task-run"))
 
         assert response.status_code == 201
@@ -140,7 +140,7 @@ class TestTaskViews:
         task = SimulatedTask.objects.get(pk=data["id"])
         scheduled_task = DBTaskResult.objects.get(pk=task.backend_task_id)
 
-        assert data == {"id": task.pk, "label": "Crunching numbers", "status": "PENDING"}
+        assert data == {"id": task.pk, "label": "Restocking hay loft", "status": "PENDING"}
         assert task.backend_task_id
         assert UUID(task.backend_task_id)
         assert scheduled_task.status == TaskResultStatus.READY
@@ -197,7 +197,7 @@ class TestTaskViews:
         scheduled_task.status = TaskResultStatus.SUCCESSFUL
         scheduled_task.return_value = {
             "status": SimulatedTask.Status.DONE,
-            "result": "Processed 42 records, avg score 87.3",
+            "result": "Routine complete: every stall passed inspection.",
             "duration": 4.2,
             "completed_at": completed_at.isoformat(),
         }
@@ -210,7 +210,7 @@ class TestTaskViews:
         data = json.loads(response.content)
         assert response.status_code == 200
         assert task.status == SimulatedTask.Status.DONE
-        assert task.result == "Processed 42 records, avg score 87.3"
+        assert task.result == "Routine complete: every stall passed inspection."
         assert task.duration == 4.2
         assert task.completed_at == completed_at
         assert data["tasks"][0]["status"] == "DONE"

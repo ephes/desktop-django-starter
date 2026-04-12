@@ -144,7 +144,7 @@ Decision for starter v1:
 
 Extension (post-v1):
 
-- `src/tasks_demo/` provides a separate page with a "Run Task" button, animated status indicators, and polling-based live updates
+- `src/tasks_demo/` provides a separate page with a "Start Routine" button, animated status indicators, and polling-based live updates
 - the backend enqueues real tasks through the `django_tasks` backport and executes them in a single database-backed `django_tasks_db` worker process supervised by Electron
 - the demo keeps its intentionally fake workload semantics: random duration, random success/failure, and starter-sized status/result reporting
 

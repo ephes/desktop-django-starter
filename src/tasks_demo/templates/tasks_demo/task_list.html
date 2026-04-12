@@ -6,15 +6,15 @@
 
 {% block content %}
 <div class="panel-toolbar">
-    <span class="hint">Starts a simulated stable routine</span>
-    <button type="button" id="run-task-btn" class="primary">Run Routine</button>
+    <span class="hint">Starts a simulated stable routine for the pony crew</span>
+    <button type="button" id="run-task-btn" class="primary">Start Routine</button>
 </div>
 
 <div id="task-list">
     {% if tasks %}
         <div class="task-list-header">
             <span>Status</span>
-            <span>Task</span>
+            <span>Routine</span>
             <span class="th-right">Duration</span>
         </div>
         {% for task in tasks %}
@@ -39,9 +39,9 @@
             </div>
         </div>
         {% if task.status == "DONE" and task.result %}
-            <div class="task-result task-result-done">Result: <span class="task-result-value">{{ task.result }}</span></div>
+            <div class="task-result task-result-done"><span class="task-result-value">{{ task.result }}</span></div>
         {% elif task.status == "FAILED" and task.result %}
-            <div class="task-result task-result-failed">Error: <span class="task-result-error">{{ task.result }}</span></div>
+            <div class="task-result task-result-failed"><span class="task-result-error">{{ task.result }}</span></div>
         {% endif %}
         {% endfor %}
     {% else %}
@@ -60,7 +60,7 @@
                 <circle cx="160.3" cy="195.8" r="36" stroke="currentColor" stroke-width="2" opacity="0.2"/>
                 <path d="M153.3,186.8v18l16-9-16-9Z" fill="currentColor" opacity="0.35"/>
             </svg>
-            <p class="empty-state-text">No routines yet. Hit Run Routine to start one.</p>
+            <p class="empty-state-text">No routines underway. Start a routine to see the stable crew at work.</p>
         </div>
     {% endif %}
 </div>
@@ -77,7 +77,7 @@
             <circle cx="160.3" cy="195.8" r="36" stroke="currentColor" stroke-width="2" opacity="0.2"/>
             <path d="M153.3,186.8v18l16-9-16-9Z" fill="currentColor" opacity="0.35"/>
         </svg>
-        <p class="empty-state-text">No routines yet. Hit Run Routine to start one.</p>
+        <p class="empty-state-text">No routines underway. Start a routine to see the stable crew at work.</p>
     </div>
 </template>
 
@@ -144,10 +144,10 @@
 
     function resultHTML(task) {
         if (task.status === "DONE" && task.result) {
-            return '<div class="task-result task-result-done">Result: <span class="task-result-value">' + escapeHTML(task.result) + "</span></div>";
+            return '<div class="task-result task-result-done"><span class="task-result-value">' + escapeHTML(task.result) + "</span></div>";
         }
         if (task.status === "FAILED" && task.result) {
-            return '<div class="task-result task-result-failed">Error: <span class="task-result-error">' + escapeHTML(task.result) + "</span></div>";
+            return '<div class="task-result task-result-failed"><span class="task-result-error">' + escapeHTML(task.result) + "</span></div>";
         }
         return "";
     }
@@ -162,11 +162,11 @@
         const container = document.getElementById("task-list");
         if (tasks.length === 0) {
             var tpl = document.getElementById("empty-state-template");
-            container.innerHTML = tpl ? tpl.innerHTML : '<div class="empty-state" id="empty-state"><p class="empty-state-text">No tasks yet. Hit Run Task to start one.</p></div>';
+            container.innerHTML = tpl ? tpl.innerHTML : '<div class="empty-state" id="empty-state"><p class="empty-state-text">No routines underway. Start a routine to see the stable crew at work.</p></div>';
             return;
         }
         let html = "";
-        html += '<div class="task-list-header"><span>Status</span><span>Task</span><span class="th-right">Duration</span></div>';
+        html += '<div class="task-list-header"><span>Status</span><span>Routine</span><span class="th-right">Duration</span></div>';
         for (const task of tasks) {
             html += '<div class="task-row" data-task-id="' + task.id + '" data-status="' + task.status + '">';
             html += indicatorHTML(task.status);

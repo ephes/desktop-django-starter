@@ -9,7 +9,7 @@ Design decisions and patterns established during the UI redesign session (2026-0
 - **Sections**: "My Ponies" (CRUD demo), "Stable Routines" (background tasks demo)
 - **Item statuses**: Grazing (backlog), Galloping (active), Show Ready (done)
 - **Form labels**: Name, Personality, Status
-- **Themed messages**: "Your pony needs a name.", "Do you know nothing about your pony?", "Release All Ponies"
+- **Themed messages**: "Your pony needs a name.", "Do you know nothing about your pony?", "Release All Ponies", "Starts a simulated stable routine for the pony crew", "No routines underway. Start a routine to see the stable crew at work."
 
 ## Color System
 

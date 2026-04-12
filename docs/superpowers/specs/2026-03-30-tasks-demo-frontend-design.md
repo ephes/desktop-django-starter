@@ -30,7 +30,7 @@ Location: `src/tasks_demo/`
 | Field | Type | Notes |
 |-------|------|-------|
 | `id` | AutoField | Primary key |
-| `label` | CharField | Human-readable name (e.g., "Crunching numbers") |
+| `label` | CharField | Human-readable name (e.g., "Restocking hay loft") |
 | `status` | CharField (choices) | PENDING, RUNNING, DONE, FAILED |
 | `result` | TextField (nullable) | Success message or error string |
 | `duration` | FloatField (nullable) | Seconds the task took |
@@ -42,9 +42,9 @@ Location: `src/tasks_demo/`
 - **`task_list`** — Renders the tasks page (HTML). Lists all tasks ordered by newest first.
 - **`task_create`** — POST only. Returns `201 Created` with a JSON body:
   ```json
-  {"id": 5, "label": "Crunching numbers", "status": "PENDING"}
+  {"id": 5, "label": "Restocking hay loft", "status": "PENDING"}
   ```
-  Creates a new `SimulatedTask` in PENDING state with a label randomly chosen from a small hardcoded list (e.g., "Crunching numbers", "Analyzing data", "Generating report", "Processing records"). Launches the worker via `_launch_task(task_id)` (see Testing section), which starts a daemon thread targeting `_run_task_worker(task_id)`. The worker:
+  Creates a new `SimulatedTask` in PENDING state with a label randomly chosen from a small hardcoded list (e.g., "Restocking hay loft", "Brushing parade manes", "Polishing tack room brass", "Counting sugar-cube tins"). Launches the worker via `_launch_task(task_id)` (see Testing section), which starts a daemon thread targeting `_run_task_worker(task_id)`. The worker:
   1. Sets status to RUNNING
   2. Sleeps for a random 3–10 seconds
   3. Sets status to DONE (with a result string) or FAILED (~20% chance, with an error message)
@@ -55,7 +55,7 @@ Location: `src/tasks_demo/`
     "tasks": [
       {
         "id": 5,
-        "label": "Crunching numbers",
+        "label": "Restocking hay loft",
         "status": "RUNNING",
         "result": null,
         "duration": null,
@@ -64,9 +64,9 @@ Location: `src/tasks_demo/`
       },
       {
         "id": 4,
-        "label": "Data analysis",
+        "label": "Brushing parade manes",
         "status": "DONE",
-        "result": "Processed 42 records, avg score 87.3",
+        "result": "Routine complete: every stall passed inspection.",
         "duration": 6.2,
         "created_at": "2026-03-30T14:20:50Z",
         "completed_at": "2026-03-30T14:20:56Z"
@@ -99,11 +99,11 @@ Add nav links to the masthead in `base.html`:
 
 ### Template: `task_list.html`
 
-- Extends `base.html` with heading "Background Tasks"
-- **Run bar**: "Run Task" button + hint text ("Starts a simulated background task")
+- Extends `base.html` with heading "Stable Routines"
+- **Run bar**: "Start Routine" button + hint text ("Starts a simulated stable routine for the pony crew")
 - **Task list**: Rows showing indicator, task name, status badge, and timing metadata
 - **Result rows**: Completed/failed tasks show result or error text below the task row
-- **Empty state**: "No tasks yet. Hit Run Task to start one."
+- **Empty state**: "No routines underway. Start a routine to see the stable crew at work."
 
 ### Task States and Indicators
 
@@ -117,7 +117,7 @@ Add nav links to the masthead in `base.html`:
 ### JavaScript (inline, no build step)
 
 - **Polling**: Calls `/tasks/status/` every 2 seconds while any task is PENDING or RUNNING. Stops when all tasks are terminal.
-- **Run Task**: POSTs to `/tasks/run/` via `fetch`, then starts/resumes polling.
+- **Start Routine**: POSTs to `/tasks/run/` via `fetch`, then starts/resumes polling.
 - **DOM updates**: On each poll, updates indicators, badges, elapsed times, and result rows.
 - **CSRF**: The `task_list` view is decorated with `@ensure_csrf_cookie` so the CSRF cookie is always set on the tasks page, even though there is no rendered `<form>`. The JS reads the token from the cookie and sends it as an `X-CSRFToken` header on the POST.
 
@@ -145,7 +145,7 @@ The random duration (3–10s) and failure probability (~20%) are drawn from modu
 - Task creation via POST returns 201 JSON with `id`, `label`, `status` fields
 - Status endpoint returns 200 JSON matching the documented schema
 - Status endpoint returns `{"tasks": []}` when no tasks exist
-- Task list page renders with 200 and includes the "Run Task" button
+- Task list page renders with 200 and includes the "Start Routine" button
 - Task model status choices are valid
 - Worker function (called directly, not via thread) correctly transitions PENDING → RUNNING → DONE
 - Worker function (called directly, patched to fail) correctly transitions PENDING → RUNNING → FAILED

@@ -6,6 +6,34 @@ Keep item ids stable. Do not renumber completed work.
 
 ## Completed Entries
 
+### BL-010: Stable Routines Theme Copy Pass
+
+Status: completed
+
+### Context
+
+The background task demo already presented itself as "Stable Routines" in the UI, but several visible task labels and result strings still used generic office or data-processing language. That weakened the teaching value of the branded demo because the page framing said pony stable while the task content still sounded like placeholder analytics work.
+
+The mismatch was narrow and mostly isolated to the demo content lists and a few visible UI strings. The architecture, route names, app package names, and worker behavior were already appropriate for the starter's background-task teaching story and did not need a thematic rewrite.
+
+### Goal
+
+Make the `/tasks/` demo read consistently as part of the Flying Stable theme by updating visible labels and result text, while leaving the underlying background-task implementation and teaching structure intact.
+
+### Implemented Summary
+
+- Replaced the generic `tasks_demo` label pool with stable-themed routine names such as hay-loft restocking, parade-mane brushing, and tack-room polishing.
+- Replaced the generic success and failure result strings with pony-stable outcomes that still read clearly as routine completions or delays.
+- Updated the task page's visible copy from generic "task" wording to the current "Start Routine" and "Routine" framing, including the empty-state fallback rendered by JavaScript.
+- Refreshed the backend tests to assert the new themed content and updated the docs that preserved exact examples of the task demo's visible copy.
+- Kept the background-task architecture, route names, app package names, and worker lifecycle semantics unchanged.
+
+### Validation Notes
+
+- Ran `uv run pytest tests/test_tasks_demo.py tests/test_docs.py`.
+- Ran `just docs-build`.
+- Ran `just check`.
+
 ### BL-003: Positron Update Strategy and Auto-Update Path
 
 Status: completed

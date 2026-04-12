@@ -16,26 +16,26 @@ MISSING_BACKEND_RESULT = "Task result could not be found."
 UNEXPECTED_BACKEND_RESULT = "Task exited before the demo row was finalized."
 
 TASK_LABELS: list[str] = [
-    "Crunching numbers",
-    "Analyzing data",
-    "Generating report",
-    "Processing records",
-    "Compiling results",
-    "Scanning inputs",
+    "Restocking hay loft",
+    "Brushing parade manes",
+    "Polishing tack room brass",
+    "Counting sugar-cube tins",
+    "Refreshing paddock lanterns",
+    "Folding ribbon blankets",
 ]
 
 SUCCESS_RESULTS: list[str] = [
-    "Processed 42 records, avg score 87.3",
-    "Generated 3 summary tables",
-    "Analysis complete - 12 anomalies flagged",
-    "All 128 entries validated successfully",
-    "Report compiled: 7 sections, 24 pages",
+    "Routine complete: the stable is ready for visitors.",
+    "Routine complete: supplies are counted and stowed.",
+    "Routine complete: every stall passed inspection.",
+    "Routine complete: tack is polished and hung.",
+    "Routine complete: the paddocks are set for evening turnout.",
 ]
 
 FAILURE_RESULTS: list[str] = [
-    "Failed: simulated random error",
-    "Error: timeout during processing",
-    "Failed: unexpected data format",
+    "Routine delayed: a loose latch needs attention.",
+    "Routine failed: the hay cart lost a wheel.",
+    "Routine delayed: the tack room key is missing.",
 ]
 
 
