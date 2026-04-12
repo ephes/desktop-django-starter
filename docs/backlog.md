@@ -6,11 +6,11 @@ When an entry is implemented, move it to [`done.md`](done.md) in the same change
 
 ## BL-008: Electron Connected Updater Release Validation
 
-Status: blocked on live release validation
+Status: blocked on Windows live release validation
 
 ### Context
 
-Electron is still the baseline release lane in this repo. The connected updater path is implemented through `electron-updater`, GitHub-hosted artifacts, updater metadata, and `Help > Check for Updates...`, but the docs still call out one important missing proof point: there has not yet been a real signed/notarized macOS update dry run or a real Windows NSIS update dry run.
+Electron is still the baseline release lane in this repo. The connected updater path is implemented through `electron-updater`, GitHub-hosted artifacts, updater metadata, and `Help > Check for Updates...`. One live proof point is now recorded: on April 12, 2026, a signed/notarized macOS packaged app updated from installed `0.1.2` to published `v0.1.4`, proving detection, download, restart/install, and `app.sqlite3` persistence. The remaining missing proof point is a real Windows NSIS update dry run.
 
 Those live validations matter more than additional experimental-shell release work because the repo already presents Electron as the most complete path. Until the release lane is exercised end to end, the release-readiness language cannot honestly get stronger.
 
@@ -20,14 +20,14 @@ Validate the implemented Electron connected updater path end to end on real pack
 
 ### Current Blocker
 
-- The updater path is implemented, but this repo still does not record a real signed/notarized macOS update dry run or a real Windows NSIS update dry run from published updater metadata.
+- The updater path is implemented, and the repo now records a real signed/notarized macOS packaged update dry run from installed `0.1.2` to published `v0.1.4`.
 - Artifact-only packaging runs, unsigned local packaging, and draft GitHub Releases are not enough to close this item.
-- Keep this entry in backlog until both platform runs prove detection, download, restart/install, and `app.sqlite3` persistence on real packaged installs.
+- Keep this entry in backlog until a real Windows NSIS packaged update run also proves detection, download, restart/install, and `app.sqlite3` persistence.
 
 ### Suggested Implementation Shape
 
-- Run one real signed/notarized macOS updater validation using published Electron release metadata.
 - Run one real Windows NSIS updater validation using published Electron release metadata.
+- Preserve the documented macOS evidence and only strengthen repo wording where the Windows proof now supports it.
 - Confirm the packaged app can detect, download, and restart into the newer version through `Help > Check for Updates...`.
 - Confirm the per-user app-data directory survives the update, including `app.sqlite3`.
 - Capture the operator workflow and results in `docs/release.md`, `README.md`, and `docs/done.md`.

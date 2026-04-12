@@ -462,9 +462,11 @@ That validation is required before strengthening the release-readiness claim bey
 Current Electron proof boundary:
 
 - the updater implementation, metadata generation, and optional GitHub Release publication path are in place
-- this repo still does not record a real signed/notarized macOS update dry run or a real Windows NSIS update dry run from published updater metadata
+- this repo now records a real signed/notarized macOS packaged update dry run performed on April 12, 2026, from installed `0.1.2` to published `v0.1.4`
+- that macOS run proved detection, download, restart/install, and `app.sqlite3` persistence on a real packaged install
+- this repo still does not record a real Windows NSIS update dry run from published updater metadata
 - Electron should therefore be described as having an implemented minimal connected updater path, not a release-validated updater lane
-- do not close `BL-008` in [`backlog.md`](backlog.md) until both platform runs prove detection, download, restart/install, and `app.sqlite3` persistence
+- do not close `BL-008` in [`backlog.md`](backlog.md) until the Windows NSIS run also proves detection, download, restart/install, and `app.sqlite3` persistence
 
 Tauri packages use `tauri-plugin-updater`. This repo keeps the updater transport outside Django: the packaged Tauri app checks its configured HTTPS endpoint after the first main-window load and prompts before it downloads or installs a newer signed payload.
 
@@ -558,7 +560,7 @@ This slice is intentionally incomplete in a few areas:
 
 - no default hosted Tauri updater manifest or release-publication path, and no Positron hosted artifact or connected updater feed
 - no always-on signed-release publication workflow; Electron GitHub Release publication is an explicit manual workflow-dispatch option
-- Electron updater readiness still needs real signed/notarized macOS and Windows NSIS update dry runs that prove detection, download, restart/install, and `app.sqlite3` persistence before being called production-ready
+- Electron updater readiness now has recorded macOS proof from installed `0.1.2` to published `v0.1.4`, but it still needs a real Windows NSIS update dry run that proves detection, download, restart/install, and `app.sqlite3` persistence before being called production-ready
 - Electron now adds a per-session shell-to-Django auth token for the localhost request channel through exact-origin header injection, but this is still a starter-level baseline rather than a full production localhost-hardening story
 - Tauri and Positron now add comparable per-session shell-to-Django request authentication through a Django bootstrap URL that sets an HttpOnly same-origin cookie, because their current public web view APIs do not expose Electron's external-localhost per-request header injection hook
 - Electron on Windows currently relies on explicit forced child-process tree termination via `taskkill /t /f`, which is acceptable for this starter slice but is not equivalent to graceful drain or broader production orphan-control work

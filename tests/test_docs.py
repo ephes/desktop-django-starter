@@ -158,11 +158,18 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "published GitHub releases" in readme
     assert "implemented connected updater path through `electron-updater`" in readme
     assert "release-validated updater readiness" in readme
-    assert "prove detection, download, restart/install, and `app.sqlite3` persistence" in readme
+    expected = "from installed `0.1.2` to published `v0.1.4`"
+    assert expected in readme
+    expected = "A real Windows NSIS update dry run is still required"
+    assert expected in readme
     assert "local `origin` Git remote" in release
     assert "draft release is useful for staging or review" in release
     assert "Current Electron proof boundary" in release
     expected = "implemented minimal connected updater path, not a release-validated updater lane"
+    assert expected in release
+    expected = "performed on April 12, 2026, from installed `0.1.2` to published `v0.1.4`"
+    assert expected in release
+    expected = "this repo still does not record a real Windows NSIS update dry run"
     assert expected in release
     assert "do not close `BL-008` in [`backlog.md`](backlog.md)" in release
     assert "per-session shell-to-Django auth token" in release
@@ -190,7 +197,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert expected in architecture
     assert "per-session shell-to-Django auth token" in architecture
     assert "release-validated updater lane" in architecture
-    expected = "prove detection, download, restart/install, and `app.sqlite3` persistence"
+    expected = "performed on April 12, 2026, from installed `0.1.2` to published `v0.1.4`"
+    assert expected in architecture
+    expected = "Electron still needs a real Windows NSIS update dry run"
     assert expected in architecture
     assert "Tauri and Positron use the same Django token setting" in architecture
     assert "taskkill /t /f" in architecture
@@ -207,7 +216,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "minimal localhost-aware CSP" in llms
     assert "tauri-plugin-updater" in llms
     assert "implemented minimal connected updater path through `electron-updater`" in llms
-    assert "not yet a release-validated updater lane" in llms
+    expected = "from installed `0.1.2` to published `v0.1.4`"
+    assert expected in llms
+    assert "still not a release-validated updater lane" in llms
     assert "Positron is manual-only for updates in this repo" in llms
     assert "per-session shell-to-Django auth token" in llms
     assert "Tauri and Positron pass the same setting to Django" in llms
@@ -219,7 +230,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "backlog.html" in docs_llms
     assert "done.html" in docs_llms
     assert "implemented minimal connected updater path through `electron-updater`" in docs_llms
-    assert "not yet a release-validated updater lane" in docs_llms
+    expected = "from installed `0.1.2` to published `v0.1.4`"
+    assert expected in docs_llms
+    assert "still not a release-validated updater lane" in docs_llms
     assert "Positron is manual-only for updates in this repo" in docs_llms
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" not in backlog
     assert "BL-005: Documentation Consistency and Discoverability Cleanup" in done
@@ -231,13 +244,15 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "BL-004: CI Validation Coverage for Electron and CLI" in done
     assert "BL-002: Tauri Connected Auto-Update" not in backlog
     assert "BL-008: Electron Connected Updater Release Validation" in backlog
-    assert "Status: blocked on live release validation" in backlog
+    assert "Status: blocked on Windows live release validation" in backlog
     expected = (
         "Artifact-only packaging runs, unsigned local packaging, "
         "and draft GitHub Releases are not enough"
     )
     assert expected in backlog
-    assert "real signed/notarized macOS update dry run" in backlog
+    expected = "signed/notarized macOS packaged app updated from installed `0.1.2`"
+    assert expected in backlog
+    assert "published `v0.1.4`" in backlog
     assert "real Windows NSIS update dry run" in backlog
     assert "BL-003: Positron Update Strategy and Auto-Update Path" not in backlog
     assert "implementation handoff" in backlog
@@ -252,6 +267,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "electron-updater" in done
     assert "Help > Check for Updates..." in done
     assert "publish_release=true" in done
+    assert "real signed/notarized macOS release dry run" in done
+    assert "Windows NSIS update validation run is still required" in done
     assert "app.security.csp" in tauri_doc
     assert "Current minimal CSP posture" in tauri_doc
     assert "canonical written checklist" in tauri_doc
@@ -260,7 +277,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "2-second grace period" in tauri_doc
     assert "deny child-window creation" in electron_doc
     assert "block top-level navigation away from the local Django origin" in electron_doc
-    expected = "proves detection, download, restart/install, and `app.sqlite3` persistence"
+    expected = "from installed `0.1.2` to published `v0.1.4` now proves detection"
     assert expected in electron_doc
     assert "Tauri uses a bootstrap HttpOnly cookie" in tauri_doc
     assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in positron_doc

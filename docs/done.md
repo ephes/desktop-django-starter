@@ -205,4 +205,4 @@ Add a minimal, production-shaped connected auto-update path for the Electron she
 ### Validation Notes
 
 - Ran `npm --prefix shells/electron test`.
-- Updater metadata generation and the optional GitHub Release publication path still need a real signed/notarized macOS release dry run and a Windows NSIS update validation run before claiming full production release readiness.
+- Updater metadata generation and the optional GitHub Release publication path now record a real signed/notarized macOS release dry run; a Windows NSIS update validation run is still required before claiming full production release readiness.
