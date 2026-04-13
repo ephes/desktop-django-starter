@@ -330,6 +330,11 @@ If the draft release is incomplete, leave it unpublished. Recover by downloading
 
 After the release is published, download the exact DMG you want to test.
 
+Release-specific note:
+
+- published `v0.1.4` predates the first-run `seed_demo_content` behavior, so a truly fresh `v0.1.4` install can still open with an empty "My Ponies" list
+- first-run starter-pony seeding begins in `v0.1.5`
+
 Browser path:
 
 1. Open the published release page, for example:
@@ -377,7 +382,7 @@ Recommended operator flow:
 3. Confirm the packaged user-data directory exists:
 
    ```bash
-   ls -lah ~/Library/Application\ Support/"Desktop Django Starter"
+   ls -lah ~/Library/Application\ Support/desktop-django-starter-electron
    ```
 
 4. Confirm `app.sqlite3` exists in that directory.
@@ -564,6 +569,8 @@ Windows-specific note:
 Packaged mode keeps writable state outside the app bundle.
 
 Electron sets `DESKTOP_DJANGO_APP_DATA_DIR` from `app.getPath("userData")`, and packaged Django settings store the SQLite database there as `app.sqlite3`.
+
+For the current Electron shell, that `userData` path resolves to `~/Library/Application Support/desktop-django-starter-electron` on macOS because the shell package name is `desktop-django-starter-electron`. The in-app `Open App Data Folder` action is the most reliable way to confirm the live path for an installed build.
 
 The packaged SQLite config is intentionally stronger than the repo-default development database setup: it keeps the single writable app-data database file, sets `transaction_mode=IMMEDIATE`, raises the timeout to 20 seconds, and initializes SQLite with `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, plus modest cache and mmap settings that fit a small teaching starter.
 

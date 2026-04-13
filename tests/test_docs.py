@@ -139,7 +139,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "gh release upload v<version> ... --clobber" in release
     assert "Download and install a specific macOS release" in release
     assert "gh release download v<version>" in release
-    assert "~/Library/Application\\ Support/\"Desktop Django Starter\"" in release
+    assert "~/Library/Application\\ Support/desktop-django-starter-electron" in release
+    assert "published `v0.1.4` predates the first-run `seed_demo_content` behavior" in release
+    assert "first-run starter-pony seeding begins in `v0.1.5`" in release
     assert "What counts as a successful macOS updater validation in this repo" in release
     assert "just tauri-build" in release
     assert "tauri-packages.yml" in release
