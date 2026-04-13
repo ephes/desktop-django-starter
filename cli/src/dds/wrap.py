@@ -9,10 +9,20 @@ import shutil
 import signal
 import subprocess
 import sys
+from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 
 from dds import __version__
+from dds.config import (
+    SUPPORTED_HARNESSES,
+    ConfigError,
+    WrapperConfig,
+    default_config_path,
+    detect_installed_harnesses,
+    load_wrapper_config,
+    save_wrapper_config,
+)
 
 ASSETS_PATH = Path(str(files("dds") / "_assets"))
 PROMPT_TEMPLATE = ASSETS_PATH / "skills" / "wrap-existing-django-in-electron" / "prompt.md"
@@ -254,6 +264,199 @@ def _shell_quote(s: str) -> str:
     return s
 
 
+class HarnessResolutionError(RuntimeError):
+    """Raised when the run harness cannot be resolved safely."""
+
+
+@dataclass(frozen=True)
+class _ResolvedRunConfig:
+    harness: str
+    model: str | None
+    harness_source: str
+    model_source: str | None
+    config_path: Path
+
+
+def _stdin_is_tty() -> bool:
+    return bool(getattr(sys.stdin, "isatty", lambda: False)())
+
+
+def _model_prompt_hint(harness: str) -> str:
+    if harness == "pi":
+        return f" for example {DEFAULT_PI_MODEL}"
+    if harness == "codex":
+        return " for example gpt-5.4"
+    return ""
+
+
+def _prompt_for_harness(options: list[str], default: str) -> str:
+    while True:
+        answer = input(f"Default harness [{default}]: ").strip()
+        if not answer:
+            return default
+        if answer in options:
+            return answer
+        if answer.isdigit():
+            index = int(answer) - 1
+            if 0 <= index < len(options):
+                return options[index]
+        supported = ", ".join(options)
+        print(f"Please enter one of: {supported}, or the matching number.")
+
+
+def _prompt_for_model(current_model: str | None, harness: str) -> str | None:
+    current = current_model or ""
+    if current:
+        prompt = (
+            "Default model (optional; press Enter to keep current, '-' to clear"
+            f"{_model_prompt_hint(harness)}) [{current}]: "
+        )
+    else:
+        prompt = (
+            "Default model (optional; press Enter to use the harness default"
+            f"{_model_prompt_hint(harness)}): "
+        )
+
+    answer = input(prompt).strip()
+    if not answer:
+        return current_model
+    if answer == "-":
+        return None
+    return answer
+
+
+def _run_setup_flow(*, existing_config: WrapperConfig | None, config_path: Path) -> WrapperConfig:
+    installed = detect_installed_harnesses()
+    if not installed:
+        supported = ", ".join(SUPPORTED_HARNESSES)
+        raise HarnessResolutionError(
+            "No supported harness CLI was found on PATH. "
+            f"Install one of: {supported}, then run `dds init`."
+        )
+
+    print("Wrapper setup")
+    print(f"  config: {config_path}")
+    print("  detected harnesses:")
+    for harness, resolved_path in installed.items():
+        print(f"    - {harness}: {resolved_path}")
+    print()
+    print("Choose the default harness for `dds wrap --run`.")
+    options = list(installed)
+    default = (
+        existing_config.harness
+        if existing_config and existing_config.harness in installed
+        else options[0]
+    )
+    for index, harness in enumerate(options, start=1):
+        marker = " (current)" if harness == default else ""
+        print(f"  {index}. {harness}{marker}")
+
+    harness = _prompt_for_harness(options, default)
+    model = _prompt_for_model(existing_config.model if existing_config else None, harness)
+    config = WrapperConfig(harness=harness, model=model)
+    saved_path = save_wrapper_config(config, config_path)
+
+    print()
+    print(f"Saved wrapper defaults to {saved_path}")
+    if config.model:
+        print(f"Default model: {config.model}")
+    else:
+        print("Default model: use each harness CLI default")
+    print()
+    return config
+
+
+def _describe_harness_source(resolved: _ResolvedRunConfig) -> str:
+    if resolved.harness_source == "cli":
+        return "CLI override"
+    if resolved.harness_source == "config":
+        return f"saved default ({resolved.config_path})"
+    if resolved.harness_source == "auto":
+        return "auto-detected"
+    return resolved.harness_source
+
+
+def _describe_model_source(resolved: _ResolvedRunConfig) -> str:
+    if resolved.model_source == "cli":
+        return "CLI override"
+    if resolved.model_source == "config":
+        return f"saved default ({resolved.config_path})"
+    if resolved.model_source is None:
+        return "harness default"
+    return resolved.model_source
+
+
+def _resolve_run_config(agent: str | None, model: str | None) -> _ResolvedRunConfig:
+    config_path = default_config_path()
+    try:
+        saved_config = load_wrapper_config(config_path)
+    except ConfigError as exc:
+        raise HarnessResolutionError(
+            f"Wrapper config is invalid: {exc}. Run `dds init` to rewrite it."
+        ) from exc
+
+    resolved_model = model if model is not None else saved_config.model if saved_config else None
+    model_source = (
+        "cli" if model is not None else "config" if saved_config and saved_config.model else None
+    )
+
+    if agent is not None:
+        return _ResolvedRunConfig(
+            harness=agent,
+            model=resolved_model,
+            harness_source="cli",
+            model_source=model_source,
+            config_path=config_path,
+        )
+
+    if saved_config is not None:
+        return _ResolvedRunConfig(
+            harness=saved_config.harness,
+            model=resolved_model,
+            harness_source="config",
+            model_source=model_source,
+            config_path=config_path,
+        )
+
+    installed = detect_installed_harnesses()
+    if len(installed) == 1:
+        harness = next(iter(installed))
+        return _ResolvedRunConfig(
+            harness=harness,
+            model=resolved_model,
+            harness_source="auto",
+            model_source=model_source,
+            config_path=config_path,
+        )
+
+    if _stdin_is_tty() and installed:
+        print(f"No wrapper defaults found at {config_path}.")
+        print("Running first-time setup before `dds wrap --run`.")
+        print()
+        config = _run_setup_flow(existing_config=None, config_path=config_path)
+        return _ResolvedRunConfig(
+            harness=config.harness,
+            model=resolved_model if model is not None else config.model,
+            harness_source="config",
+            model_source="cli" if model is not None else "config" if config.model else None,
+            config_path=config_path,
+        )
+
+    installed_names = ", ".join(installed) if installed else "none"
+    if installed:
+        raise HarnessResolutionError(
+            "No wrapper defaults are configured, and multiple supported harnesses are "
+            f"installed on PATH ({installed_names}). Run `dds init` to save a default "
+            "harness, or pass `--harness` explicitly."
+        )
+
+    supported = ", ".join(SUPPORTED_HARNESSES)
+    raise HarnessResolutionError(
+        "No wrapper defaults are configured, and no supported harness CLI was found on PATH. "
+        f"Install one of: {supported}, then run `dds init` or pass `--harness` explicitly."
+    )
+
+
 class _Preflight:
     """Accumulates preflight results."""
 
@@ -280,7 +483,7 @@ class _Preflight:
 def run_wrap(
     *,
     run_agent: bool,
-    agent: str,
+    agent: str | None,
     model: str | None,
     force: bool,
     emit_prompt: bool,
@@ -290,9 +493,23 @@ def run_wrap(
         print(_generate_prompt())
         return
 
+    resolved_run: _ResolvedRunConfig | None = None
+    if run_agent:
+        try:
+            resolved_run = _resolve_run_config(agent, model)
+        except HarnessResolutionError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            sys.exit(1)
+
     pf = _Preflight()
     print("Preflight")
     print(f"  dds {__version__}")
+    if resolved_run is not None:
+        print(f"  harness: {resolved_run.harness} ({_describe_harness_source(resolved_run)})")
+        if resolved_run.model:
+            print(f"  model: {resolved_run.model} ({_describe_model_source(resolved_run)})")
+        else:
+            print("  model: harness default")
     print()
 
     # 1. Git repo (hard error, always)
@@ -355,11 +572,18 @@ def run_wrap(
             pf.warn(f"{cmd} not found (required for post-wrap verification)")
 
     # 7. Agent CLI (hard error only with --run)
-    if run_agent:
-        if not shutil.which(agent):
-            pf.error(f"{agent} not found on PATH")
+    if resolved_run is not None:
+        if not shutil.which(resolved_run.harness):
+            if resolved_run.harness_source == "config":
+                pf.error(
+                    f"{resolved_run.harness} not found on PATH "
+                    "(saved default from "
+                    f"{resolved_run.config_path}; run `dds init` or pass --harness)"
+                )
+            else:
+                pf.error(f"{resolved_run.harness} not found on PATH")
         else:
-            pf.ok(f"{agent} found")
+            pf.ok(f"{resolved_run.harness} found ({_describe_harness_source(resolved_run)})")
 
     # Verdict
     print()
@@ -369,21 +593,22 @@ def run_wrap(
     print("Preflight passed.")
 
     # --- Run or print ---
-    if run_agent:
+    if resolved_run is not None:
         resolved_prompt = _generate_prompt()
         assets_str = str(ASSETS_PATH)
 
-        if agent == "claude":
-            _run_claude(resolved_prompt, assets_str, model)
-        elif agent == "pi":
+        if resolved_run.harness == "claude":
+            _run_claude(resolved_prompt, assets_str, resolved_run.model)
+        elif resolved_run.harness == "pi":
             # pi doesn't support --add-dir; absolute paths in prompt are sufficient
-            os.execvp("pi", _pi_command(resolved_prompt, model))
-        elif agent == "codex":
-            os.execvp("codex", _codex_command(resolved_prompt, assets_str, model))
+            os.execvp("pi", _pi_command(resolved_prompt, resolved_run.model))
+        elif resolved_run.harness == "codex":
+            os.execvp("codex", _codex_command(resolved_prompt, assets_str, resolved_run.model))
     else:
         print()
         print("To wrap this project:")
         print()
+        print("  dds init")
         print("  dds wrap --run")
         print()
         print("With a different agent:")
@@ -398,3 +623,26 @@ def run_wrap(
         print("Or generate the resolved prompt for manual use:")
         print()
         print("  dds wrap --emit-prompt")
+
+
+def run_init() -> None:
+    config_path = default_config_path()
+    if not _stdin_is_tty():
+        print(
+            "error: `dds init` requires an interactive terminal. "
+            "Run it in a TTY, or pass `--harness` directly to `dds wrap --run`.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    try:
+        existing_config = load_wrapper_config(config_path)
+    except ConfigError as exc:
+        print(f"warning: existing wrapper config is invalid: {exc}", file=sys.stderr)
+        existing_config = None
+
+    try:
+        _run_setup_flow(existing_config=existing_config, config_path=config_path)
+    except HarnessResolutionError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        sys.exit(1)

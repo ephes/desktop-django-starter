@@ -57,11 +57,19 @@ repo is inferred from the script's location, or specified with `--starter`:
 The packaged CLI can be run without a local starter checkout:
 
 ```bash
+uvx desktop-django-starter init
 uvx desktop-django-starter wrap --run
 uvx desktop-django-starter wrap --run --harness pi --model openai-codex/gpt-5.4
 ```
 
-With the default `claude` agent, current `dds` builds stream concise progress
+`dds init` saves a user-level default harness plus an optional freeform default
+model. Then `dds wrap --run` resolves the harness in this order: explicit CLI
+flags, saved config, then auto-detect when exactly one supported harness is
+installed. If no config exists yet and stdin is a TTY, `wrap --run` launches
+the same setup flow inline. Non-interactive runs never prompt; if the harness
+is ambiguous they fail and point to `dds init` or `--harness`.
+
+When using the `claude` harness, current `dds` builds stream concise progress
 while the agent works. Older builds delegated to Claude's default `-p` text
 output, which could make a long wrapping run look idle until Claude exited.
 Use `--harness` and `--model` to choose the agent harness and model. `--agent`

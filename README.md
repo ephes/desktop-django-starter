@@ -64,13 +64,19 @@ cd ~/projects/my-django-app
 Or use the packaged CLI:
 
 ```bash
+uvx desktop-django-starter init
 uvx desktop-django-starter wrap --run
 uvx desktop-django-starter wrap --run --harness pi --model openai-codex/gpt-5.4
 ```
 
-Current `dds` builds stream concise Claude progress during `--run`; older builds
-could look idle until Claude finished. Use `--harness` and `--model` to choose the
-agent harness and model. See [`docs/agent-use.md`](docs/agent-use.md) for details.
+`dds init` saves a default harness and optional model in user-level config. Then
+`dds wrap --run` resolves the harness in this order: explicit `--harness` or
+`--agent`, saved config, then auto-detect when exactly one supported harness is
+installed. If no config exists yet and stdin is a TTY, `wrap --run` launches
+the same setup flow inline; non-interactive runs fail clearly instead of
+prompting. Current `dds` builds stream concise Claude progress when you choose
+the `claude` harness; older builds could look idle until Claude finished. See
+[`docs/agent-use.md`](docs/agent-use.md) for details.
 
 For local-model experiments with Ollama, benchmark the real wrap prompt against a
 clean target repo before you run the agent:

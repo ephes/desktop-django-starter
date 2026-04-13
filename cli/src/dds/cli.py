@@ -16,6 +16,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     subparsers = parser.add_subparsers(dest="command")
 
+    # --- init ---
+    subparsers.add_parser(
+        "init",
+        help="Configure default harness and model for dds wrap --run",
+    )
+
     # --- wrap ---
     wrap_parser = subparsers.add_parser(
         "wrap", help="Wrap the Django project in the current directory"
@@ -29,16 +35,17 @@ def main(argv: list[str] | None = None) -> None:
         "--agent",
         "--harness",
         dest="agent",
-        default="claude",
+        default=None,
         choices=["claude", "pi", "codex"],
-        help="Agent harness to use (default: claude)",
+        help="Agent harness to use. Overrides saved config or auto-detect.",
     )
     wrap_parser.add_argument(
         "--model",
         help=(
             "Model to pass to the selected agent. "
-            "When omitted, each agent uses its CLI default except pi, "
-            "which defaults to openai-codex/gpt-5.4."
+            "Overrides any saved default model. "
+            "When omitted, saved config or the harness CLI default is used; "
+            "pi defaults to openai-codex/gpt-5.4."
         ),
     )
     wrap_parser.add_argument(
@@ -71,6 +78,10 @@ def main(argv: list[str] | None = None) -> None:
             force=args.force,
             emit_prompt=args.emit_prompt,
         )
+    elif args.command == "init":
+        from dds.wrap import run_init
+
+        run_init()
     elif args.command == "doctor":
         from dds.doctor import run_doctor
 

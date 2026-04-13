@@ -93,6 +93,10 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "docs/release.md" in readme
     assert "docs/backlog.md" in readme
     assert "docs/done.md" in readme
+    assert "uvx desktop-django-starter init" in readme
+    assert "explicit `--harness` or" in readme
+    assert "saved config, then auto-detect when exactly one supported harness is" in readme
+    assert "non-interactive runs fail clearly instead of" in readme
     assert "SHA-256" in readme
     assert ".stage/backend" in readme
     assert "shells/electron" in readme
@@ -223,6 +227,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/electron/" in llms
     assert "shells/tauri/" in llms
     assert "shells/positron/" in llms
+    assert "uvx desktop-django-starter init" in llms
+    assert "saved config, then auto-detect when exactly one supported harness is installed" in llms
     assert "assets/brand/" in llms
     assert "GitHub-hosted Tauri artifact workflow" in llms
     assert "prepared, unverified Windows NSIS path" in llms
@@ -247,6 +253,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "shells/positron.html" in docs_llms
     assert "backlog.html" in docs_llms
     assert "done.html" in docs_llms
+    assert "uvx desktop-django-starter init" in docs_llms
+    expected = "saved config, then auto-detect when exactly one supported harness is installed"
+    assert expected in docs_llms
     assert "implemented minimal connected updater path through `electron-updater`" in docs_llms
     expected = "from installed `0.1.2` to published `v0.1.4`"
     assert expected in docs_llms
@@ -267,6 +276,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "BL-004: CI Validation Coverage for Electron and CLI" in done
     assert "BL-002: Tauri Connected Auto-Update" not in backlog
     assert "BL-009: First-Run Pony Demo Seeding" not in backlog
+    assert "BL-009: Wrapper CLI Harness Setup And First-Run UX" not in backlog
     assert "BL-008: Electron Connected Updater Release Validation" in backlog
     assert "Status: blocked on Windows live release validation" in backlog
     expected = (
@@ -286,6 +296,9 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "BL-002: Tauri Connected Auto-Update" in done
     assert "BL-003: Positron Update Strategy and Auto-Update Path" in done
     assert "BL-009: First-Run Pony Demo Seeding" in done
+    assert "BL-009: Wrapper CLI Harness Setup And First-Run UX" in done
+    assert "`dds init` as an interactive setup command" in done
+    assert "explicit CLI flags, saved config, then auto-detect" in done
     assert "seed_demo_content" in done
     assert "checks whether the packaged per-user `app.sqlite3` exists before `migrate`" in done
     assert "manual-only Positron update strategy for now" in done

@@ -6,6 +6,34 @@ Keep item ids stable. Do not renumber completed work.
 
 ## Completed Entries
 
+### BL-009: Wrapper CLI Harness Setup And First-Run UX
+
+Status: completed
+
+### Context
+
+The packaged wrapper CLI used to assume `claude` for `dds wrap --run`, then fail preflight if that binary was not installed even when `pi` or `codex` were already available. It also had no persistent wrapper defaults, no explicit setup command, and no first-run setup path for users who skipped the docs and went straight to `wrap --run`.
+
+### Goal
+
+Make the wrapper CLI choose and remember a usable agent harness more gracefully without broadening scope into a new orchestration layer or provider abstraction.
+
+### Implemented Summary
+
+- Added a small user-level config layer for wrapper defaults, stored at `~/.config/dds/config.toml` on Unix-like systems.
+- Added `dds init` as an interactive setup command that detects installed `claude`, `pi`, and `codex` harness CLIs, prompts for a default harness, optionally saves a freeform default model string, and safely rewrites the config file.
+- Updated `dds wrap --run` so it now resolves the harness in this order: explicit CLI flags, saved config, then auto-detect when exactly one supported harness is installed.
+- Reused the same setup flow inline on first `dds wrap --run` when no config exists and stdin is a TTY, while keeping non-interactive runs prompt-free and failing with precise guidance to use `dds init` or `--harness`.
+- Updated `dds doctor`, packaged CLI help text, and the wrapping docs so the CLI no longer implies Claude is present on every machine and now explains config state, override behavior, and non-interactive expectations.
+- Expanded the CLI tests to cover config read/write behavior, resolution precedence, auto-detect for zero/one/multiple installed harnesses, TTY first-run setup, non-interactive failure paths, and the new `init` command surface.
+
+### Validation Notes
+
+- Ran `uv run pytest cli/tests/test_wrap.py` from the repo root and hit an import-path issue because that invocation does not put `cli/src` on `PYTHONPATH` in this environment.
+- Ran `uv run --with pytest python -m pytest tests/test_wrap.py` from `cli/`.
+- Ran `uv run pytest tests/test_docs.py`.
+- Ran `just docs-build`.
+
 ### BL-009: First-Run Pony Demo Seeding
 
 Status: completed
