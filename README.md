@@ -158,6 +158,8 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 - `just github-package-latest-run`: print the latest successful packaging workflow run id for the current branch
 - `just github-package-latest-path`: print the local path for the last `github-package-download-latest` download
 - `just github-package-download-latest`: download the latest successful packaging workflow run for the current branch
+- `just github-release-verify <tag>`: check that a draft Electron GitHub Release has the full hosted asset set before publishing
+- `just github-release-publish <tag>`: verify the hosted asset set and then publish the draft Electron GitHub Release
 - `just github-package-tauri`: trigger the Tauri GitHub Actions packaging workflow for the current branch
 - `just github-package-tauri-download <run-id>`: download a specific Tauri packaging workflow run into `dist/github-actions/tauri/<run-id>/`
 - `just github-package-tauri-latest-run`: print the latest successful Tauri packaging workflow run id for the current branch
@@ -192,6 +194,7 @@ For the packaged-mode staging slice, use `just packaged-start`.
 The `.stage/` directory is rebuilt on each packaged staging run and should be treated as ephemeral.
 
 For GitHub-built Electron install artifacts, use `just github-package` and then `just github-package-download-latest` once the workflow succeeds. The download helpers require the GitHub CLI plus an authenticated `gh` session and place per-platform artifacts under `dist/github-actions/<run-id>/`. `just github-package-latest-run` prints the current latest run id, `just github-package-download-latest` records the run id in `dist/github-actions/latest-run.txt`, attempts to create `dist/github-actions/latest` as a symlink when the local platform allows it, and `just github-package-latest-path` prints the resolved local directory for that latest download.
+For the draft GitHub Release created by `publish_release=true`, use `just github-release-verify v<version>` before publishing it. `just github-release-publish v<version>` runs the same verification and only flips the release out of draft mode after the expected macOS, Windows, Linux, and `latest*.yml` assets are present.
 Pass a different branch as the first argument when needed, for example `just github-package my-branch`.
 
 For GitHub-built Tauri artifacts, use `just github-package-tauri` and then `just github-package-tauri-download-latest` once the workflow succeeds. Those helpers place artifacts under `dist/github-actions/tauri/<run-id>/`, record the last downloaded run in `dist/github-actions/tauri/latest-run.txt`, attempt to create `dist/github-actions/tauri/latest` as a symlink when the local platform allows it, and keep the same branch-selection behavior as the Electron helpers.

@@ -24,6 +24,7 @@ def test_core_docs_scaffold_exists() -> None:
         ROOT / "docs" / "shells" / "electron.md",
         ROOT / "docs" / "shells" / "tauri.md",
         ROOT / "docs" / "shells" / "positron.md",
+        ROOT / "scripts" / "check-github-release.py",
         ROOT / "scripts" / "stage-backend.cjs",
         ROOT / "scripts" / "write-checksums.py",
         ROOT / "shells" / "electron" / "package.json",
@@ -109,6 +110,8 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "just positron-package-dmg" in readme
     assert "dist/github-actions/latest" in readme
     assert "dist/github-actions/tauri/latest" in readme
+    assert "just github-release-verify <tag>" in readme
+    assert "just github-release-publish <tag>" in readme
     assert "per-session shell-to-Django auth token" in readme
     assert "the shells now add a per-session shell-to-Django auth token" in readme
     assert "Tauri and Positron pass the same setting to Django" in readme
@@ -130,6 +133,10 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "Team key, not an Individual key" in release
     assert "role `App Manager`" in release
     assert "gh workflow run desktop-packages.yml --ref <branch> -f publish_release=true" in release
+    assert "Do not publish the draft as soon as the first platform finishes" in release
+    assert "just github-release-verify v<version>" in release
+    assert "just github-release-publish v<version>" in release
+    assert "gh release upload v<version> ... --clobber" in release
     assert "Download and install a specific macOS release" in release
     assert "gh release download v<version>" in release
     assert "~/Library/Application\\ Support/\"Desktop Django Starter\"" in release
@@ -418,4 +425,7 @@ def test_electron_github_download_helper_fetches_checksum_artifacts() -> None:
     assert "desktop-django-starter-macos-checksums" in justfile
     assert "desktop-django-starter-windows-checksums" in justfile
     assert "desktop-django-starter-linux-checksums" in justfile
+    assert "github-release-verify TAG:" in justfile
+    assert "github-release-publish TAG:" in justfile
+    assert "scripts/check-github-release.py" in justfile
     assert "hosted-artifact bundle helpers" in claude

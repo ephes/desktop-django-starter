@@ -185,6 +185,12 @@ github-package-download-latest BRANCH="":
     fi; \
     echo "Latest downloaded path: dist/github-actions/$run_id"
 
+github-release-verify TAG:
+    uv run python scripts/check-github-release.py "{{TAG}}"
+
+github-release-publish TAG:
+    uv run python scripts/check-github-release.py "{{TAG}}" --publish
+
 github-package-tauri BRANCH="":
     @branch="{{BRANCH}}"; \
     if [ -z "$branch" ]; then branch="$(git symbolic-ref --short -q HEAD)"; fi; \

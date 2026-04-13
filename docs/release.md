@@ -306,6 +306,26 @@ Then confirm the macOS job shows all of the following:
 
 The workflow creates a GitHub Release draft when `publish_release=true`. Electron updater checks still require you to publish that release afterward because draft releases are not visible to updater clients.
 
+Do not publish the draft as soon as the first platform finishes. Wait for the whole workflow run to complete, then verify that the draft release contains the full hosted Electron asset set:
+
+```bash
+just github-release-verify v<version>
+```
+
+That helper checks for the current hosted set:
+
+- macOS DMG, updater ZIP, `latest-mac.yml`, and macOS blockmaps
+- Windows NSIS `.exe`, `latest.yml`, and the Windows blockmap
+- Linux AppImage and `latest-linux.yml`
+
+Once the verification passes, publish the draft release with:
+
+```bash
+just github-release-publish v<version>
+```
+
+If the draft release is incomplete, leave it unpublished. Recover by downloading the successful run artifacts with `just github-package-download <run-id>` and then upload the missing files with `gh release upload v<version> ... --clobber` before you publish the release.
+
 #### 8. Download and install a specific macOS release
 
 After the release is published, download the exact DMG you want to test.
