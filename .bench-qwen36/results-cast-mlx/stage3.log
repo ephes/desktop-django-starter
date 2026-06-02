@@ -1,0 +1,17 @@
+
+
+All 5 checks passed. The log confirms `GET /health/` 200 and `GET /` 200.
+
+---
+
+## Stage 3 Report
+
+1. **Files changed:** none (zero-edit stage).
+2. **Remaining Electron-side dependencies blocking full smoke testing:** none — the packaged smoke test completed successfully with both endpoints returning 200.
+3. **Checks run and results:**
+   - `git status --short` — ✅ passed (shows Stage 1 scaffold files)
+   - `uv run python example/manage.py check --settings example_site.settings.dev` — ✅ passed (0 issues)
+   - `node electron/scripts/stage-backend.cjs` — ✅ passed (backend staged, benign `django_vite.W001` only)
+   - `uv run python example/manage.py check --settings example_site.packaged_settings` — ✅ passed (benign `django_vite.W001` only)
+   - `npm --prefix electron run smoke:packaged` — ✅ passed (`GET /health/` 200, `GET /` 200)
+4. **Stage 3 completed with verification only** — no Django-side edits were required.

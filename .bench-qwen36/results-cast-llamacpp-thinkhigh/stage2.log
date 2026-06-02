@@ -1,0 +1,25 @@
+All four checks passed. No edits needed.
+
+---
+
+## Stage 2 Report
+
+**1. Files changed:** none (zero-edit)
+
+**2. Known deferred Django-side dependencies for Stage 3:**
+- `example/example_site/settings/base.py` — modified (Stage 1)
+- `example/example_site/urls.py` — modified (Stage 1)
+- `example/manage.py` — modified (Stage 1)
+- `justfile` — modified (Stage 1)
+- `example/example_site/desktop_middleware.py` — new (Stage 1)
+- `example/example_site/desktop_runtime.py` — new (Stage 1)
+- `example/example_site/packaged_settings.py` — new (Stage 1)
+
+**3. Verification checks:**
+
+| # | Check | Result |
+|---|-------|--------|
+| 1 | `git status --short` | ✅ — electron/ present, Django-side changes as expected from Stage 1 |
+| 2 | `node --check electron/main.js` | ✅ — syntax OK |
+| 3 | `node --check electron/scripts/launch-electron.cjs` | ✅ — syntax OK |
+| 4 | `node --test electron/scripts/*.test.cjs` | ✅ — 53 tests passed, 0 failures |

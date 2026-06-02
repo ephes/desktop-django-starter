@@ -1,0 +1,116 @@
+
+> django-cast-electron@0.1.6 smoke:packaged
+> npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged --smoke-test
+
+
+> django-cast-electron@0.1.6 stage-backend
+> node ./scripts/stage-backend.cjs
+
+Downloading cpython-3.14.5-macos-aarch64-none (download) (24.7MiB)
+ Downloaded cpython-3.14.5-macos-aarch64-none (download)
+Installed Python 3.14.5 in 892ms
+ + cpython-3.14.5-macos-aarch64-none
+Pruned bundled Python GUI artifacts:
+- bin/idle3
+- bin/idle3.14
+- lib/itcl4.3.5
+- lib/libtcl9.0.dylib
+- lib/libtcl9tk9.0.dylib
+- lib/python3.14/idlelib
+- lib/python3.14/lib-dynload/_tkinter.cpython-314-darwin.so
+- lib/python3.14/tkinter
+- lib/tcl9
+- lib/tcl9.0
+- lib/thread3.0.4
+- lib/tk9.0
+Building wheel...
+Successfully built .stage/.build/django_cast-0.2.59-py3-none-any.whl
+Using Python 3.14.5 environment at: .stage/backend/python
+Resolved 50 packages in 102ms
+Prepared 50 packages in 19ms
+Installed 50 packages in 235ms
+ + anyascii==0.3.3
+ + asgiref==3.11.1
+ + beautifulsoup4==4.14.3
+ + certifi==2026.5.20
+ + charset-normalizer==3.4.7
+ + crispy-bootstrap4==2026.2
+ + defusedxml==0.7.1
+ + django==6.0.5
+ + django-cast==0.2.59 (from file:///Users/jochen/projects/django-cast-clean/.stage/.build/django_cast-0.2.59-py3-none-any.whl)
+ + django-contrib-comments==2.2.0
+ + django-crispy-forms==2.6
+ + django-environ==0.13.0
+ + django-filter==25.2
+ + django-htmx==1.27.0
+ + django-model-utils==5.0.0
+ + django-modelcluster==6.5
+ + django-permissionedforms==0.1
+ + django-stubs-ext==6.0.5
+ + django-taggit==6.1.0
+ + django-tasks==0.12.0
+ + django-threadedcomments==2.0
+ + django-treebeard==5.2.1
+ + django-vite==3.1.0
+ + djangorestframework==3.17.1
+ + draftjs-exporter==5.2.0
+ + et-xmlfile==2.0.0
+ + filetype==1.2.0
+ + idna==3.18
+ + laces==0.1.2
+ + markdown-it-py==4.2.0
+ + mdurl==0.1.2
+ + modelsearch==1.3.1
+ + openpyxl==3.1.5
+ + pillow==12.2.0
+ + pillow-heif==1.3.0
+ + pygments==2.20.0
+ + python-dateutil==2.9.0.post0
+ + python-slugify==8.0.4
+ + requests==2.34.2
+ + rich==15.0.0
+ + setuptools==82.0.1
+ + six==1.17.0
+ + soupsieve==2.8.4
+ + sqlparse==0.5.5
+ + telepath==0.3.1
+ + text-unidecode==1.3
+ + typing-extensions==4.15.0
+ + urllib3==2.7.0
+ + wagtail==7.4.1
+ + willow==1.12.0
+System check identified some issues:
+
+WARNINGS:
+?: (django_vite.W001) Cannot read Vite manifest file for app default at /Users/jochen/projects/django-cast-clean/.stage/backend/staticfiles/manifest.json : [Errno 2] No such file or directory: '/Users/jochen/projects/django-cast-clean/.stage/backend/staticfiles/manifest.json'
+	HINT: Make sure you have generated a manifest file, and that DJANGO_VITE["default"]["manifest_path"] points to the correct location.
+
+275 static files copied to '/Users/jochen/projects/django-cast-clean/.stage/backend/staticfiles', 275 post-processed.
+Staged backend bundle at /Users/jochen/projects/django-cast-clean/.stage/backend
+[django] System check identified some issues:
+
+WARNINGS:
+?: (django_vite.W001) Cannot read Vite manifest file for app default at /Users/jochen/projects/django-cast-clean/.stage/backend/staticfiles/manifest.json : [Errno 2] No such file or directory: '/Users/jochen/projects/django-cast-clean/.stage/backend/staticfiles/manifest.json'
+	HINT: Make sure you have generated a manifest file, and that DJANGO_VITE["default"]["manifest_path"] points to the correct location.
+[django] Operations to perform:
+  Apply all migrations: admin, auth, authtoken, cast, cast_comments, contenttypes, django_comments, sessions, sites, taggit, threadedcomments, wagtailadmin, wagtailcore, wagtaildocs, wagtailembeds, wagtailforms, wagtailimages, wagtailredirects, wagtailsearch, wagtailusers
+[django] Running migrations:
+  No migrations to apply.
+[django] Performing system checks...
+
+[django] System check identified some issues:
+
+WARNINGS:
+?: (django_vite.W001) Cannot read Vite manifest file for app default at /Users/jochen/projects/django-cast-clean/.stage/backend/staticfiles/manifest.json : [Errno 2] No such file or directory: '/Users/jochen/projects/django-cast-clean/.stage/backend/staticfiles/manifest.json'
+	HINT: Make sure you have generated a manifest file, and that DJANGO_VITE["default"]["manifest_path"] points to the correct location.
+
+System check identified 1 issue (0 silenced).
+[django] June 02, 2026 - 21:58:00
+Django version 6.0.5, using settings 'example_site.packaged_settings'
+Starting development server at http://127.0.0.1:57198/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+[django] [02/Jun/2026 21:58:00] "GET /health/ HTTP/1.1" 200 16
+[django] [02/Jun/2026 21:58:00] "GET / HTTP/1.1" 200 211

@@ -17,8 +17,8 @@ const IGNORED_DIRS = new Set([
   "venv"
 ]);
 const STARTER_TEMPLATE_CHECKSUMS = {
-  "main.js": "dac21bc8fc6759c059969c4e52f3e18b791001a2a6c276617af9d1875bd9d2d9",
-  "scripts/electron-builder-config.cjs": "bf3ed6ef9695d9791e8941c49653b485108379ad08431632c196c9921ddab92c",
+  "main.js": "69db5e86fc76612786629d34d11376ec8ec8fa6beb70fb6676317463fdeef8ff",
+  "scripts/electron-builder-config.cjs": "0f1bd0754248cfcc86396da326302cfa166b76060a9d12f98fc03149e5364580",
   "scripts/launch-electron.cjs": "c383e90dc8ab279dcff53f4ba67375e17917bc7878df13a0a12e1b5244b9b0da",
   "scripts/stage-backend.cjs": "949b7b53996d592ce22dfbe2c4746e81b50becf38e0ebfc6ee88b7d6837f873f",
   "scripts/bundled-python.cjs": "69008cc5b84665fc66b9aa3a6e81e8f3daee41ac208c533b78b9b7fd9274b071"
@@ -192,17 +192,46 @@ function inferSettingsLayout(targetRoot, manageRoot, settingsModule) {
   const usesSettingsPackage = fs.existsSync(path.join(targetRoot, settingsPackageInit));
 
   if (usesSettingsPackage) {
-    if (parts.length < 3) {
-      fail(`settings package layout is ambiguous for settings module: ${settingsModule}`);
+    if (parts.length >= 3) {
+      // The settings module points at a submodule of a settings package, e.g.
+      // "proj.settings.dev" -> container "proj.settings", base "proj.settings.base".
+      const settingsContainerModule = parts.slice(0, -1).join(".");
+      const projectPackageModule = parts.slice(0, -2).join(".");
+      return {
+        projectPackageModule,
+        packagedSettingsModule: `${projectPackageModule}.packaged_settings`,
+        settingsBaseModule: `${settingsContainerModule}.base`,
+        settingsBasePath: resolveModuleFilePath(manageRoot, `${settingsContainerModule}.base`),
+        settingsContainerModule
+      };
     }
 
-    const settingsContainerModule = parts.slice(0, -1).join(".");
-    const projectPackageModule = parts.slice(0, -2).join(".");
+    // The settings module IS the package, e.g. "testproject.settings" whose
+    // __init__ re-exports a submodule (.local/.dev/.base). Use the package as the
+    // container, insert middleware into its base submodule, and place the packaged
+    // settings module inside the package as "<package>.packaged".
+    const settingsContainerModule = settingsModule;
+    const baseModuleCandidate = `${settingsContainerModule}.base`;
+    const baseExists = fs.existsSync(
+      path.join(targetRoot, resolveModuleFilePath(manageRoot, baseModuleCandidate))
+    );
+    if (!baseExists) {
+      fail(
+        `settings package layout is ambiguous for settings module: ${settingsModule} `
+        + `(expected a base submodule at ${baseModuleCandidate})`
+      );
+    }
+
+    // Place the packaged settings module as a sibling of the settings package in
+    // the project package (e.g. "testproject.packaged_settings"), not inside the
+    // settings package, so its relative imports (`from .settings.base import *`,
+    // `from .desktop_runtime import ...`) match the generated template.
+    const projectPackageModule = parts.slice(0, -1).join(".");
     return {
       projectPackageModule,
       packagedSettingsModule: `${projectPackageModule}.packaged_settings`,
-      settingsBaseModule: `${settingsContainerModule}.base`,
-      settingsBasePath: resolveModuleFilePath(manageRoot, `${settingsContainerModule}.base`),
+      settingsBaseModule: baseModuleCandidate,
+      settingsBasePath: resolveModuleFilePath(manageRoot, baseModuleCandidate),
       settingsContainerModule
     };
   }
@@ -344,6 +373,15 @@ function updateBuilderConfig(electronRoot, productName, slug) {
     `productName: "${productName}",`,
     builderConfigPath
   );
+  // The starter ships a hardcoded GitHub release repository default used for
+  // auto-update publishing. Point it at the wrapped target slug so the copied
+  // builder-config test (rewritten by the generic test naming cleanup) matches.
+  source = replaceRequired(
+    source,
+    'const DEFAULT_GITHUB_RELEASE_REPO = "desktop-django-starter";',
+    `const DEFAULT_GITHUB_RELEASE_REPO = "${slug}";`,
+    builderConfigPath
+  );
   source = replaceRequired(
     source,
     'artifactName: "desktop-django-starter-macos-${version}-${arch}.${ext}",',
@@ -481,12 +519,11 @@ function writeWrappedSplash(electronRoot, productName) {
 function updateLaunchScripts(electronRoot, targetConfig, slug) {
   const mainPath = path.join(electronRoot, "main.js");
   let mainSource = fs.readFileSync(mainPath, "utf8");
-  mainSource = replaceRequired(
-    mainSource,
-    'const { app, BrowserWindow, dialog, ipcMain, nativeImage, shell } = require("electron");',
-    'const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell } = require("electron");',
-    mainPath
-  );
+  // The current starter main.js already imports Menu and ships its own
+  // buildApplicationMenu/installApplicationMenu pair (installed once at
+  // startup with the update controller). We only need to add the navigation
+  // helper functions plus a "Navigate" submenu so wrapped desktop users keep a
+  // native path back to the app's primary view even when browser chrome is gone.
   mainSource = replaceRequired(
     mainSource,
     'function focusExistingWindow() {\n'
@@ -543,11 +580,23 @@ function updateLaunchScripts(electronRoot, targetConfig, slug) {
       + '  if (homeUrl) {\n'
       + '    mainWindow.loadURL(homeUrl);\n'
       + '  }\n'
-      + '}\n'
-      + '\n'
-      + 'function buildApplicationMenu() {\n'
-      + '  const template = [\n'
-      + '    ...(process.platform === "darwin" ? [{ role: "appMenu" }] : []),\n'
+      + '}\n',
+    mainPath
+  );
+  mainSource = replaceRequired(
+    mainSource,
+    '    {\n'
+      + '      label: "File",\n'
+      + '      submenu: [\n'
+      + '        process.platform === "darwin" ? { role: "close" } : { role: "quit" }\n'
+      + '      ]\n'
+      + '    },\n',
+    '    {\n'
+      + '      label: "File",\n'
+      + '      submenu: [\n'
+      + '        process.platform === "darwin" ? { role: "close" } : { role: "quit" }\n'
+      + '      ]\n'
+      + '    },\n'
       + '    {\n'
       + '      label: "Navigate",\n'
       + '      submenu: [\n'
@@ -568,18 +617,7 @@ function updateLaunchScripts(electronRoot, targetConfig, slug) {
       + '          click: () => navigateForward()\n'
       + '        }\n'
       + '      ]\n'
-      + '    },\n'
-      + '    { role: "editMenu" },\n'
-      + '    { role: "viewMenu" },\n'
-      + '    { role: "windowMenu" }\n'
-      + '  ];\n'
-      + '\n'
-      + '  return Menu.buildFromTemplate(template);\n'
-      + '}\n'
-      + '\n'
-      + 'function applyApplicationMenu() {\n'
-      + '  Menu.setApplicationMenu(buildApplicationMenu());\n'
-      + '}\n',
+      + '    },\n',
     mainPath
   );
   mainSource = replaceRequired(
@@ -705,26 +743,23 @@ function updateLaunchScripts(electronRoot, targetConfig, slug) {
     'backgroundColor: "#ffffff",',
     mainPath
   );
+  // Wrapped targets seed their desktop data through the Django runtime bootstrap
+  // (ensure_runtime_database), not the starter-only `seed_demo_content`
+  // management command, which most targets do not provide. Make the electron-side
+  // seed step opt-in (default off) so wrapping a target without that command does
+  // not abort startup.
   mainSource = replaceRequired(
     mainSource,
-    '  mainWindow = win;\n'
-      + '  currentAppUrl = url;\n'
-      + '  currentAuthToken = authToken;\n',
-    '  mainWindow = win;\n'
-      + '  currentAppUrl = url;\n'
-      + '  currentAuthToken = authToken;\n'
-      + '  applyApplicationMenu();\n',
+    "  const shouldSeedDemoContent = packagedDatabasePath !== null && !fs.existsSync(packagedDatabasePath);",
+    '  const shouldSeedDemoContent = process.env.DESKTOP_DJANGO_SEED_DEMO_CONTENT === "1";',
     mainPath
   );
-  mainSource = replaceRequired(
-    mainSource,
-    '      setApplicationIcon();\n'
-      + '      await bootstrap();',
-    '      setApplicationIcon();\n'
-      + '      applyApplicationMenu();\n'
-      + '      await bootstrap();',
-    mainPath
-  );
+
+  // The current starter installs its application menu once at startup via
+  // installApplicationMenu(createElectronUpdateController(...)), so the wrapped
+  // shell does not need to re-apply the menu when each window loads. The
+  // injected Navigate submenu reads mainWindow/currentAppUrl lazily at click
+  // time, which is set by then.
   fs.writeFileSync(mainPath, mainSource);
 
   const launchPath = path.join(electronRoot, "scripts", "launch-electron.cjs");

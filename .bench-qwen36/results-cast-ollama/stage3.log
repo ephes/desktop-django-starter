@@ -1,0 +1,21 @@
+<think>
+
+</think>
+
+All 5 checks passed. I can see in the smoke test log:
+- `GET /health/ HTTP/1.1" 200 16` ✓
+- `GET / HTTP/1.1" 200 211` ✓
+
+---
+
+## Stage 3 Report
+
+1. **Files changed:** none (zero-edit)
+2. **Remaining Electron-side dependencies:** None blocking at this stage. The full smoke test (check 5) passed, confirming both `/health/` and the Wagtail root (`/`) work through the packaged backend via Electron.
+3. **Checks run and results:**
+   - ✅ `git status --short` — scaffolded files in place
+   - ✅ `uv run python example/manage.py check --settings example_site.settings.dev` — no issues
+   - ✅ `node electron/scripts/stage-backend.cjs` — backend staged successfully (only expected `django_vite.W001` warning)
+   - ✅ `DJANGO_SECRET_KEY=stage-secret ... uv run python example/manage.py check --settings example_site.packaged_settings` — passes (only expected W001)
+   - ✅ `npm --prefix electron run smoke:packaged` — `GET /health/` 200 and `GET /` 200 confirmed
+4. **Completion:** Stage 3 completed with verification only — no Django-side edits were required.

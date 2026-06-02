@@ -162,6 +162,39 @@ SQLite database by generating a small runtime bootstrap that can run migrations
 on the first real desktop app request. It still assumes a recognizable
 `urlpatterns = [` layout rather than arbitrary project structure.
 
+### Local runtime comparison (Ollama vs llama.cpp vs MLX)
+
+The staged workflow is runtime-agnostic: it only needs a local model that can act
+as a tool-using agent over an OpenAI-compatible `/v1/chat/completions` endpoint. On
+2026-06-02 the same `qwen 3.6 27b` model (≈4-bit) was driven through the staged
+`django-resume` wrap on three runtimes via `pi`, each judged independently by
+`pi / openai-codex/gpt-5.5` re-running the packaged smoke itself. All three reached
+a working packaged Electron app (`/health/` 200, `/` 302, `/resume/` 200) as
+verification-only, zero-edit runs and were judged **PASS**.
+
+| Runtime | Weights / quant | Stage 2+3 wall-clock | Raw decode | Tool calling |
+|---|---|---|---|---|
+| Ollama | `qwen36-27b-tools` (GGUF Q4_K_M) | 171s | 16.0 tok/s | needed a derived Modelfile re-attaching the Qwen3 ChatML template (the imported GGUF shipped a bare `{{ .Prompt }}` template) |
+| llama.cpp | `Qwen3.6-27B-Q4_K_M.gguf` (`llama-server --jinja`) | 112s | 22.5 tok/s | native — `--jinja` reads the chat template embedded in the GGUF |
+| MLX | `mlx-community/Qwen3.6-27B-4bit` (`mlx_lm.server`) | 110s | 26.9 tok/s | native — must send the exact HF repo id as the request `model` |
+
+Decode speed: **MLX > llama.cpp > Ollama** (≈1.7× and ≈1.4× faster than Ollama). The
+end-to-end stage gap is smaller because each stage's wall-clock is dominated by fixed
+tool execution (`uv` venv resolve, `npm`, node tests, packaged smoke), not model
+decode.
+
+The same matrix was then replicated against a harder second target, **`django-wiki`**
+(`testproject`: auth + article permissions + media + MPTT + plugins; a settings
+*package*; no committed seed DB; `/` serves the wiki root article). All six cells (4
+engines × 2 models × thinking off/high) reached a working packaged wrap with zero model
+edits, judged PASS, after generalizing the deterministic scaffold for this target
+(settings-module-as-package, `re_path` health route, `Path(BASE_DIR)` coercion, opt-in
+`seed_demo_content`, and a runtime-bootstrap superuser + wiki root-article seed). The
+django-resume-vs-django-wiki comparison is in `.bench-qwen36/RUNTIME-COMPARISON.md`. The pi provider extensions and the shared runner that produced these numbers
+live under `.bench-qwen36/`, and the full table is in
+`.bench-qwen36/RUNTIME-COMPARISON.md`; the runs are recorded as entries 30–32 in the
+staged `run-log.md`.
+
 ### Lab workflow (experiment harness)
 
 For iterating on the wrapping skill itself, the `desktop-django-lab` tooling
@@ -200,6 +233,14 @@ The lab tooling lives in dotfiles (`~/.config/desktop-django-lab/`), not in this
   `prompt-stage-3-django.md`, `prompt-stage-4-fix-from-failures.md` — narrower
   stage prompts for reset-and-rerun experiments
 - `skills/wrap-existing-django-in-electron-staged/run-log.md` — staged experiment log
+- `.bench-qwen36/RUNTIME-COMPARISON.md` — qwen 3.6 27b staged-wrap comparison across
+  Ollama, llama.cpp, MLX, and ds4 (DeepSeek V4 Flash), plus the `pi` provider
+  extensions (`pi-ollama-provider.ts`, `pi-localserver-provider.ts`,
+  `pi-ds4local-provider.ts`) and shared runner (`run-staged-wrap.sh`) used to
+  produce it
+- `.bench-qwen36/HOWTO-demo.md` — step-by-step demo runbook: start each local
+  model server, clean-clone django-resume, drive Stage 2/3 through Pi (per-runtime
+  provider/model table), run the Pi judge, plus per-model absolute timings
 
 ### Iteration loop
 

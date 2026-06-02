@@ -1,0 +1,82 @@
+
+> django-wiki-electron@0.1.6 smoke:packaged
+> npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged --smoke-test
+
+
+> django-wiki-electron@0.1.6 stage-backend
+> node ./scripts/stage-backend.cjs
+
+Downloading cpython-3.14.5-macos-aarch64-none (download) (24.7MiB)
+ Downloaded cpython-3.14.5-macos-aarch64-none (download)
+Installed Python 3.14.5 in 895ms
+ + cpython-3.14.5-macos-aarch64-none
+Pruned bundled Python GUI artifacts:
+- bin/idle3
+- bin/idle3.14
+- lib/itcl4.3.5
+- lib/libtcl9.0.dylib
+- lib/libtcl9tk9.0.dylib
+- lib/python3.14/idlelib
+- lib/python3.14/lib-dynload/_tkinter.cpython-314-darwin.so
+- lib/python3.14/tkinter
+- lib/tcl9
+- lib/tcl9.0
+- lib/thread3.0.4
+- lib/tk9.0
+Building wheel...
+Building SCSS files.
+pysassc not found, please install it to proceed.
+Successfully built .stage/.build/wiki-0.12.2-py3-none-any.whl
+Using Python 3.14.5 environment at: .stage/backend/python
+Resolved 17 packages in 70ms
+Prepared 17 packages in 32ms
+Installed 17 packages in 86ms
+ + asgiref==3.11.1
+ + bleach==6.3.0
+ + django==5.2.14
+ + django-classy-tags==4.1.0
+ + django-js-asset==3.1.2
+ + django-mptt==0.16.0
+ + django-nyt==1.4.2
+ + django-sekizai==4.1.0
+ + markdown==3.9
+ + pillow==12.2.0
+ + pymdown-extensions==10.5
+ + pyyaml==6.0.3
+ + sorl-thumbnail==12.11.0
+ + sqlparse==0.5.5
+ + tinycss2==1.4.0
+ + webencodings==0.5.1
+ + wiki==0.12.2 (from file:///Users/jochen/projects/django-wiki-clean/.stage/.build/wiki-0.12.2-py3-none-any.whl)
+
+377 static files copied to '/Users/jochen/projects/django-wiki-clean/.stage/backend/staticfiles'.
+Staged backend bundle at /Users/jochen/projects/django-wiki-clean/.stage/backend
+[django] Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, django_nyt, sessions, sites, thumbnail, wiki, wiki_attachments, wiki_images, wiki_notifications
+[django] Running migrations:
+  No migrations to apply.
+[django] Performing system checks...
+
+[django] System check identified no issues (0 silenced).
+[django] June 02, 2026 - 23:22:22
+Django version 5.2.14, using settings 'testproject.packaged_settings'
+Starting development server at http://127.0.0.1:54124/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/5.2/howto/deployment/
+[django] [02/Jun/2026 23:22:22] "GET /health/ HTTP/1.1" 200 16
+[django] [02/Jun/2026 23:22:22] "GET / HTTP/1.1" 200 8856
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/img/github_icon.png HTTP/1.1" 200 3902
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/js/jquery-3.6.0.min.js HTTP/1.1" 200 89501
+[02/Jun/2026 23:22:22] "GET /static/wiki/colorbox/example1/colorbox.css HTTP/1.1" 200 4363
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/js/core.js HTTP/1.1" 200 312
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/js/popper.js HTTP/1.1" 200 21233
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/bootstrap/css/wiki-bootstrap.min.css HTTP/1.1" 200 262320
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/plugins/notifications/js/ui.js HTTP/1.1" 200 2374
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/js/respond.min.js HTTP/1.1" 200 4592
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/js/article.js HTTP/1.1" 200 158
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/bootstrap/js/bootstrap.bundle.min.js HTTP/1.1" 200 83376
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/colorbox/jquery.colorbox-min.js HTTP/1.1" 200 11096
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/js/images.js HTTP/1.1" 200 222
+[django] [02/Jun/2026 23:22:22] "GET /static/wiki/font-awesome/webfonts/fa-solid-900.woff2 HTTP/1.1" 200 76120

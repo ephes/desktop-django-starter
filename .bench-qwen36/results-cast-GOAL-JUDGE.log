@@ -1,0 +1,2 @@
+GOAL_REACHED: YES  
+REASON: I verified all six result cells: Ollama/qwen off, llama.cpp/qwen off+high, MLX/qwen off, and ds4/DeepSeek off+high. Each summary has `stage2_exit=0`, `stage3_exit=0`, `app_served=1`, `health200=1`, `root200=1`, and `git_changed_files=9`; smoke logs show `GET /health/` 200 and `GET /` 200. Stage 2/3 logs are coherent zero-edit verification outcomes, git status shows only expected scaffold files, and `/tmp/cast-judge.log` independently reports PASS.

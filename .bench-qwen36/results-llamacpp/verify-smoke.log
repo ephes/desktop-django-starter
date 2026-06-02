@@ -1,0 +1,67 @@
+
+> django-resume-electron@0.1.6 smoke:packaged
+> npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged --smoke-test
+
+
+> django-resume-electron@0.1.6 stage-backend
+> node ./scripts/stage-backend.cjs
+
+Downloading cpython-3.14.5-macos-aarch64-none (download) (24.7MiB)
+ Downloaded cpython-3.14.5-macos-aarch64-none (download)
+Installed Python 3.14.5 in 946ms
+ + cpython-3.14.5-macos-aarch64-none
+Pruned bundled Python GUI artifacts:
+- bin/idle3
+- bin/idle3.14
+- lib/itcl4.3.5
+- lib/libtcl9.0.dylib
+- lib/libtcl9tk9.0.dylib
+- lib/python3.14/idlelib
+- lib/python3.14/lib-dynload/_tkinter.cpython-314-darwin.so
+- lib/python3.14/tkinter
+- lib/tcl9
+- lib/tcl9.0
+- lib/thread3.0.4
+- lib/tk9.0
+Building wheel...
+Successfully built .stage/.build/django_resume-0.2.0-py3-none-any.whl
+Using Python 3.14.5 environment at: .stage/backend/python
+Resolved 5 packages in 85ms
+Prepared 5 packages in 9ms
+Installed 5 packages in 65ms
+ + asgiref==3.11.1
+ + django==6.0.5
+ + django-resume==0.2.0 (from file:///Users/jochen/projects/django-resume-clean/.stage/.build/django_resume-0.2.0-py3-none-any.whl)
+ + nh3==0.3.5
+ + sqlparse==0.5.5
+core ready! Example plugins disabled (set DJANGO_RESUME_ENABLE_EXAMPLE_PLUGINS=True to enable).
+
+143 static files copied to '/Users/jochen/projects/django-resume-clean/.stage/backend/staticfiles'.
+Staged backend bundle at /Users/jochen/projects/django-resume-clean/.stage/backend
+[django] core ready! Example plugins disabled (set DJANGO_RESUME_ENABLE_EXAMPLE_PLUGINS=True to enable).
+[django] Operations to perform:
+  Apply all migrations: admin, auth, contenttypes, django_resume, sessions
+[django] Running migrations:
+  No migrations to apply.
+[django] core ready! Example plugins disabled (set DJANGO_RESUME_ENABLE_EXAMPLE_PLUGINS=True to enable).
+[django] Performing system checks...
+
+[django] System check identified no issues (0 silenced).
+[django] June 02, 2026 - 17:41:02
+Django version 6.0.5, using settings 'example.packaged_settings'
+Starting development server at http://127.0.0.1:54623/
+Quit the server with CONTROL-C.
+
+WARNING: This is a development server. Do not use it in a production setting. Use a production WSGI or ASGI server instead.
+For more information on production servers see: https://docs.djangoproject.com/en/6.0/howto/deployment/
+[django] [02/Jun/2026 17:41:02] "GET /health/ HTTP/1.1" 200 16
+[django] [02/Jun/2026 17:41:02] "GET / HTTP/1.1" 302 0
+[django] [02/Jun/2026 17:41:02] "GET /resume/ HTTP/1.1" 200 17847
+[django] [02/Jun/2026 17:41:02] "GET /static/django_resume/css/styles.css HTTP/1.1" 200 10486
+[django] [02/Jun/2026 17:41:02] "GET /static/django_resume/css/edit.css HTTP/1.1" 200 5702
+[django] [02/Jun/2026 17:41:02] "GET /static/django_resume/fonts/martian_mono_300.woff2 HTTP/1.1" 200 17640
+[02/Jun/2026 17:41:02] "GET /static/django_resume/fonts/martian_mono_200.woff2 HTTP/1.1" 200 17544
+[django] [02/Jun/2026 17:41:02] "GET /static/django_resume/fonts/inter_600.woff2 HTTP/1.1" 200 112224
+[django] [02/Jun/2026 17:41:02] "GET /static/django_resume/css/print.css HTTP/1.1" 200 742
+[02/Jun/2026 17:41:02] "GET /static/django_resume/img/jochen-illustration-footer.png HTTP/1.1" 200 804039
+[django] [02/Jun/2026 17:41:02] "GET /static/django_resume/img/white-linen.png HTTP/1.1" 200 466

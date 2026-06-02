@@ -15,12 +15,21 @@ release
 backlog
 done
 agent-use
+demo-local-model-wrap
 shells/electron
 shells/tauri
 shells/positron
 Design Guide <design-guide>
 Tasks Demo Design <superpowers/specs/2026-03-30-tasks-demo-frontend-design>
 ```
+
+## Guides
+
+- [Agent Use](agent-use.md) — wrapping another Django app, the staged workflow for
+  smaller local models, and the Ollama/llama.cpp/MLX/ds4 runtime comparison.
+- [Local-Model Wrap Demo](demo-local-model-wrap.md) — step-by-step runbook for
+  demoing the `django-resume` wrap through Pi on each local runtime, including
+  per-model timings.
 
 ## Local Development
 

@@ -1,0 +1,13 @@
+All 5 checks passed. **Zero-edit Stage 3 success.**
+
+## Stage 3 Report
+
+1. **Files changed:** none (zero-edit stage)
+2. **Remaining Electron-side dependencies:** none blocking this stage — the packaged backend smoke test confirmed full functionality.
+3. **Checks:**
+   - `git status --short` ✅ — shows expected Stage 1 files (modifications to `base.py`, `urls.py`; new files for middleware, runtime, packaged settings)
+   - `uv run python testproject/manage.py check --settings testproject.settings` ✅ — system check: 0 issues
+   - `node electron/scripts/stage-backend.cjs` ✅ — backend bundle staged with Python 3.14.5, 17 packages, 377 static files
+   - `DJANGO_SECRET_KEY=... uv run python testproject/manage.py check --settings testproject.packaged_settings` ✅ — packaged settings check: 0 issues
+   - `npm --prefix electron run smoke:packaged` ✅ — log confirms `GET /health/` 200 and `GET /` 200; static assets loaded successfully
+4. **Completion mode:** Verification only — no Django-side edits required.

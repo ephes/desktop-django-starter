@@ -1,0 +1,9 @@
+label=llamacpp
+provider=llamacpp model=qwen3.6-27b
+stage2_exit=0 stage2_seconds=41.7
+stage3_exit=0 stage3_seconds=70.7
+verify_smoke_exit=0
+health200=1
+root302=1
+resume200=1
+git_changed_files=11

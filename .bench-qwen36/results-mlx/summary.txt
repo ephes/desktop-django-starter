@@ -1,0 +1,9 @@
+label=mlx
+provider=mlx model=mlx-community/Qwen3.6-27B-4bit
+stage2_exit=0 stage2_seconds=40.0
+stage3_exit=0 stage3_seconds=70.2
+verify_smoke_exit=0
+health200=1
+root302=1
+resume200=1
+git_changed_files=11

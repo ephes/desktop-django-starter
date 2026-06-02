@@ -1,0 +1,18 @@
+All four verification checks pass:
+
+1. **`git status --short`** — Shows expected new/modified files (Stage 1 Django-side changes + `electron/` scaffold). No unexpected dirty state.
+2. **`node --check electron/main.js`** — Syntax OK.
+3. **`node --check electron/scripts/launch-electron.cjs`** — Syntax OK.
+4. **`node --test electron/scripts/*.test.cjs`** — 53/53 tests pass (fail 0).
+
+**Stage 2 result: zero-edit success.**
+
+Files changed: none.
+
+Deferred Django-side dependencies for Stage 3:
+- `example.settings` → `example.packaged_settings` mode mapping
+- `example/urls.py` root `/` → `/resume/` redirect
+- `example/desktop_middleware.py` header insertion
+- `example/desktop_runtime.py` runtime manifest building
+- Template back-links for Electron asset fallback
+- Any needed `justfile` commands for Electron builds

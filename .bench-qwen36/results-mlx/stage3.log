@@ -1,0 +1,26 @@
+
+
+All 5 checks passed. Zero-edit Stage 3 — stopping immediately.
+
+---
+
+## Stage 3 Report
+
+### 1. Files changed
+**None.** Zero edits required.
+
+### 2. Remaining Electron-side dependencies blocking full smoke testing
+None. The `smoke:packaged` test completed successfully — the packaged backend started, served `/health/` (200), redirected `/` → `/resume/` (302 → 200), and served all static assets (200).
+
+### 3. Verification results
+
+| # | Command | Result |
+|---|---------|--------|
+| 1 | `git status --short` | ✅ Clean — only Stage 1/2 changes present |
+| 2 | `uv run python example/manage.py check --settings example.settings` | ✅ No issues (0 silenced) |
+| 3 | `node electron/scripts/stage-backend.cjs` | ✅ Backend bundle staged at `.stage/backend` |
+| 4 | `uv run python example/manage.py check --settings example.packaged_settings` | ✅ No issues (0 silenced) |
+| 5 | `npm --prefix electron run smoke:packaged` | ✅ `GET /health/` 200, `GET /` 302, `GET /resume/` 200, all static 200 |
+
+### 4. Completion mode
+**Verification only** — no Django-side edits were needed

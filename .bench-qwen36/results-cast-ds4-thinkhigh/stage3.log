@@ -1,0 +1,19 @@
+All five verification checks passed:
+
+1. **`git status --short`** — shows expected scaffold changes (modified `base.py`, `urls.py`, `manage.py`; new desktop middleware/runtime/settings files) and the `electron/` directory.
+
+2. **`uv run python example/manage.py check --settings example_site.settings.dev`** — System check identified no issues (0 silenced). ✅
+
+3. **`node electron/scripts/stage-backend.cjs`** — Backend staged successfully with static files copied.
+
+4. **`DJANGO_SECRET_KEY=stage-secret ... packaged_settings`** — only the expected django_vite.W001 warning (no error).
+
+5. **`npm --prefix electron run smoke:packaged`** — `/health/` returned HTTP 200 and `/` returned HTTP 200, confirming the Wagtail root page works.
+
+**No files changed** — zero-edit Stage 3 success.
+
+**Report:**
+- Files changed: none
+- Remaining Electron-side dependencies: none that block smoke testing
+- Checks ran: 5/5 passed
+- Stage 3 completed with **verification only**; no Django-side edits required.

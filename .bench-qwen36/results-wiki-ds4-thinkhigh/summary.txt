@@ -1,0 +1,8 @@
+label=wiki-ds4
+provider=ds4local model=deepseek-v4-flash thinking=high
+src=/Users/jochen/projects/django-wiki target=/Users/jochen/projects/django-wiki-clean
+stage2_exit=0 stage2_seconds=29.7
+stage3_exit=0 stage3_seconds=64.1
+verify_smoke_exit=0
+health200=1 root200=1 root302=0 app_served=1
+git_changed_files=8

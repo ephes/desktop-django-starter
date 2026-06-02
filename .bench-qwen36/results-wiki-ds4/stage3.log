@@ -1,0 +1,13 @@
+All 5 checks passed successfully.
+
+**Stage 3 Report**
+
+1. **Files changed**: none (zero-edit stage).
+2. **Remaining Electron-side dependencies**: The smoke test (`npm run smoke:packaged`) ran without error; no further Electron-side dependencies currently block full smoke testing.
+3. **Checks run and passed**:
+   - `git status --short`
+   - `uv run python testproject/manage.py check --settings testproject.settings` → 0 issues
+   - `node electron/scripts/stage-backend.cjs` → successful staging
+   - `DJANGO_SECRET_KEY=stage-secret DESKTOP_DJANGO_BUNDLE_DIR=...packaged_settings check` → 0 issues
+   - `npm --prefix electron run smoke:packaged` → HTTP 200 on both `/health/` and `/`
+4. **Outcome**: Stage 3 completed with verification only — no Django-side edits were required.

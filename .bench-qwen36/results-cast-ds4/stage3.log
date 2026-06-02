@@ -1,0 +1,27 @@
+
+
+**Checks completed — all passed without edits:**
+
+1. **`git status --short`** – shows expected tracked modifications and newly added scaffold files.
+2. **`uv run python example/manage.py check --settings example_site.settings.dev`** – ✅ No issues (0 silenced).
+3. **`node electron/scripts/stage-backend.cjs`** – ✅ Staged the backend bundle, including static files (275 copied). Minor expected `django_vite.W001` warning.
+4. **`DJANGO_SECRET_KEY=stage-secret DESKTOP_DJANGO_BUNDLE_DIR="$PWD/.stage/backend" DESKTOP_DJANGO_APP_DATA_DIR="$PWD/.stage/runtime-data" uv run python example/manage.py check --settings example_site.packaged_settings`** – ✅ System check passed (1 issue reported: expected Vite manifest warning).
+5. **`npm --prefix electron run smoke:packaged`** – ✅ Server started, `GET /health/` returned 200, `GET /` returned 200.
+
+**Outcome:** Stage 3 completed with **verification only** — no Django-side edits were necessary. All requested checks passed.
+
+---
+
+**Final Summary**
+
+| Check | Result |
+|------|--------|
+| Modified/untracked files | Electron scaffold + Django integration |
+| `manage.py check` (dev) | ✅ No issues |
+| `stage-backend.cjs` | ✅ Backend staged |
+| `npm run smoke:packaged` | ✅ GET /health/ → 200, GET / → 200 |
+
+**Files changed:** none  
+**Remaining Electron-side dependencies for full smoke testing:** None within the scope of this stage; the packaged backend serves `/health/` and the Wagtail root page successfully.
+
+**Verification result:** Stage 3 succeeded with zero Django-side edits.

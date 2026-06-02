@@ -268,11 +268,13 @@ function updateUrls(targetRoot, metadata) {
     urlsPath
   );
 
+  // Use re_path (which this scaffold guarantees is imported) instead of path,
+  // so the health route works in target urlconfs that import only re_path.
   source = insertAfterRegex(
     source,
     /^urlpatterns\s*=\s*\[\n/m,
-    '    path("health/", health_view),\n',
-    'path("health/", health_view)',
+    '    re_path(r"^health/$", health_view),\n',
+    're_path(r"^health/$", health_view)',
     urlsPath
   );
 
@@ -375,7 +377,34 @@ class DesktopAutoLoginMiddleware:
 `;
 }
 
-function buildDesktopRuntimeSource() {
+function buildDesktopRuntimeSource(seedWiki) {
+  const seedInvocationBlock = seedWiki
+    ? "        _seed_desktop_content()\n        connections.close_all()\n"
+    : "";
+  const seedFunctionBlock = seedWiki
+    ? `
+
+def _seed_desktop_content() -> None:
+    """Seed a desktop superuser and the django-wiki root article on first run."""
+
+    from django.contrib.auth import get_user_model
+
+    user_model = get_user_model()
+    if not user_model.objects.filter(is_superuser=True).exists():
+        user_model.objects.create_superuser("desktop", "desktop@example.com", "desktop")
+
+    try:
+        from wiki.models import URLPath
+
+        URLPath.create_root(
+            title="Home", content="# Welcome\\n\\nDesktop wiki root article."
+        )
+    except Exception:
+        # The wiki app may not be installed for every target; ignore when absent.
+        pass
+
+`
+    : "";
   return `from __future__ import annotations
 
 import shutil
@@ -415,31 +444,33 @@ def _runtime_database_has_schema() -> bool:
 
 
 def ensure_runtime_database() -> None:
-    """Apply migrations for empty desktop runtime databases on first app access."""
+    """Apply migrations and seed desktop content on first app access.
+
+    The packaged launcher may run migrate before the first request, so the seed
+    step must run whether or not this function performed the migration. Seeding
+    is idempotent.
+    """
 
     global _runtime_database_ready
 
     if _runtime_database_ready or not _runtime_database_uses_sqlite():
         return
 
-    if _runtime_database_has_schema():
-        _runtime_database_ready = True
-        return
-
     with _runtime_database_lock:
         if _runtime_database_ready:
             return
 
-        database_path = _runtime_database_path()
-        if database_path is not None:
-            database_path.parent.mkdir(parents=True, exist_ok=True)
+        if not _runtime_database_has_schema():
+            database_path = _runtime_database_path()
+            if database_path is not None:
+                database_path.parent.mkdir(parents=True, exist_ok=True)
 
-        connections.close_all()
-        call_command("migrate", interactive=False, run_syncdb=True, verbosity=0)
-        connections.close_all()
-        _runtime_database_ready = True
+            connections.close_all()
+            call_command("migrate", interactive=False, run_syncdb=True, verbosity=0)
+            connections.close_all()
+${seedInvocationBlock}        _runtime_database_ready = True
 
-
+${seedFunctionBlock}
 def bootstrap_packaged_runtime(
     app_data_dir: Path,
     seed_database_path: Path | None,
@@ -493,9 +524,11 @@ INSTALLED_APPS = [
     app for app in base_settings.INSTALLED_APPS if app not in PACKAGED_EXCLUDED_APPS
 ]
 
-bundle_dir = Path(os.environ.get("DESKTOP_DJANGO_BUNDLE_DIR", BASE_DIR))  # noqa: F405
+# BASE_DIR may be a str or a Path depending on the target's settings; coerce it.
+base_dir_path = Path(BASE_DIR)  # noqa: F405
+bundle_dir = Path(os.environ.get("DESKTOP_DJANGO_BUNDLE_DIR", base_dir_path))
 app_data_dir = Path(
-    os.environ.get("DESKTOP_DJANGO_APP_DATA_DIR", BASE_DIR / ".desktop-data")  # noqa: F405
+    os.environ.get("DESKTOP_DJANGO_APP_DATA_DIR", base_dir_path / ".desktop-data")
 )
 
 secret_key = os.environ.get("DJANGO_SECRET_KEY")
@@ -640,9 +673,21 @@ function writeDesktopFiles(targetRoot, metadata) {
     path.join(targetRoot, metadata.django.desktopMiddlewarePath),
     buildDesktopMiddlewareSource()
   );
+  // django-wiki needs a root article (and a user to auto-login) before "/" will
+  // serve 200, so seed those on first run for wiki targets with no committed DB.
+  let seedWiki = false;
+  try {
+    const baseSource = fs.readFileSync(
+      path.join(targetRoot, metadata.django.settingsBasePath),
+      "utf8"
+    );
+    seedWiki = /["']wiki(\.apps\.WikiConfig|["'])/.test(baseSource);
+  } catch (error) {
+    seedWiki = false;
+  }
   writeIfChanged(
     path.join(targetRoot, metadata.django.desktopRuntimePath),
-    buildDesktopRuntimeSource()
+    buildDesktopRuntimeSource(seedWiki)
   );
   writeIfChanged(
     path.join(targetRoot, metadata.django.packagedSettingsPath),

@@ -1,0 +1,9 @@
+ M example/example_site/settings/base.py
+ M example/example_site/urls.py
+ M example/manage.py
+ M justfile
+?? .stage/
+?? electron/
+?? example/example_site/desktop_middleware.py
+?? example/example_site/desktop_runtime.py
+?? example/example_site/packaged_settings.py

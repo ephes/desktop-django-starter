@@ -1,0 +1,11 @@
+ M example/example/settings.py
+ M example/example/urls.py
+ M justfile
+ M src/django_resume/templates/django_resume/pages/headwind/resume_cv.html
+ M src/django_resume/templates/django_resume/pages/headwind/resume_detail.html
+ M uv.lock
+?? .stage/
+?? electron/
+?? example/example/desktop_middleware.py
+?? example/example/desktop_runtime.py
+?? example/example/packaged_settings.py

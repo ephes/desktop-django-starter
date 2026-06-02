@@ -1,0 +1,24 @@
+All 5 verification checks passed. Stage 3 is complete with zero edits.
+
+---
+
+## Stage 3 Report
+
+### 1. Files changed
+**None** — zero-edit stage. The Stage 1 scaffold was already correct.
+
+### 2. Remaining Electron-side dependencies
+None blocking at this stage. The packaged backend smoke test (`smoke:packaged`) runs end-to-end successfully: Django starts, migrations apply (no-op on re-run), and both endpoints respond 200.
+
+### 3. Check results
+
+| # | Command | Result |
+|---|---------|--------|
+| 1 | `git status --short` | ✅ Expected scaffold files present |
+| 2 | `uv run python example/manage.py check --settings example_site.settings.dev` | ✅ No issues |
+| 3 | `node electron/scripts/stage-backend.cjs` | ✅ Backend staged (275 static files copied) |
+| 4 | `uv run python example/manage.py check --settings example_site.packaged_settings` | ✅ Only expected `django_vite.W001` warning |
+| 5 | `npm --prefix electron run smoke:packaged` | ✅ `GET /health/` → **200**, `GET /` → **200** |
+
+### 4. Completion mode
+**Verification only** — no Django-side edits were required. The Stage 1 scaffold (packaged settings, desktop middleware, runtime helpers, URL wiring, auto-login) was already production-ready for the packaged backend.

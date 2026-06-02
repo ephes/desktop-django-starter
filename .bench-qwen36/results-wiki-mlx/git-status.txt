@@ -1,0 +1,8 @@
+ M testproject/testproject/settings/base.py
+ M testproject/testproject/urls.py
+?? .stage/
+?? electron/
+?? testproject/testproject/desktop_middleware.py
+?? testproject/testproject/desktop_runtime.py
+?? testproject/testproject/packaged_settings.py
+?? uv.lock

@@ -1,0 +1,26 @@
+
+
+All 5 checks passed. Zero-edit Stage 3 — stopping immediately.
+
+---
+
+## Stage 3 Report
+
+### 1. Files changed
+**None.** Zero edits required.
+
+### 2. Remaining Electron-side dependencies blocking full smoke testing
+None. The `smoke:packaged` test completed successfully — Electron launched, the packaged Django backend started, and both `/health/` and `/` returned HTTP 200.
+
+### 3. Verification results
+
+| # | Command | Result |
+|---|---------|--------|
+| 1 | `git status --short` | ✅ Only Stage 1 scaffold files present |
+| 2 | `uv run python testproject/manage.py check --settings testproject.settings` | ✅ No issues (0 silenced) |
+| 3 | `node electron/scripts/stage-backend.cjs` | ✅ Backend staged successfully |
+| 4 | `DJANGO_SECRET_KEY=... uv run python testproject/manage.py check --settings testproject.packaged_settings` | ✅ No issues (0 silenced) |
+| 5 | `npm --prefix electron run smoke:packaged` | ✅ `GET /health/` 200, `GET /` 200 |
+
+### 4. Completion mode
+**Verification only** — no Django-side edits were needed. The Stage 1 scaffold is fully correct for the django-wiki target.
