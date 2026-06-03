@@ -11,3 +11,9 @@ REASON: I verified the frontier control by rerunning `npm --prefix electron inst
 BENCHMARK_RUN_SUCCESSFUL: NO
 REASON: I independently verified the control works: packaged smoke returns `/health/` 200 and `/` redirects to `/resume/` 200, and the control diff is a large model-authored wrap. The local failures are genuine: qwen produced no Electron wrap, ds4 smoke failed or produced no `electron/main.js`, and ds4 transcripts show read/bash exploration with 0 writes in the longer runs. However, the stated conclusion is not fully supported: ds4-4h ends with `500 prompt exceeds context`, and ds4-2h ends in a provider error around 130k tokens, so the claim that ds4 failed “not time or context” is contradicted by the artifacts.
 ```
+
+## Benchmark-success judge — updated to include the qwen256k cell (2026-06-03)
+```
+BENCHMARK_RUN_SUCCESSFUL: YES
+REASON: The control artifacts verify the harness: PASS outcome, 35-file model-authored wrap, node tests passing, and packaged smoke serving `/health/` 200 plus `/` → `/resume/` 200. The local outcomes are genuine non-passes: qwen32 produced only one Django file/no Electron, qwen256k produced a 30-file partial with node tests passing but smoke failing on `ModuleNotFoundError: No module named 'core'`, and ds4 runs show no clean serving pass with 128k context-overflow evidence and 256k `invalid tool call` evidence. The supported conclusion is the nuanced one: context provisioning and tool-call reliability dominate local one-shot behavior; full-context qwen gets close, while the frontier control finishes cleanly.
+```

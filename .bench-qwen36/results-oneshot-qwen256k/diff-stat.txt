@@ -1,0 +1,32 @@
+# Model-authored diff (electron/package-lock.json + node_modules excluded — qwen ran npm install itself during its session)
+ .gitignore                                        |   7 +-
+ electron/electron-builder.config.cjs              |   3 +
+ electron/main.js                                  | 671 ++++++++++++++++++++++
+ electron/package.json                             |  23 +
+ electron/preload.cjs                              |   5 +
+ electron/scripts/auth-token.cjs                   |  58 ++
+ electron/scripts/auth-token.test.cjs              |  72 +++
+ electron/scripts/bundled-python.cjs               | 143 +++++
+ electron/scripts/bundled-python.test.cjs          | 126 ++++
+ electron/scripts/electron-builder-config.cjs      | 235 ++++++++
+ electron/scripts/electron-builder-config.test.cjs | 247 ++++++++
+ electron/scripts/launch-electron.cjs              |  49 ++
+ electron/scripts/materialize-symlinks.cjs         |  47 ++
+ electron/scripts/materialize-symlinks.test.cjs    |  87 +++
+ electron/scripts/process-exit-policy.cjs          |  12 +
+ electron/scripts/process-exit-policy.test.cjs     |  57 ++
+ electron/scripts/prune-bundled-python-runtime.cjs |  85 +++
+ electron/scripts/stage-backend.cjs                | 201 +++++++
+ electron/scripts/updates.cjs                      | 240 ++++++++
+ electron/scripts/updates.test.cjs                 | 209 +++++++
+ electron/scripts/window-guards.cjs                |  41 ++
+ electron/scripts/window-guards.test.cjs           |  63 ++
+ example/example/base_settings.py                  | 157 +++++
+ example/example/desktop_dev_settings.py           |  16 +
+ example/example/middleware.py                     |  98 ++++
+ example/example/packaged_settings.py              |  60 ++
+ example/example/settings.py                       | 139 +----
+ example/example/urls.py                           |  30 +-
+ justfile                                          |  30 +
+ uv.lock                                           |   2 +-
+ 30 files changed, 3080 insertions(+), 133 deletions(-)

@@ -1,0 +1,7 @@
+label=qwen256k
+provider=llamacpp256k model=qwen3.6-27b thinking=off
+pi_exit=0 (124=timeout, 143=SIGTERM/killed) duration_seconds=4740.3
+electron_exists=1 npm_install_ok=1 node_tests=pass
+smoke_exit=1 health200=0 root200=0 root302=0 resume200=0 app_served=0
+files_changed=30 (model-authored source; excludes the npm-generated electron/package-lock.json that qwen created by running npm install in-session)
+outcome=FAIL (PARTIAL: near-complete wrap, Electron node tests pass; packaged smoke failed with ModuleNotFoundError: No module named 'core')

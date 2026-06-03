@@ -175,7 +175,8 @@ scratch in one unattended agentic session, then self-verify. Runner:
 | Subject | Context | Budget | Outcome | What happened |
 |---------|---------|--------|---------|---------------|
 | gpt-5.5 (frontier control) | 272k | — | **PASS** (7.2 min) | authored 35 files / 2,565 insertions (model-authored; the verifier's npm `package-lock.json` is excluded); packaged smoke `/health/` 200, `/` → `/resume/` 200; node tests pass |
-| qwen 3.6 27b (llama.cpp) | 32k | killed at 37 min | **FAIL** | authored only 1 partial Django middleware (`desktop_auth_middleware.py`), never started the `electron/` shell; under heavy context pressure (~24k of its 32k window after reading the skill+refs). Stopped (SIGTERM, `pi_exit=143`) at 37 min to reallocate RAM to ds4 — before its 40-min cap and before a definitive overflow. Evidence: `results-oneshot-llamacpp/{summary,diff-stat,server-evidence}.txt` |
+| qwen 3.6 27b (llama.cpp) | 32k (**under-provisioned**) | killed at 37 min | **FAIL** | served at only `-c 32768` though the model is **trained for 262144 (256k)** — llama.cpp warned `n_ctx_seq (32768) < n_ctx_train (262144)`. Authored only 1 partial Django middleware, never started `electron/`; under ~24k/32k pressure; stopped (SIGTERM) at 37 min to free RAM for ds4. **This run under-served the model — see the 256k row below for the fair test.** Evidence: `results-oneshot-llamacpp/{summary,diff-stat,server-evidence}.txt` |
+| qwen 3.6 27b (llama.cpp) | **256k** (full trained ctx) | 79 min (ran to completion) | **PARTIAL** | given its real window, qwen authored a **near-complete wrap**: 30 model-authored source files / 3,080 insertions (full `electron/` shell + Django integration; `+8` edits; it ran npm itself, so its `package-lock.json` is excluded). **Electron node tests pass.** Only the packaged smoke failed — `ModuleNotFoundError: No module named 'core'` (a packaging python-path bug in its settings). Not a clean serving PASS, but vastly beyond the 32k run. Evidence: `results-oneshot-qwen256k/{summary,diff-stat,transcript-summary}.txt,verify-smoke.log` |
 | DeepSeek V4 Flash (ds4.c) | 128k | 50 min | **FAIL** | built `electron/` skeleton + `package.json`, then stalled; timed out |
 | DeepSeek V4 Flash (ds4.c) | 128k | 2 h | **FAIL** | exited cleanly (`pi_exit=0`) after ~54 min with 0 files — explored (18 read + 47 bash, 0 writes) and never authored a wrap. The shared 128k ds4-server session overflowed its KV cache during this window, though this run's own committed transcript-summary carries no overflow marker (`error_markers=[]`). Evidence: `results-oneshot-ds4-2h/transcript-summary.txt` (tool usage) + `results-oneshot-ds4-128k-session-server-evidence.txt` (shared-session overflow) |
 | DeepSeek V4 Flash (ds4.c) | 128k | 4 h | **FAIL** | context overflow — this run's transcript carries `prompt exceeds context` markers and the shared 128k server logged a KV-cache overflow; self-terminated in ~19 min. Evidence: `results-oneshot-ds4-4h/transcript-summary.txt` (per-run markers) + `results-oneshot-ds4-128k-session-server-evidence.txt` (shared 128k server) |
@@ -186,13 +187,15 @@ scratch in one unattended agentic session, then self-verify. Runner:
 - **Staged**: every engine/model/thinking cell passed on django-resume, django-wiki, and
   django-cast (zero model edits, verification-only). The staged benchmark measures
   "can the model *verify* a scaffold-covered wrap" — near-zero capability signal.
-- **One-shot**: only the **frontier** model (gpt-5.5) completed, in ~7 min. **Both local
-  models failed**, for layered reasons:
-  - qwen 3.6 27b — did not converge: heavy **32k context pressure** (reached ~24k after
-    reading the 505-line skill + architecture + spec) with only a partial Django
-    middleware and no Electron shell when it was stopped at 37 min. (Stopped to free RAM
-    for ds4 before the 40-min cap, so a full 32k overflow was not reached — but it was
-    nowhere near a working wrap.)
+- **One-shot**: only the **frontier** model (gpt-5.5) produced a clean PASS, in ~7 min.
+  The local results were strongly **context-dependent**:
+  - qwen 3.6 27b — **context was the dominant limiter, and partly a serving artifact.**
+    At 32k (1/8th of its trained 256k window) it produced almost nothing. Re-served at
+    its full **256k** context and run to completion, it authored a **near-complete wrap**
+    (30 source files, Electron node tests passing) and failed only the packaged smoke on
+    a single `core` module-path bug — a **PARTIAL**, not a near-total failure. So the
+    earlier "32k failure" was largely under-provisioning on our side, not a hard model
+    limit.
   - DeepSeek V4 Flash — **128k context overflow** is directly evidenced for the 4h run
     (its transcript carries `prompt exceeds context` markers) and for the shared 128k
     server session (KV-cache capacity exceeded). The 2h run's own transcript shows only
@@ -201,14 +204,18 @@ scratch in one unattended agentic session, then self-verify. Runner:
     overflowing but still failed on an **unreliable large-file tool call** (`invalid
     tool call`) after heavy exploration. Time was *not* the limiter (it self-terminated
     well within the 2h/4h budgets); context and large-write tool-call reliability were.
-- This is exactly why the staged workflow exists: its own description says it is for when
-  "the one-shot wrap prompt is too large for the model you want to run locally… the run
-  stalls, drifts, or corrupts long files… the model has a smaller or less reliable
-  context window." The one-shot benchmark makes that gap measurable here: **the frontier
-  control one-shot the wrap in minutes; the two local configurations tested (qwen 3.6 27b
-  @32k, DeepSeek V4 Flash @128k/256k) did not** — blocked by context limits and
-  large-write tool-call reliability, not wall time. (This is evidence from two local
-  configs on one target, not a universal claim that no local model can one-shot a wrap.)
+- The one-shot benchmark makes the gap measurable here: **the frontier control produced a
+  clean PASS in ~7 min; the local models did not** — but with the important caveat that
+  **context provisioning dominated the local results**. qwen 3.6 27b at its full 256k
+  window got to a PARTIAL (near-complete wrap, node tests pass, one packaging bug); ds4
+  failed on 128k overflow and, at 256k, on large-write tool-call reliability. So the
+  honest takeaway is *not* "local models can't one-shot a wrap" but: **the one-shot wrap
+  is large enough that context window and tool-call reliability are decisive — serve the
+  model its full trained context and a local 27B can get most of the way there in one
+  shot, while a frontier model finishes cleanly and far faster.** (Evidence: a few local
+  configs on one target; not a universal claim.) This is also why the staged workflow
+  exists — its description targets exactly the "one-shot prompt too large / smaller or
+  less reliable context window" regime.
 
 Reproduction: `.bench-qwen36/run-oneshot-wrap.sh`, `oneshot-judge-prompt.md`,
 `oneshot-goal-judge.md`. Per-cell evidence is in `results-oneshot-*/` — small
