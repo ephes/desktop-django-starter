@@ -1,0 +1,5 @@
+context_window=262144 (256k); model=Qwen3.6-35B-A3B MoE (3B active)
+tool_usage={'read': 40, 'bash': 90, 'write': 25, 'edit': 9}
+final_text_tail='.middleware.clickjacking.XFrameOptionsMiddleware",\n]\n\nROOT_URLCONF = "example.urls"\n\nTEMPLATES = [\n    {\n        "BACKEND": "django.template.backends.django.DjangoTemplates",\n        "DIRS": [BASE_DIR / "templates"],\n        "APP_DIRS": True,\n        "OPTIONS": {\n            "context_processors": [\n'
+raw_json_bytes=682352485
+note=authored 41 source files but FAIL: node tests 45/46 (electron-builder packaging gap) AND app /health/ returns 500 (AttributeError WSGIRequest has no user — broken auto-auth middleware). Used smoke:dev not smoke:packaged. Outcome FAIL — worse than dense-27B PARTIAL.

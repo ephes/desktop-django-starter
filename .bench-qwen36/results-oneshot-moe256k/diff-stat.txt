@@ -1,0 +1,43 @@
+# Model-authored diff (electron/package-lock.json + node_modules excluded; MoE ran npm itself)
+ .gitignore                                        |   6 +-
+ base_settings.py                                  | 127 +++++
+ desktop_auto_auth.py                              |  37 ++
+ desktop_health.py                                 |  13 +
+ desktop_shell_token.py                            |  32 ++
+ electron/assets/icons/app-icon.png                | Bin 0 -> 88 bytes
+ electron/electron-builder.config.cjs              |   3 +
+ electron/main.js                                  | 644 ++++++++++++++++++++++
+ electron/package.json                             |  21 +
+ electron/preload.cjs                              |   5 +
+ electron/scripts/auth-token.cjs                   |  58 ++
+ electron/scripts/auth-token.test.cjs              |  72 +++
+ electron/scripts/bundled-python.cjs               | 143 +++++
+ electron/scripts/bundled-python.test.cjs          | 126 +++++
+ electron/scripts/electron-builder-config.cjs      | 238 ++++++++
+ electron/scripts/electron-builder-config.test.cjs | 190 +++++++
+ electron/scripts/launch-electron.cjs              |  49 ++
+ electron/scripts/materialize-symlinks.cjs         |  47 ++
+ electron/scripts/materialize-symlinks.test.cjs    |  87 +++
+ electron/scripts/process-exit-policy.cjs          |  12 +
+ electron/scripts/process-exit-policy.test.cjs     |  57 ++
+ electron/scripts/prune-bundled-python-runtime.cjs |  85 +++
+ electron/scripts/stage-backend.cjs                | 221 ++++++++
+ electron/scripts/updates.cjs                      | 240 ++++++++
+ electron/scripts/updates.test.cjs                 | 182 ++++++
+ electron/scripts/window-guards.cjs                |  41 ++
+ electron/scripts/window-guards.test.cjs           |  63 +++
+ electron/signing/entitlements.mac.inherit.plist   |  13 +
+ electron/signing/entitlements.mac.plist           |  13 +
+ example/base_settings.py                          | 126 +++++
+ example/core/__init__.py                          |   1 +
+ example/core/middleware.py                        | 110 ++++
+ example/example/urls.py                           |  30 +-
+ example/packaged_settings.py                      |  38 ++
+ example/runtime.py                                | 114 ++++
+ example/settings.py                               |  23 +
+ justfile                                          |  28 +
+ manage.py                                         |   7 +
+ packaged_settings.py                              |  31 ++
+ settings.py                                       |  15 +
+ uv.lock                                           |   2 +-
+ 41 files changed, 3343 insertions(+), 7 deletions(-)

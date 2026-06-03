@@ -1,0 +1,6 @@
+[django] Internal Server Error: /health/
+AttributeError: 'WSGIRequest' object has no attribute 'user'
+[django] [03/Jun/2026 11:45:42] "GET /health/ HTTP/1.1" 500 65695
+[django] Internal Server Error: /health/
+AttributeError: 'WSGIRequest' object has no attribute 'user'
+[django] [03/Jun/2026 11:45:42] "GET /health/ HTTP/1.1" 500 65695

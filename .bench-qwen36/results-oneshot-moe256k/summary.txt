@@ -1,0 +1,7 @@
+label=moe256k
+provider=llamacppmoe model=qwen3.6-35b-a3b thinking=off
+pi_exit=0 (124=timeout, 143=SIGTERM/killed) duration_seconds=4368.7
+electron_exists=1 npm_install_ok=1 node_tests=fail
+smoke_exit=NA health200=0 root200=0 root302=0 resume200=0 app_served=0
+files_changed=41 (model-authored source; the 42 from the pre-verify git add includes the npm-generated electron/package-lock.json that the MoE created by running npm install in-session)
+outcome=FAIL

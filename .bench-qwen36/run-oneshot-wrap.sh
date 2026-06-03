@@ -43,7 +43,8 @@ pi_args=(--provider "$PROVIDER" --model "$MODEL" --no-session --thinking "$THINK
 
 t0=$(now)
 echo "[$LABEL] one-shot wrap (timeout ${TIMEOUT}s) ..."
-timeout "$TIMEOUT" pi "${pi_args[@]}" -p "$(cat "$PROMPT")" > "$OUT/oneshot.log" 2>&1
+# </dev/null so pi never blocks waiting on a TTY stdin when launched detached.
+timeout "$TIMEOUT" pi "${pi_args[@]}" -p "$(cat "$PROMPT")" </dev/null > "$OUT/oneshot.log" 2>&1
 pi_exit=$?
 t1=$(now)
 dur=$(python3 -c "print(f'{$t1-$t0:.1f}')")
