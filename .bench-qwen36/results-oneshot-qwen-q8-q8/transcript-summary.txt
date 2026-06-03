@@ -1,0 +1,37 @@
+One-shot django-resume wrap — Qwen3.6-27B DENSE, Q8_0 quant, 256k ctx, thinking OFF.
+
+Engine:   llama.cpp (llama-server --jinja -c 262144 -ngl 999 --reasoning off),
+          GGUF Qwen3.6-27B-Q8_0 (26.6 GB), Apple M4 Max 128 GB.
+Driver:   pi --provider llamacpp256k --model qwen3.6-27b --thinking off (one-shot prompt,
+          NO Stage-1 scaffold; model authors the entire wrap).
+
+Session:  agent_end reached cleanly (not killed). 97 turns, 140 tool calls
+          (read-heavy, then bash, fewer write/edit). pi_exit=0.
+Duration: 4062.5 s pi run (~67.7 min) at ~8.8 tok/s decode (Q8 is ~1.7x slower to
+          decode than Q4_K_M for the same model).
+
+Output:   31 model-authored source files / +3146 / -129 (electron/ shell + Django
+          packaging glue), excluding the in-session electron/package-lock.json.
+          Electron Node test harness adapted and PASSING: 51/51.
+
+Verify:   npm install ok; node --test 51/51 pass.
+          Packaged smoke (smoke:packaged) FAILED -> timeout (exit 124).
+          stage-backend succeeded fully (wheel built, cpython-3.14.5 bundled,
+          "core ready!", 143 static files collected, bundle staged). Electron then
+          launched but /health/ never returned 200 within 200 s; killed (the
+          GPU/network-service "exit_code=15" lines are SIGTERM teardown at the timeout,
+          NOT the cause). Re-running the smoke with the LLM server stopped (GPU fully
+          free) reproduced the identical timeout -> not GPU contention.
+
+Root cause (single self-inconsistent path contract authored by the model):
+  - main.js validatePackagedBackendRoot() REQUIRES manage.py at the backend ROOT,
+    and buildManageInvocation() runs `manage.py` with cwd = backendRoot.
+  - the model's OWN stage-backend.cjs stages manage.py at example/manage.py, not root.
+  => at packaged launch the bundle is judged "incomplete (Missing: manage.py)" /
+     the backend spawn has no manage.py to run -> backend never serves -> smoke times out.
+
+Characterization: PARTIAL. Same tier as the Q4_K_M-off run (near-complete wrap, all
+Node tests pass, packaged smoke fails on ONE self-authored path/module contract). The
+specific bug moved (Q4_K_M: Django `ModuleNotFoundError: No module named 'core'`;
+Q8_0: packaged backend-root manage.py location) but the outcome tier is unchanged.
+Higher precision did NOT convert PARTIAL -> PASS, at ~1.7x the decode cost.

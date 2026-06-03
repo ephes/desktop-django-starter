@@ -1,0 +1,13 @@
+label=qwen-q8
+provider=llamacpp256k model=qwen3.6-27b thinking=off
+pi_exit=0 (124=timeout, 143=SIGTERM/killed) duration_seconds=4062.5
+electron_exists=1 npm_install_ok=1 node_tests=pass
+smoke_exit=124 health200=0 root200=0 root302=0 resume200=0 app_served=0
+files_changed=32
+outcome=FAIL
+# characterization: PARTIAL (node tests 51/51 pass, 31-file wrap, agent_end clean) but
+# packaged smoke FAILED -> timeout. Root cause: model's stage-backend.cjs stages
+# manage.py at example/manage.py while its own main.js requires manage.py at the backend
+# ROOT (validatePackagedBackendRoot + cwd=backendRoot) -> backend never serves. Verified
+# NOT GPU contention (smoke re-run with LLM server stopped reproduced the timeout). Same
+# tier as Q4_K_M-off PARTIAL; higher quant did NOT close the gap (and was ~1.7x slower).

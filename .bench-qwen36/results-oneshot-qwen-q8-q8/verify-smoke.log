@@ -1,0 +1,42 @@
+
+> django-resume-desktop@0.1.0 smoke:packaged
+> npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged --smoke-test
+
+
+> django-resume-desktop@0.1.0 stage-backend
+> node ./scripts/stage-backend.cjs
+
+Downloading cpython-3.14.5-macos-aarch64-none (download) (24.7MiB)
+ Downloaded cpython-3.14.5-macos-aarch64-none (download)
+Installed Python 3.14.5 in 913ms
+ + cpython-3.14.5-macos-aarch64-none
+Pruned bundled Python GUI artifacts:
+- bin/idle3
+- bin/idle3.14
+- lib/itcl4.3.5
+- lib/libtcl9.0.dylib
+- lib/libtcl9tk9.0.dylib
+- lib/python3.14/idlelib
+- lib/python3.14/lib-dynload/_tkinter.cpython-314-darwin.so
+- lib/python3.14/tkinter
+- lib/tcl9
+- lib/tcl9.0
+- lib/thread3.0.4
+- lib/tk9.0
+Building wheel...
+Successfully built .stage/.build/django_resume-0.2.0-py3-none-any.whl
+Using Python 3.14.5 environment at: .stage/backend/python
+Resolved 5 packages in 78ms
+Prepared 5 packages in 11ms
+Installed 5 packages in 116ms
+ + asgiref==3.11.1
+ + django==6.0.6
+ + django-resume==0.2.0 (from file:///Users/jochen/projects/django-resume-oneshot-qwen-q8/.stage/.build/django_resume-0.2.0-py3-none-any.whl)
+ + nh3==0.3.5
+ + sqlparse==0.5.5
+core ready! Example plugins disabled (set DJANGO_RESUME_ENABLE_EXAMPLE_PLUGINS=True to enable).
+
+143 static files copied to '/Users/jochen/projects/django-resume-oneshot-qwen-q8/.stage/backend/staticfiles'.
+Staged backend bundle at /Users/jochen/projects/django-resume-oneshot-qwen-q8/.stage/backend
+[32011:0603/190124.392382:ERROR:content/browser/network_service_instance_impl.cc:610] Network service crashed or was terminated, restarting service.
+[32011:0603/190124.392671:ERROR:content/browser/gpu/gpu_process_host.cc:1004] GPU process exited unexpectedly: exit_code=15

@@ -17,3 +17,13 @@ REASON: I independently verified the control works: packaged smoke returns `/hea
 BENCHMARK_RUN_SUCCESSFUL: YES
 REASON: The control artifacts verify the harness: PASS outcome, 35-file model-authored wrap, node tests passing, and packaged smoke serving `/health/` 200 plus `/` → `/resume/` 200. The local outcomes are genuine non-passes: qwen32 produced only one Django file/no Electron, qwen256k produced a 30-file partial with node tests passing but smoke failing on `ModuleNotFoundError: No module named 'core'`, and ds4 runs show no clean serving pass with 128k context-overflow evidence and 256k `invalid tool call` evidence. The supported conclusion is the nuanced one: context provisioning and tool-call reliability dominate local one-shot behavior; full-context qwen gets close, while the frontier control finishes cleanly.
 ```
+
+## Q8_0 quant experiment (run 24f) — 2026-06-03
+
+`Q8_EXPERIMENT_SOUND: YES` (pi / openai-codex/gpt-5.5, independent).
+REASON: The Q8 cell is real and evidenced (`pi_exit=0`, thinking off, clean `agent_end`,
+~31 authored files, Node tests 51/51 pass). The packaged smoke failure is consistently a
+timeout after successful backend staging with no `/health/` 200; the GPU/network
+`exit_code=15` lines are teardown (the GPU-free rerun reproduces the same timeout). The
+"Q8 did not close the gap" conclusion is supported; the bf16 statement is framed as a
+likely/near-lossless extrapolation, not a measured result.
