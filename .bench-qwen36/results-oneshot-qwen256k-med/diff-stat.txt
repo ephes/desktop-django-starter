@@ -1,0 +1,34 @@
+# Model-authored diff (electron/package-lock.json + node_modules excluded; model ran npm itself)
+ .gitignore                                        |   5 +
+ electron/assets/icons/app-icon.png                | Bin 0 -> 77 bytes
+ electron/electron-builder.config.cjs              |   3 +
+ electron/main.js                                  | 555 ++++++++++++++++++++++
+ electron/package.json                             |  20 +
+ electron/preload.cjs                              |   5 +
+ electron/scripts/auth-token.cjs                   |  58 +++
+ electron/scripts/auth-token.test.cjs              |  72 +++
+ electron/scripts/bundled-python.cjs               | 143 ++++++
+ electron/scripts/bundled-python.test.cjs          | 126 +++++
+ electron/scripts/electron-builder-config.cjs      | 237 +++++++++
+ electron/scripts/electron-builder-config.test.cjs | 297 ++++++++++++
+ electron/scripts/launch-electron.cjs              |  55 +++
+ electron/scripts/materialize-symlinks.cjs         |  47 ++
+ electron/scripts/materialize-symlinks.test.cjs    |  47 ++
+ electron/scripts/process-exit-policy.cjs          |  12 +
+ electron/scripts/process-exit-policy.test.cjs     |  57 +++
+ electron/scripts/prune-bundled-python-runtime.cjs |  85 ++++
+ electron/scripts/stage-backend.cjs                | 190 ++++++++
+ electron/scripts/window-guards.cjs                |  41 ++
+ electron/scripts/window-guards.test.cjs           |  63 +++
+ electron/signing/entitlements.mac.inherit.plist   |  13 +
+ electron/signing/entitlements.mac.plist           |  13 +
+ example/example/base_settings.py                  | 147 ++++++
+ example/example/desktop_dev_settings.py           |  27 ++
+ example/example/desktop_middleware.py             |  98 ++++
+ example/example/packaged_settings.py              |  92 ++++
+ example/example/urls.py                           |  17 +-
+ example/example/views.py                          |   8 +
+ justfile                                          |  26 +
+ tests/desktop_shell_test.py                       | 172 +++++++
+ uv.lock                                           |   2 +-
+ 32 files changed, 2730 insertions(+), 3 deletions(-)

@@ -1,0 +1,4 @@
+model=Qwen3.6-27B dense @256k, thinking=MEDIUM (server --reasoning on --reasoning-budget 2048; bounded)
+duration=114min; turns=137; tool_usage={'read': 43, 'bash': 92, 'write': 29, 'edit': 9}
+raw_json_bytes=469013175
+note=Bounded reasoning AVOIDED the high-run paralysis: it wrote files (node tests 38/38 PASS, ~32 source files). But packaged smoke FAILED on KeyError collectstatic + ModuleNotFoundError example — comparable to the thinking-OFF PARTIAL but with MORE packaging bugs and SLOWER (114min vs 79min). Reasoning did not help qwen reach a clean pass.

@@ -1,0 +1,46 @@
+✔ requestUrlMatchesOrigin matches only the exact Django origin (0.746583ms)
+✔ desktop auth header is added only for the Django origin (0.624208ms)
+✔ desktop auth helpers omit empty tokens (0.054916ms)
+✔ webRequest filter is scoped to the exact Django origin (0.068542ms)
+✔ buildRuntimeManifest records backend-relative launcher paths (0.950042ms)
+✔ manifest paths use forward slashes and round-trip on read (0.189416ms)
+✔ resolveBundledPythonExecutable prefers the staged manifest (1.201667ms)
+✔ getBundledPythonCandidates retains Windows and POSIX fallback paths (0.840042ms)
+✔ resolveBundledPythonExecutable prefers a versioned staged binary (0.91625ms)
+✔ resolveBundledPythonExecutable throws when the manifest target is missing (0.561125ms)
+✔ electron-builder config ships the staged backend as a packaged resource (7.651167ms)
+✔ electron-builder config packages every shell-local main-process helper (4.827208ms)
+✔ electron-builder config keeps per-platform artifact names explicit (4.069ms)
+✔ electron-builder config does not expose test helpers as enumerable keys (4.654708ms)
+✔ electron-builder config includes a GitHub update feed by default (0.113667ms)
+✔ electron-builder config falls back to the git origin remote for the update feed (0.061709ms)
+✔ electron-builder config allows generic update feed override (0.065708ms)
+✔ electron-builder config allows GitHub release feed override (4.281917ms)
+✔ electron-builder config detects GitHub owner and repo from common repository formats (0.067083ms)
+✔ electron-builder config prefers GITHUB_REPOSITORY over git origin detection (0.082375ms)
+✔ electron-builder config falls back to the hardcoded repository default (0.047667ms)
+✔ electron-builder enables macOS notarization when Apple credentials are present (3.739333ms)
+✔ electron-builder enables macOS notarization for Apple ID credentials (3.778833ms)
+✔ electron-builder enables macOS notarization for keychain profile credentials (3.699917ms)
+✔ electron-builder keeps macOS notarization disabled for partial API key credentials (3.984333ms)
+✔ electron-builder exposes optional Windows signing settings from env (3.701375ms)
+✔ electron-builder does not expose Windows signtool options for generic signing env alone (3.529875ms)
+✔ getEnvList trims items and ignores empty entries (0.050416ms)
+✔ materializeSymlinks replaces symlinks with real copies (3.071292ms)
+✔ materializeSymlinks is no-op on non-existent path (0.072708ms)
+✔ managed process exits show an error dialog during normal app runtime (0.584292ms)
+✔ managed process exits stay quiet during update installation handoff (0.051583ms)
+✔ managed process exits stay quiet after Electron explicitly requests a stop (0.048625ms)
+✔ managed process exits stay quiet while quitting or after spawn failure (0.041583ms)
+✔ isExternalOpenableUrl allows only expected external protocols (0.696208ms)
+✔ navigation guard allows in-app localhost navigation (0.644042ms)
+✔ navigation guard blocks external navigation and opens safe external URLs (0.083625ms)
+✔ window open guard always denies child windows (0.063542ms)
+ℹ tests 38
+ℹ suites 0
+ℹ pass 38
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 117.387125

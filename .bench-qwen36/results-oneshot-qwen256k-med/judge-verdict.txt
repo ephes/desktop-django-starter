@@ -1,0 +1,3 @@
+# pi judge (openai-codex/gpt-5.5)
+VERDICT: SUPPORTED
+REASON: summary.txt, diff-stat.txt, transcript-summary.txt, and smoke-evidence.txt support the MEDIUM run characterization; sibling OFF/HIGH summaries corroborate the comparison that more reasoning did not improve results.

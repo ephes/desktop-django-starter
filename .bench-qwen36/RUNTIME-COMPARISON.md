@@ -178,6 +178,7 @@ scratch in one unattended agentic session, then self-verify. Runner:
 | qwen 3.6 27b (llama.cpp) | 32k (**under-provisioned**) | killed at 37 min | **FAIL** | served at only `-c 32768` though the model is **trained for 262144 (256k)** — llama.cpp warned `n_ctx_seq (32768) < n_ctx_train (262144)`. Authored only 1 partial Django middleware, never started `electron/`; under ~24k/32k pressure; stopped (SIGTERM) at 37 min to free RAM for ds4. **This run under-served the model — see the 256k row below for the fair test.** Evidence: `results-oneshot-llamacpp/{summary,diff-stat,server-evidence}.txt` |
 | qwen 3.6 27b **dense** (llama.cpp) | **256k** (full trained ctx) | 79 min (ran to completion) | **PARTIAL** | given its real window, qwen authored a **near-complete wrap**: 30 model-authored source files / 3,080 insertions (full `electron/` shell + Django integration; `+8` edits; it ran npm itself, so its `package-lock.json` is excluded). **Electron node tests pass.** Only the packaged smoke failed — `ModuleNotFoundError: No module named 'core'` (a packaging python-path bug in its settings). Not a clean serving PASS, but vastly beyond the 32k run. (Thinking OFF.) Evidence: `results-oneshot-qwen256k/{summary,diff-stat,transcript-summary}.txt,verify-smoke.log` |
 | qwen 3.6 27b **dense** (llama.cpp) | **256k**, **thinking HIGH** | 20 min (exited, `pi_exit=0`) | **FAIL** | same model + context as the row above but with **unrestricted thinking on** (server `--reasoning on --reasoning-budget -1`, 17 reasoning-budget activations): **analysis-paralysis** — 42 read + 8 bash + **0 writes** across 15 turns, then ended by *quoting* a template in its response instead of writing it. **0 files authored** — far worse than the same model thinking-off (30 files, PARTIAL). High reasoning *hurt* this action-heavy one-shot. Evidence: `results-oneshot-qwen256k-think/{summary,transcript-summary}.txt` |
+| qwen 3.6 27b **dense** (llama.cpp) | **256k**, **thinking MEDIUM** (budget 2048) | 114 min (ran to completion) | **PARTIAL** | bounded reasoning (`--reasoning-budget 2048`) **fixed the paralysis** — 137 turns, 43 read + 92 bash + **29 write** + 9 edit, 32 source files, **node tests 38/38 pass**. But packaged smoke still **FAILED** (`KeyError: 'collectstatic'` + `ModuleNotFoundError: No module named 'example'`), and it was **slower than thinking-off (114 vs 79 min) with more bugs**. So medium recovered from high's collapse but was **no better than thinking-off**. Evidence: `results-oneshot-qwen256k-med/{summary,diff-stat,transcript-summary,smoke-evidence}.txt` |
 | Qwen3.6 **35B-A3B MoE** (llama.cpp) | **256k** (full trained ctx) | 72.8 min (ran to completion) | **FAIL** | the MoE (3B active, ~3–5× faster decode) authored *more* — 41 source files / 3,343 insertions (90 bash + 25 write + 9 edit) — but lower quality: **node tests 45/46 (1 fail:** electron-builder config packaging gap**)** and the app is **broken at runtime** — `/health/` returns **500 `AttributeError: 'WSGIRequest' object has no attribute 'user'`** (mis-wired auto-auth middleware), so it never passes the health check. Also used non-standard script names (`smoke:dev` not `smoke:packaged`). Despite its speed, a **worse** wrap than the dense 27B's PARTIAL — consistent with Qwen's benchmarks (dense 27B > 35B-A3B on coding, SkillsBench +15.5). Evidence: `results-oneshot-moe256k/{summary,diff-stat,transcript-summary,own-smoke-evidence}.txt` |
 | DeepSeek V4 Flash (ds4.c) | 128k | 50 min | **FAIL** | built `electron/` skeleton + `package.json`, then stalled; timed out |
 | DeepSeek V4 Flash (ds4.c) | 128k | 2 h | **FAIL** | exited cleanly (`pi_exit=0`) after ~54 min with 0 files — explored (18 read + 47 bash, 0 writes) and never authored a wrap. The shared 128k ds4-server session overflowed its KV cache during this window, though this run's own committed transcript-summary carries no overflow marker (`error_markers=[]`). Evidence: `results-oneshot-ds4-2h/transcript-summary.txt` (tool usage) + `results-oneshot-ds4-128k-session-server-evidence.txt` (shared-session overflow) |
@@ -218,12 +219,19 @@ scratch in one unattended agentic session, then self-verify. Runner:
   configs on one target; not a universal claim.) This is also why the staged workflow
   exists — its description targets exactly the "one-shot prompt too large / smaller or
   less reliable context window" regime.
-- **Thinking mode hurts the action-heavy one-shot.** qwen dense @256k with *thinking OFF*
-  reached a 30-file PARTIAL; the **same model + context with thinking HIGH authored 0
-  files** (analysis-paralysis: 42 reads + 0 writes, then quoted a template instead of
-  writing it). ds4 showed the same pattern (thinking-high derailed django-resume). So for
-  agentic, write-heavy tasks, **high reasoning budget made local models reason/explore
-  instead of act** — thinking off was consistently better. (The dense 27B MoE sibling
+- **More thinking did not help the action-heavy one-shot — the off/medium/high curve is
+  flat-to-negative** (qwen dense @256k, llama.cpp; thinking controlled via llama-server
+  `--reasoning-budget`):
+  - **OFF** → PARTIAL, 30 files, 1 packaging bug (`core`), **79 min** — best.
+  - **MEDIUM** (budget 2048) → PARTIAL, 32 files, node tests pass, but 2 packaging bugs
+    (`collectstatic` KeyError + `example` ModuleNotFound), **114 min** — recovered from
+    high's paralysis but no better than off, and slower.
+  - **HIGH** (unbounded) → **FAIL, 0 files** — analysis-paralysis (42 reads, 0 writes,
+    quoted a template instead of writing it), exited at 20 min.
+  So a *little* reasoning is survivable (bounded), but **unbounded reasoning is
+  catastrophic** (the model reasons/explores instead of acting), and **no thinking level
+  beat thinking-off**. ds4 showed the same pattern (thinking-high derailed django-resume).
+  All thinking variation here was on **llama.cpp**; MLX thinking was not tested. (The dense 27B MoE sibling
   35B-A3B also failed at 256k — see the one-shot table — so among the local cells, only
   thinking-off dense qwen at full context got close.)
 

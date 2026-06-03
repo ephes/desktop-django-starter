@@ -1,0 +1,2 @@
+KeyError: 'collectstatic'
+ModuleNotFoundError: No module named 'example'
