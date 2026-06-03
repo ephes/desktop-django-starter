@@ -1,0 +1,9 @@
+# qwen 3.6 27b one-shot context-pressure evidence (llama-server log).
+# The run was stopped (SIGTERM, pi_exit=143) at ~37 min to reallocate RAM to ds4,
+# BEFORE its 40-min cap and before a definitive 32k overflow. It had authored only
+# 1 partial Django file (src/django_resume/desktop_auth_middleware.py) and no electron/.
+# Largest prompt-processing chunks observed (context growing toward the 32k window):
+35.23.015.279 I slot print_timing: id  3 | task 21432 | prompt processing, n_tokens =  12407, progress = 0.52, t =  54.01 s / 229.73 tokens per second
+35.30.903.075 I slot print_timing: id  3 | task 21432 | prompt processing, n_tokens =  14455, progress = 0.60, t =  61.90 s / 233.54 tokens per second
+35.40.803.583 I slot print_timing: id  3 | task 21432 | prompt processing, n_tokens =  16503, progress = 0.69, t =  71.80 s / 229.86 tokens per second
+35.50.996.199 I slot print_timing: id  3 | task 21432 | prompt processing, n_tokens =  18551, progress = 0.78, t =  81.99 s / 226.26 tokens per second

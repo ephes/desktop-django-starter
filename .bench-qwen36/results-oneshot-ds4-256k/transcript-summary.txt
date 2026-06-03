@@ -1,0 +1,5 @@
+tool_usage={'read': 4, 'bash': 122, 'write': 1}
+write_targets=['?']
+error_markers=[]
+final_text_tail='onsMiddleware\',\\n]\\n\\nROOT_URLCONF = \'django_backend.urls\'\\n\\nTEMPLATES = [\\n    {\\n        \'BACKEND\': \'django.template.backends.django.DjangoTemplates\',\\n        \'DIRS\': [],\\n        \'APP_DIRS\': True,\\n        \'OPTIONS\': {\\n            \'context_processors\': [\\n                \'django.template.context_processors.debug\',\\n                \'django.template.context_processors.request\',\\n                \'django.contrib.auth.context_processors.auth\',\\n                \'django.contrib.messages.context_processors.messages\',\\n            ],\\n        },\\n    },\\n]\\n\\nDATABASES = {\\n    \'default\': {\\n        \'ENGINE\': \'django.db.backends.sqlite3\',\\n        \'NAME\': BASE_DIR / \'db.sqlite3\',\\n    }\\n}\\n"\n}'
+raw_json_bytes=65531122

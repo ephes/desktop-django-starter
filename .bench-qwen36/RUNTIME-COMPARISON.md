@@ -158,3 +158,62 @@ Notes:
   `cast-stage-{2,3}-filled.md`, `cast-judge-prompt.md`, `cast-goal-judge.md`,
   `results-cast-*`).
 
+
+---
+
+# One-shot (un-staged) variant: django-resume (2026-06-03)
+
+The staged benchmarks above all passed because the deterministic Stage 1 scaffold does
+the mechanical wrapping and the model only runs verification-first Stages 2–3. To make
+it genuinely hard, this variant drops the scaffold entirely and gives the model the
+**original one-shot prompt** (`skills/wrap-existing-django-in-electron/prompt.md`): the
+model must author the *entire* wrap (electron/ + Django integration, ~9–36 files) from
+scratch in one unattended agentic session, then self-verify. Runner:
+`.bench-qwen36/run-oneshot-wrap.sh` (no scaffold). Judged by `pi / openai-codex/gpt-5.5`
+(independent live judge + benchmark-success judge `BENCHMARK_RUN_SUCCESSFUL: YES`).
+
+| Subject | Context | Budget | Outcome | What happened |
+|---------|---------|--------|---------|---------------|
+| gpt-5.5 (frontier control) | 272k | — | **PASS** (7.2 min) | authored 35 files / 2,565 insertions (model-authored; the verifier's npm `package-lock.json` is excluded); packaged smoke `/health/` 200, `/` → `/resume/` 200; node tests pass |
+| qwen 3.6 27b (llama.cpp) | 32k | killed at 37 min | **FAIL** | authored only 1 partial Django middleware (`desktop_auth_middleware.py`), never started the `electron/` shell; under heavy context pressure (~24k of its 32k window after reading the skill+refs). Stopped (SIGTERM, `pi_exit=143`) at 37 min to reallocate RAM to ds4 — before its 40-min cap and before a definitive overflow. Evidence: `results-oneshot-llamacpp/{summary,diff-stat,server-evidence}.txt` |
+| DeepSeek V4 Flash (ds4.c) | 128k | 50 min | **FAIL** | built `electron/` skeleton + `package.json`, then stalled; timed out |
+| DeepSeek V4 Flash (ds4.c) | 128k | 2 h | **FAIL** | exited cleanly (`pi_exit=0`) after ~54 min with 0 files — explored (18 read + 47 bash, 0 writes) and never authored a wrap. The shared 128k ds4-server session overflowed its KV cache during this window, though this run's own committed transcript-summary carries no overflow marker (`error_markers=[]`). Evidence: `results-oneshot-ds4-2h/transcript-summary.txt` (tool usage) + `results-oneshot-ds4-128k-session-server-evidence.txt` (shared-session overflow) |
+| DeepSeek V4 Flash (ds4.c) | 128k | 4 h | **FAIL** | context overflow — this run's transcript carries `prompt exceeds context` markers and the shared 128k server logged a KV-cache overflow; self-terminated in ~19 min. Evidence: `results-oneshot-ds4-4h/transcript-summary.txt` (per-run markers) + `results-oneshot-ds4-128k-session-server-evidence.txt` (shared 128k server) |
+| DeepSeek V4 Flash (ds4.c) | **256k** | 2 h | **FAIL** | no overflow (reached ~132k); 122 bash explorations, then `finish=error error="invalid tool call"` while emitting a large settings write. Evidence: `results-oneshot-ds4-256k/server-evidence.txt` |
+
+## Staged vs one-shot — the discriminating result
+
+- **Staged**: every engine/model/thinking cell passed on django-resume, django-wiki, and
+  django-cast (zero model edits, verification-only). The staged benchmark measures
+  "can the model *verify* a scaffold-covered wrap" — near-zero capability signal.
+- **One-shot**: only the **frontier** model (gpt-5.5) completed, in ~7 min. **Both local
+  models failed**, for layered reasons:
+  - qwen 3.6 27b — did not converge: heavy **32k context pressure** (reached ~24k after
+    reading the 505-line skill + architecture + spec) with only a partial Django
+    middleware and no Electron shell when it was stopped at 37 min. (Stopped to free RAM
+    for ds4 before the 40-min cap, so a full 32k overflow was not reached — but it was
+    nowhere near a working wrap.)
+  - DeepSeek V4 Flash — **128k context overflow** is directly evidenced for the 4h run
+    (its transcript carries `prompt exceeds context` markers) and for the shared 128k
+    server session (KV-cache capacity exceeded). The 2h run's own transcript shows only
+    exploration (47 bash, 0 writes) and a clean exit with no wrap, so its failure isn't
+    independently tied to an overflow marker. Given **256k** headroom ds4 stopped
+    overflowing but still failed on an **unreliable large-file tool call** (`invalid
+    tool call`) after heavy exploration. Time was *not* the limiter (it self-terminated
+    well within the 2h/4h budgets); context and large-write tool-call reliability were.
+- This is exactly why the staged workflow exists: its own description says it is for when
+  "the one-shot wrap prompt is too large for the model you want to run locally… the run
+  stalls, drifts, or corrupts long files… the model has a smaller or less reliable
+  context window." The one-shot benchmark makes that gap measurable here: **the frontier
+  control one-shot the wrap in minutes; the two local configurations tested (qwen 3.6 27b
+  @32k, DeepSeek V4 Flash @128k/256k) did not** — blocked by context limits and
+  large-write tool-call reliability, not wall time. (This is evidence from two local
+  configs on one target, not a universal claim that no local model can one-shot a wrap.)
+
+Reproduction: `.bench-qwen36/run-oneshot-wrap.sh`, `oneshot-judge-prompt.md`,
+`oneshot-goal-judge.md`. Per-cell evidence is in `results-oneshot-*/` — small
+`summary.txt`, `diff-stat.txt`, `transcript-summary.txt` (tool-call breakdown), and
+`server-evidence.txt` (the cited context/tool-call errors from the model server logs);
+the pi judge verdicts are in `results-oneshot-JUDGE-verdicts.md`. The multi-GB raw json
+transcripts are gitignored (`.gitignore`), not committed. The original one-shot
+prompt/skill is `skills/wrap-existing-django-in-electron/`.

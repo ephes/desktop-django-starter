@@ -1,0 +1,7 @@
+label=control-gpt55
+provider=openai-codex model=gpt-5.5 thinking=off
+pi_exit=0 (124=timeout, 143=SIGTERM/killed) duration_seconds=432.5
+electron_exists=1 npm_install_ok=1 node_tests=pass
+smoke_exit=0 health200=1 root200=0 root302=1 resume200=1 app_served=1
+files_changed=35 (model-authored; excludes verifier-generated electron/package-lock.json)
+outcome=PASS

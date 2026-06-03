@@ -1,0 +1,7 @@
+label=llamacpp
+provider=llamacpp model=qwen3.6-27b thinking=off
+pi_exit=143 (124=timeout) duration_seconds=2235.6
+electron_exists=0 npm_install_ok=0 node_tests=NA
+smoke_exit=NA health200=0 root200=0 root302=0 app_served=0
+files_changed=1
+outcome=FAIL

@@ -32,3 +32,6 @@ cli/dist/
 .artifacts/
 .superpowers/
 docs/superpowers/
+
+# One-shot streaming json transcripts can be multi-GB; keep curated transcript-summary.txt instead
+.bench-qwen36/results-oneshot-*/oneshot.log

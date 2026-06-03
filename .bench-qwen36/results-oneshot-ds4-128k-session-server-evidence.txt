@@ -1,0 +1,17 @@
+# Shared evidence: the ds4 2h and 4h one-shot runs BOTH used the same 128k
+# ds4-server (-c 131072). This is that server session's context-overflow evidence
+# (it is one session, not two independent captures). Per-run detail is in each
+# run's transcript-summary.txt.
+ds4: Metal graph compressed KV cache capacity exceeded at layer 2
+0603 03:48:32 ds4-server: chat ctx=111685..126750:15065 gen=500 TOOLS DSML_START decoding chunk=22.59 t/s avg=22.35 t/s 22.367s
+0603 03:48:35 ds4-server: chat ctx=111685..126750:15065 gen=550 TOOLS DSML_START decoding chunk=22.62 t/s avg=22.38 t/s 24.578s
+0603 03:48:37 ds4-server: chat ctx=111685..126750:15065 gen=600 TOOLS DSML_START decoding chunk=22.63 t/s avg=22.40 t/s 26.788s
+0603 03:48:39 ds4-server: chat ctx=111685..126750:15065 gen=650 TOOLS DSML_START decoding chunk=22.57 t/s avg=22.41 t/s 29.003s
+0603 03:48:41 ds4-server: chat ctx=111685..126750:15065 gen=690 TOOLS DSML_START DSML_END decoding chunk=22.67 t/s avg=22.43 t/s 30.768s
+0603 03:48:41 ds4-server: tool calls ctx=111685..126750:15065 n=11 names=[read,read,read,read,read,read,read,read,read,read,read]
+0603 03:48:41 ds4-server: tool checkpoint canonicalized ctx=111685..126750:15065 common=127440 live=127440 canonical=127441
+0603 03:48:41 ds4-server: chat ctx=111685..126750:15065 gen=690 TOOLS DSML_START DSML_END finish=tool_calls 122.757s
+0603 03:48:41 ds4-server: chat ctx=127441..142455:15014 TOOLS prompt start
+0603 03:48:43 ds4-server: chat ctx=127441..142455:15014 TOOLS prompt start
+0603 03:48:47 ds4-server: chat ctx=127441..142455:15014 TOOLS prompt start
+0603 03:48:55 ds4-server: chat ctx=127441..142455:15014 TOOLS prompt start

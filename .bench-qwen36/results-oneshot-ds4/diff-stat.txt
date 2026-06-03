@@ -1,0 +1,4 @@
+ electron/package-lock.json | 4112 ++++++++++++++++++++++++++++++++++++++++++++
+ electron/package.json      |   21 +
+ uv.lock                    |    2 +-
+ 3 files changed, 4134 insertions(+), 1 deletion(-)

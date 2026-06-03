@@ -1,0 +1,7 @@
+label=ds4
+provider=ds4local model=deepseek-v4-flash thinking=off
+pi_exit=124 (124=timeout, 143=SIGTERM/killed) duration_seconds=3000.1
+electron_exists=1 npm_install_ok=1 node_tests=NA
+smoke_exit=1 health200=0 root200=0 root302=0 resume200=0 app_served=0
+files_changed=3
+outcome=FAIL
