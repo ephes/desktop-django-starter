@@ -1,0 +1,5 @@
+model=Qwen3.6-27B dense @256k, thinking=HIGH (server --reasoning on --reasoning-budget -1, enable_thinking=true; 17 reasoning-budget activations)
+turns=15; tool_usage={'read': 42, 'bash': 8} (0 write/edit)
+final_text_tail='lass="footer-with-background">\n        <img\n          src="{% static \'django_resume/img/jochen-illustration-footer.png\' %}"\n          alt="Resume Footer"\n          class="footer-image"\n        >\n      </footer>\n    </div>\n  </div>\n  </body>\n{% endblock body %}'
+raw_json_bytes=305971098
+note=ANALYSIS-PARALYSIS: read 42 + bash 8 + 0 writes over ~20 min, then exited (pi_exit=0) with 0 files. Reasoned/quoted instead of acting. FAIL — far worse than the SAME model thinking-OFF (30 files, PARTIAL). High reasoning hurt this agentic one-shot task.

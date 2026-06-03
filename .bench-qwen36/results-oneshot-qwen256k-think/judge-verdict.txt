@@ -1,0 +1,3 @@
+# pi judge (openai-codex/gpt-5.5)
+VERDICT: SUPPORTED
+REASON: `results-oneshot-qwen256k-think/summary.txt` shows `files_changed=0` and `outcome=FAIL`; its `transcript-summary.txt` shows 15 turns, 17 reasoning-budget activations, `tool_usage={'read': 42, 'bash': 8}` with `0 write/edit`, and labels this analysis-paralysis. The comparison is also supported: `results-oneshot-qwen256k/summary.txt` documents thinking-off with 30 files changed and PARTIAL results.
