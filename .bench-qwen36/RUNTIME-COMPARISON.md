@@ -161,7 +161,7 @@ Notes:
 
 ---
 
-# One-shot (un-staged) variant: django-resume (2026-06-03)
+# One-shot (un-staged) variant: django-resume (2026-06-03; low-thinking cells added 2026-06-09)
 
 The staged benchmarks above all passed because the deterministic Stage 1 scaffold does
 the mechanical wrapping and the model only runs verification-first Stages 2–3. To make
@@ -178,6 +178,8 @@ scratch in one unattended agentic session, then self-verify. Runner:
 | qwen 3.6 27b (llama.cpp) | 32k (**under-provisioned**) | killed at 37 min | **FAIL** | served at only `-c 32768` though the model is **trained for 262144 (256k)** — llama.cpp warned `n_ctx_seq (32768) < n_ctx_train (262144)`. Authored only 1 partial Django middleware, never started `electron/`; under ~24k/32k pressure; stopped (SIGTERM) at 37 min to free RAM for ds4. **This run under-served the model — see the 256k row below for the fair test.** Evidence: `results-oneshot-llamacpp/{summary,diff-stat,server-evidence}.txt` |
 | qwen 3.6 27b **dense** (llama.cpp) | **256k** (full trained ctx) | 79 min (ran to completion) | **PARTIAL** | given its real window, qwen authored a **near-complete wrap**: 30 model-authored source files / 3,080 insertions (full `electron/` shell + Django integration; `+8` edits; it ran npm itself, so its `package-lock.json` is excluded). **Electron node tests pass.** Only the packaged smoke failed — `ModuleNotFoundError: No module named 'core'` (a packaging python-path bug in its settings). Not a clean serving PASS, but vastly beyond the 32k run. (Thinking OFF.) Evidence: `results-oneshot-qwen256k/{summary,diff-stat,transcript-summary}.txt,verify-smoke.log` |
 | qwen 3.6 27b **dense, Q8_0** (llama.cpp) | **256k**, thinking OFF | 67.7 min (ran to completion, `agent_end` clean) | **PARTIAL** | **same model + context + thinking as the Q4_K_M-off row above, but at near-lossless Q8_0 (26.6 GB) instead of Q4_K_M (16 GB)** — to isolate the quant variable. Outcome **unchanged**: 31 model-authored source files / 3,146 insertions, **node tests 51/51 pass**, packaged smoke **FAILED** (timeout). The bug *moved* but stayed the same tier — a single self-inconsistent path contract the model authored: its `stage-backend.cjs` stages `manage.py` at `example/manage.py` while its own `main.js` requires `manage.py` at the **backend root** (`validatePackagedBackendRoot` + `cwd=backendRoot`), so the packaged backend never serves. Verified **not** GPU contention (re-ran the smoke with the LLM server stopped → identical timeout). **Q8 did not close the gap** (and decoded ~1.7× slower than Q4_K_M). Evidence: `results-oneshot-qwen-q8-q8/{summary,diff-stat,transcript-summary,verify-smoke-gpufree}.{txt,log}` |
+| qwen 3.6 27b **dense, Q8_0** (llama.cpp) | **256k**, **thinking LOW** (budget 512) | 120.8 min (ran to completion) | **FAIL / PARTIAL-ish** | low reasoning avoided the high-thinking 0-write collapse and authored a very large wrap: 178 changed paths, `electron/`, Django glue, staticfiles, **53/53 Node tests pass**, and packaged smoke exited 0 with `/health/` 200 and `/resume/` 200. It still is not a clean PASS under the one-shot contract because the smoke never requested `/`, so the runner could not verify `/` -> 200/302 (`app_served=0`). Treat as the strongest low-thinking serving evidence but not a comparable clean pass; it also committed generated staticfiles and package-lock material in-session. Evidence: `results-oneshot-qwen-q8-low/{summary,diff-stat,nodetests,verify-smoke}.txt` |
+| qwen 3.6 27b **dense, Q4_K_M** (llama.cpp) | **256k**, **thinking LOW** (budget 512) | 66.3 min (ran to completion) | **FAIL** | same low-thinking setup as the Q8_0 low row, but Q4_K_M: 29 changed files, `electron/`, Django glue, npm install ok, **18/18 Node tests pass**. Packaged backend staging completed, but `smoke:packaged` timed out before any `/health/`, `/`, or `/resume/` 200 (`smoke_exit=124`). Weaker than Q8_0 low and no better than Q4_K_M thinking-off; low reasoning did not close the one-shot gap. Evidence: `results-oneshot-qwen-q4-low/{summary,diff-stat,nodetests,verify-smoke}.txt` |
 | qwen 3.6 27b **dense** (llama.cpp) | **256k**, **thinking HIGH** | 20 min (exited, `pi_exit=0`) | **FAIL** | same model + context as the row above but with **unrestricted thinking on** (server `--reasoning on --reasoning-budget -1`, 17 reasoning-budget activations): **analysis-paralysis** — 42 read + 8 bash + **0 writes** across 15 turns, then ended by *quoting* a template in its response instead of writing it. **0 files authored** — far worse than the same model thinking-off (30 files, PARTIAL). High reasoning *hurt* this action-heavy one-shot. Evidence: `results-oneshot-qwen256k-think/{summary,transcript-summary}.txt` |
 | qwen 3.6 27b **dense** (llama.cpp) | **256k**, **thinking MEDIUM** (budget 2048) | 114 min (ran to completion) | **PARTIAL** | bounded reasoning (`--reasoning-budget 2048`) **fixed the paralysis** — 137 turns, 43 read + 92 bash + **29 write** + 9 edit, 32 source files, **node tests 38/38 pass**. But packaged smoke still **FAILED** (`KeyError: 'collectstatic'` + `ModuleNotFoundError: No module named 'example'`), and it was **slower than thinking-off (114 vs 79 min) with more bugs**. So medium recovered from high's collapse but was **no better than thinking-off**. Evidence: `results-oneshot-qwen256k-med/{summary,diff-stat,transcript-summary,smoke-evidence}.txt` |
 | Qwen3.6 **35B-A3B MoE** (llama.cpp) | **256k** (full trained ctx) | 72.8 min (ran to completion) | **FAIL** | the MoE (3B active, ~3–5× faster decode) authored *more* — 41 source files / 3,343 insertions (90 bash + 25 write + 9 edit) — but lower quality: **node tests 45/46 (1 fail:** electron-builder config packaging gap**)** and the app is **broken at runtime** — `/health/` returns **500 `AttributeError: 'WSGIRequest' object has no attribute 'user'`** (mis-wired auto-auth middleware), so it never passes the health check. Also used non-standard script names (`smoke:dev` not `smoke:packaged`). Despite its speed, a **worse** wrap than the dense 27B's PARTIAL — consistent with Qwen's benchmarks (dense 27B > 35B-A3B on coding, SkillsBench +15.5). Evidence: `results-oneshot-moe256k/{summary,diff-stat,transcript-summary,own-smoke-evidence}.txt` |
@@ -220,10 +222,14 @@ scratch in one unattended agentic session, then self-verify. Runner:
   configs on one target; not a universal claim.) This is also why the staged workflow
   exists — its description targets exactly the "one-shot prompt too large / smaller or
   less reliable context window" regime.
-- **More thinking did not help the action-heavy one-shot — the off/medium/high curve is
+- **More thinking did not help the action-heavy one-shot — the off/low/medium/high curve is
   flat-to-negative** (qwen dense @256k, llama.cpp; thinking controlled via llama-server
   `--reasoning-budget`):
   - **OFF** → PARTIAL, 30 files, 1 packaging bug (`core`), **79 min** — best.
+  - **LOW** (budget 512) → mixed but still no clean PASS: Q8_0 low got closest to
+    serving (`/health/` 200 and `/resume/` 200, 53 Node tests pass) but did not verify
+    the root route required by the one-shot contract; Q4_K_M low timed out before HTTP
+    service. Low avoided high's analysis-paralysis, but did not beat thinking-off.
   - **MEDIUM** (budget 2048) → PARTIAL, 32 files, node tests pass, but 2 packaging bugs
     (`collectstatic` KeyError + `example` ModuleNotFound), **114 min** — recovered from
     high's paralysis but no better than off, and slower.
@@ -235,7 +241,8 @@ scratch in one unattended agentic session, then self-verify. Runner:
   All thinking variation here was on **llama.cpp**; MLX thinking was not tested. (The dense 27B MoE sibling
   35B-A3B also failed at 256k — see the one-shot table — so among the local cells, only
   thinking-off dense qwen at full context got close.)
-- **Quantization was not the bottleneck — Q4_K_M vs Q8_0 land in the same PARTIAL tier.**
+- **Quantization was not the bottleneck for thinking-off, and low thinking did not
+  produce a clean Q4/Q8 pass either.**
   Re-running the best local config (dense qwen @256k, thinking-off) at near-lossless
   **Q8_0** (26.6 GB) instead of **Q4_K_M** (16 GB) did **not** convert the PARTIAL into a
   PASS: both authored a near-complete wrap with all Node tests passing and failed the
@@ -248,7 +255,10 @@ scratch in one unattended agentic session, then self-verify. Runner:
   **Q4_K_M is the better operating point** for this model/task. The real ceiling is
   **one-shot integration reliability** — keeping a self-authored multi-file contract
   (stage script ↔ Electron runtime ↔ Django settings) internally consistent across the
-  whole wrap — which is a model-capability limit, not a precision limit.
+  whole wrap — which is a model-capability limit, not a precision limit. The 2026-06-09
+  low-thinking follow-up was more nuanced: Q8_0 low produced stronger serving evidence
+  than Q4_K_M low, but still did not satisfy the root-route pass contract and cost about
+  121 minutes. Q4_K_M low was faster (66 minutes) but timed out before any HTTP 200.
 
 Reproduction: `.bench-qwen36/run-oneshot-wrap.sh`, `oneshot-judge-prompt.md`,
 `oneshot-goal-judge.md`. Per-cell evidence is in `results-oneshot-*/` — small

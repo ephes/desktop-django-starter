@@ -1,0 +1,26 @@
+✔ requestUrlMatchesOrigin matches only the exact Django origin (0.753ms)
+✔ desktop auth header is added only for the Django origin (0.618792ms)
+✔ desktop auth helpers omit empty tokens (0.052708ms)
+✔ webRequest filter is scoped to the exact Django origin (0.0685ms)
+✔ buildRuntimeManifest records backend-relative launcher paths (1.002666ms)
+✔ manifest paths use forward slashes and round-trip on read (0.226125ms)
+✔ resolveBundledPythonExecutable prefers the staged manifest (0.946333ms)
+✔ getBundledPythonCandidates retains Windows and POSIX fallback paths (0.774625ms)
+✔ resolveBundledPythonExecutable prefers a versioned staged binary (1.003ms)
+✔ resolveBundledPythonExecutable throws when the manifest target is missing (0.602333ms)
+✔ materializeSymlinks replaces file symlinks with copied files (2.120875ms)
+✔ materializeSymlinks replaces directory symlinks and nested links (2.512417ms)
+✔ materializeSymlinks raises a clear error for broken symlinks (0.619375ms)
+✔ materializeSymlinks leaves normal files untouched (0.485833ms)
+✔ isExternalOpenableUrl allows only expected external protocols (0.688167ms)
+✔ navigation guard allows in-app localhost navigation (0.6095ms)
+✔ navigation guard blocks external navigation and opens safe external URLs (0.080625ms)
+✔ window open guard always denies child windows (0.060208ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 71.075292

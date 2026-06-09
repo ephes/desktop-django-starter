@@ -1,0 +1,7 @@
+label=qwen-q4-low
+provider=llamacpp256k model=qwen3.6-27b thinking=low
+pi_exit=0 (124=timeout, 143=SIGTERM/killed) duration_seconds=3980.6
+electron_exists=1 npm_install_ok=1 node_tests=pass
+smoke_exit=124 health200=0 root200=0 root302=0 resume200=0 app_served=0
+files_changed=29
+outcome=FAIL
