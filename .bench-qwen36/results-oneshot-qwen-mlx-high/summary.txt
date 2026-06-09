@@ -1,0 +1,7 @@
+label=qwen-mlx-high
+provider=mlx model=mlx-community/Qwen3.6-27B-4bit thinking=high
+pi_exit=1 (124=timeout, 143=SIGTERM/killed) duration_seconds=987.0
+electron_exists=0 npm_install_ok=0 node_tests=NA
+smoke_exit=NA health200=0 root200=0 root302=0 resume200=0 app_served=0
+files_changed=0
+outcome=FAIL

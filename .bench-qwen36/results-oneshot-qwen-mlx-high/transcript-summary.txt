@@ -1,0 +1,28 @@
+MLX high-thinking one-shot transcript summary (2026-06-09)
+
+Source transcript:
+  .bench-qwen36/results-oneshot-qwen-mlx-high/oneshot.log
+
+Raw transcript is intentionally ignored:
+  size=141377177 bytes
+
+Tool usage:
+  tool_execution_start=43
+  read_starts=38
+  bash_starts=5
+  write_or_edit_starts=0
+
+Run markers:
+  agent_end=1
+  compaction_start=1
+  compaction_end=1
+  server_failure_markers=0
+  transcript_failure_markers=0
+
+Behavior summary:
+  The model read the required skill/docs, listed starter Electron files, read the
+  target Django settings/URLs and starter Electron scripts/tests, then produced a
+  very large thinking-only response. It reached a pi context compaction event and
+  ended without issuing any write/edit tool calls or mutating the disposable clone.
+  The wrapper summary therefore records files_changed=0, electron_exists=0, and
+  outcome=FAIL.

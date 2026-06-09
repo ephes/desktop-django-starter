@@ -1,0 +1,26 @@
+MLX high-thinking one-shot server evidence (2026-06-09)
+
+Run:
+  label=qwen-mlx-high
+  provider=mlx
+  model=mlx-community/Qwen3.6-27B-4bit
+  thinking=high
+  prompt=.bench-qwen36/run-oneshot-wrap.sh original one-shot prompt
+  target=/Users/jochen/projects/django-resume-clean-mlx-high-oneshot
+
+Server command:
+  /Users/jochen/.local/bin/mlx_lm.server \
+    --model mlx-community/Qwen3.6-27B-4bit \
+    --host 127.0.0.1 --port 8081 \
+    --chat-template-args '{"enable_thinking":true}' \
+    --max-tokens 8192
+
+Notes:
+  - This run intentionally enabled Qwen thinking in the MLX chat template and also
+    passed BENCH_THINKING=high to pi.
+  - The server processed requests successfully and logged no MLX parse failures,
+    invalid tool-call errors, or context-exceeded errors.
+  - The run did trigger pi transcript compaction after a large thinking-only turn,
+    then exited without modifying the target clone.
+  - Wrapper result is in summary.txt: files_changed=0, electron_exists=0,
+    outcome=FAIL.

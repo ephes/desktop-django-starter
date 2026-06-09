@@ -161,7 +161,7 @@ Notes:
 
 ---
 
-# One-shot (un-staged) variant: django-resume (2026-06-03; low-thinking/MLX cells added 2026-06-09)
+# One-shot (un-staged) variant: django-resume (2026-06-03; low-thinking/MLX cells added 2026-06-09; MLX high added 2026-06-09)
 
 The staged benchmarks above all passed because the deterministic Stage 1 scaffold does
 the mechanical wrapping and the model only runs verification-first Stages 2–3. To make
@@ -181,6 +181,7 @@ scratch in one unattended agentic session, then self-verify. Runner:
 | qwen 3.6 27b **dense, Q8_0** (llama.cpp) | **256k**, **thinking LOW** (budget 512) | 120.8 min (ran to completion) | **FAIL / PARTIAL-ish** | low reasoning avoided the high-thinking 0-write collapse and authored a very large wrap: 178 changed paths, `electron/`, Django glue, staticfiles, **53/53 Node tests pass**, and packaged smoke exited 0 with `/health/` 200 and `/resume/` 200. It still is not a clean PASS under the one-shot contract because the smoke never requested `/`, so the runner could not verify `/` -> 200/302 (`app_served=0`). Treat as the strongest low-thinking serving evidence but not a comparable clean pass; it also committed generated staticfiles and package-lock material in-session. Evidence: `results-oneshot-qwen-q8-low/{summary,diff-stat,nodetests,verify-smoke}.txt` |
 | qwen 3.6 27b **dense, Q4_K_M** (llama.cpp) | **256k**, **thinking LOW** (budget 512) | 66.3 min (ran to completion) | **FAIL** | same low-thinking setup as the Q8_0 low row, but Q4_K_M: 29 changed files, `electron/`, Django glue, npm install ok, **18/18 Node tests pass**. Packaged backend staging completed, but `smoke:packaged` timed out before any `/health/`, `/`, or `/resume/` 200 (`smoke_exit=124`). Weaker than Q8_0 low and no better than Q4_K_M thinking-off; low reasoning did not close the one-shot gap. Evidence: `results-oneshot-qwen-q4-low/{summary,diff-stat,nodetests,verify-smoke}.txt` |
 | qwen 3.6 27b **dense, MLX 4-bit** (`mlx_lm.server`) | MLX server, thinking OFF, large prompt accepted (45.9k final request processed) | 41.8 min (ran to completion, `pi_exit=1`) | **PARTIAL** | same hard original one-shot prompt, no deterministic scaffold, served from `mlx-community/Qwen3.6-27B-4bit` with `--chat-template-args '{"enable_thinking":false}' --max-tokens 8192`. The model authored a full wrap: 32 changed source files / 7,320 insertions, `electron/`, Django settings/middleware glue, npm install ok, and **49/49 Node tests pass**. The clean contract still failed: independent packaged smoke exited 2 before HTTP checks because the staged runtime tried to open missing `.stage/backend/manage.py` (`health200=0`, `app_served=0`). This is a near-complete wrapper with a self-inconsistent packaged-backend path contract, not a staged-wrap success. Evidence: `results-oneshot-qwen-mlx/{summary.txt,diff-stat.txt,npm.log,nodetests.log,verify-smoke.log,server-evidence.txt}` |
+| qwen 3.6 27b **dense, MLX 4-bit** (`mlx_lm.server`) | MLX server, **thinking HIGH** (`enable_thinking=true`) | 16.5 min (ran to completion, `pi_exit=1`) | **FAIL** | same MLX artifact and hard prompt as the row above, but Qwen thinking was enabled in the MLX chat template and `BENCH_THINKING=high` was passed to `pi`. Result: **0 files changed**, no `electron/`, no npm/tests/smoke. Transcript summary shows 43 tool starts (**38 read, 5 bash, 0 write/edit**), one huge thinking-only turn, pi compaction (`compaction_start`/`compaction_end`), and no server parse/context failure markers. High thinking reproduced the action-paralysis failure mode on MLX. Evidence: `results-oneshot-qwen-mlx-high/{summary.txt,diff-stat.txt,transcript-summary.txt,server-evidence.txt}` |
 | qwen 3.6 27b **dense** (llama.cpp) | **256k**, **thinking HIGH** | 20 min (exited, `pi_exit=0`) | **FAIL** | same model + context as the row above but with **unrestricted thinking on** (server `--reasoning on --reasoning-budget -1`, 17 reasoning-budget activations): **analysis-paralysis** — 42 read + 8 bash + **0 writes** across 15 turns, then ended by *quoting* a template in its response instead of writing it. **0 files authored** — far worse than the same model thinking-off (30 files, PARTIAL). High reasoning *hurt* this action-heavy one-shot. Evidence: `results-oneshot-qwen256k-think/{summary,transcript-summary}.txt` |
 | qwen 3.6 27b **dense** (llama.cpp) | **256k**, **thinking MEDIUM** (budget 2048) | 114 min (ran to completion) | **PARTIAL** | bounded reasoning (`--reasoning-budget 2048`) **fixed the paralysis** — 137 turns, 43 read + 92 bash + **29 write** + 9 edit, 32 source files, **node tests 38/38 pass**. But packaged smoke still **FAILED** (`KeyError: 'collectstatic'` + `ModuleNotFoundError: No module named 'example'`), and it was **slower than thinking-off (114 vs 79 min) with more bugs**. So medium recovered from high's collapse but was **no better than thinking-off**. Evidence: `results-oneshot-qwen256k-med/{summary,diff-stat,transcript-summary,smoke-evidence}.txt` |
 | Qwen3.6 **35B-A3B MoE** (llama.cpp) | **256k** (full trained ctx) | 72.8 min (ran to completion) | **FAIL** | the MoE (3B active, ~3–5× faster decode) authored *more* — 41 source files / 3,343 insertions (90 bash + 25 write + 9 edit) — but lower quality: **node tests 45/46 (1 fail:** electron-builder config packaging gap**)** and the app is **broken at runtime** — `/health/` returns **500 `AttributeError: 'WSGIRequest' object has no attribute 'user'`** (mis-wired auto-auth middleware), so it never passes the health check. Also used non-standard script names (`smoke:dev` not `smoke:packaged`). Despite its speed, a **worse** wrap than the dense 27B's PARTIAL — consistent with Qwen's benchmarks (dense 27B > 35B-A3B on coding, SkillsBench +15.5). Evidence: `results-oneshot-moe256k/{summary,diff-stat,transcript-summary,own-smoke-evidence}.txt` |
@@ -229,10 +230,11 @@ scratch in one unattended agentic session, then self-verify. Runner:
   passing Node tests, but still missed the packaged backend path contract
   (`.stage/backend/manage.py`). Runtime/format helped speed and avoided the earlier
   llama.cpp low-thinking timeout, but it did **not** turn the local 27B into a clean
-  one-shot PASS.
+  one-shot PASS. Enabling MLX thinking made the result worse: the high-thinking MLX
+  run produced no files at all after a large thinking-only turn and pi compaction.
 - **More thinking did not help the action-heavy one-shot — the off/low/medium/high curve is
-  flat-to-negative** (qwen dense @256k, llama.cpp; thinking controlled via llama-server
-  `--reasoning-budget`):
+  flat-to-negative** (qwen dense; llama.cpp thinking controlled via
+  `--reasoning-budget`, MLX high controlled via `enable_thinking=true`):
   - **OFF** → PARTIAL, 30 files, 1 packaging bug (`core`), **79 min** — best.
   - **LOW** (budget 512) → mixed but still no clean PASS: Q8_0 low got closest to
     serving (`/health/` 200 and `/resume/` 200, 53 Node tests pass) but did not verify
@@ -241,14 +243,15 @@ scratch in one unattended agentic session, then self-verify. Runner:
   - **MEDIUM** (budget 2048) → PARTIAL, 32 files, node tests pass, but 2 packaging bugs
     (`collectstatic` KeyError + `example` ModuleNotFound), **114 min** — recovered from
     high's paralysis but no better than off, and slower.
-  - **HIGH** (unbounded) → **FAIL, 0 files** — analysis-paralysis (42 reads, 0 writes,
-    quoted a template instead of writing it), exited at 20 min.
+  - **HIGH** (unbounded / Qwen thinking enabled) → **FAIL, 0 files** — analysis-paralysis.
+    llama.cpp high read/explored and quoted a template instead of writing it; MLX high
+    similarly spent the run in reads + thinking, hit pi compaction, and exited with
+    0 writes.
   So a *little* reasoning is survivable (bounded), but **unbounded reasoning is
   catastrophic** (the model reasons/explores instead of acting), and **no thinking level
   beat thinking-off**. ds4 showed the same pattern (thinking-high derailed django-resume).
-  All thinking variation here was on **llama.cpp**; MLX thinking was not tested. (The dense 27B MoE sibling
-  35B-A3B also failed at 256k — see the one-shot table — so among the local cells, only
-  thinking-off dense qwen at full context got close.)
+  The dense 27B MoE sibling 35B-A3B also failed at 256k — see the one-shot table — so
+  among the local cells, only thinking-off dense qwen at full context got close.
 - **Quantization was not the bottleneck for thinking-off, and low thinking did not
   produce a clean Q4/Q8 pass either.**
   Re-running the best local config (dense qwen @256k, thinking-off) at near-lossless
