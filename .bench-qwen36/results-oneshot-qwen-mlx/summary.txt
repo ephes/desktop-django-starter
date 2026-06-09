@@ -1,0 +1,7 @@
+label=qwen-mlx
+provider=mlx model=mlx-community/Qwen3.6-27B-4bit thinking=off
+pi_exit=1 (124=timeout, 143=SIGTERM/killed) duration_seconds=2508.5
+electron_exists=1 npm_install_ok=1 node_tests=pass
+smoke_exit=2 health200=0 root200=0 root302=0 resume200=0 app_served=0
+files_changed=32
+outcome=FAIL

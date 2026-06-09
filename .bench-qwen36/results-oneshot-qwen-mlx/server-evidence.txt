@@ -1,0 +1,27 @@
+MLX one-shot server evidence (2026-06-09)
+
+Run:
+  label=qwen-mlx
+  provider=mlx
+  model=mlx-community/Qwen3.6-27B-4bit
+  prompt=.bench-qwen36/run-oneshot-wrap.sh original one-shot prompt
+  target=/Users/jochen/projects/django-resume-clean-mlx-oneshot
+
+Fair server command:
+  /Users/jochen/.local/bin/mlx_lm.server \
+    --model mlx-community/Qwen3.6-27B-4bit \
+    --host 127.0.0.1 --port 8081 \
+    --chat-template-args '{"enable_thinking":false}' \
+    --max-tokens 8192
+
+Notes:
+  - Earlier MLX attempts were discarded before classification:
+    - a relative provider path invocation failed before a real agent run;
+    - a server without chat-template args emitted thinking despite thinking=off;
+    - a server with the default 512-token output cap truncated a tool call and logged a parse failure.
+  - The classified run used the fair command above and reached a large final request
+    (server log showed prompt processing through 45889/45889 tokens) without an MLX
+    parse/length failure.
+  - Wrapper result is in summary.txt. It is a benchmark failure under the clean
+    one-shot contract because packaged smoke exited 2 before any /health, /, or
+    /resume/ HTTP success.
