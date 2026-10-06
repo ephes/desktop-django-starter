@@ -276,6 +276,11 @@ default behavior. Prefer handling new-window and external-navigation policy
 in Electron's main process. Only change Django templates when the app's
 internal navigation structure itself needs repair.
 
+The starter's `will-navigate` and `will-redirect` guards keep the main window
+on the local Django origin, so a login flow that redirects off-origin (OAuth,
+allauth social login, SSO) opens in the system browser instead of the app
+window. Flag such flows to the user rather than loosening the guard.
+
 If an application menu is added and existing preload actions (like "reveal
 app data") aren't referenced in the app's templates, the agent may
 consolidate them into the menu.

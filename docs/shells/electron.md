@@ -11,6 +11,8 @@ Current responsibilities:
 - inject `X-Desktop-Django-Token` only for the exact local Django origin, including the Electron health poll, without exposing the token through preload
 - keep using hidden exact-origin header injection rather than the bootstrap cookie flow used by the experimental Tauri and Positron shells
 - deny child-window creation from the renderer by default and block top-level navigation away from the local Django origin, opening safe external URLs through the OS shell instead
+- apply the same origin rule to server-side redirects (`will-redirect`), so an off-origin redirect from Django, such as an OAuth or social-login hand-off, opens in the system browser instead of inside the app window; subframes may still navigate because they never receive the preload bridge
+- answer the `window.desktop` preload bridge only for pages on the exact local Django origin, refusing IPC calls from any other sender frame
 - consume the shared staged backend from `.stage/backend/`
 - package desktop artifacts with `electron-builder`
 - generate Electron updater metadata and use `electron-updater` for connected update checks

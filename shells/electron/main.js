@@ -18,7 +18,9 @@ const {
 } = require("./scripts/auth-token.cjs");
 const {
   getNavigationGuardAction,
-  getWindowOpenGuardResponse
+  getRedirectGuardAction,
+  getWindowOpenGuardResponse,
+  isTrustedIpcSender
 } = require("./scripts/window-guards.cjs");
 const { shouldShowManagedProcessExitDialog } = require("./scripts/process-exit-policy.cjs");
 const { createElectronUpdateController } = require("./scripts/updates.cjs");
@@ -586,16 +588,28 @@ function registerWindowNavigationGuards(win, url) {
   });
 
   win.webContents.on("will-navigate", (event, targetUrl) => {
-    const navigationAction = getNavigationGuardAction(targetUrl, url);
-    if (navigationAction.allowNavigation) {
-      return;
-    }
-
-    event.preventDefault();
-    if (navigationAction.openExternal) {
-      shell.openExternal(targetUrl).catch(() => {});
-    }
+    applyNavigationGuardAction(event, targetUrl, getNavigationGuardAction(targetUrl, url));
   });
+
+  // Server-side 3xx redirects emit `will-redirect`, not `will-navigate`. Without
+  // this, a Django response redirecting off-origin (an OAuth/social login, an
+  // open redirect) would load the external page inside the app window. Such
+  // flows now open in the system browser instead. Subframes keep their own
+  // navigation (see getRedirectGuardAction); they never get the preload bridge.
+  win.webContents.on("will-redirect", (event) => {
+    applyNavigationGuardAction(event, event.url, getRedirectGuardAction(event, url));
+  });
+}
+
+function applyNavigationGuardAction(event, targetUrl, navigationAction) {
+  if (navigationAction.allowNavigation) {
+    return;
+  }
+
+  event.preventDefault();
+  if (navigationAction.openExternal) {
+    shell.openExternal(targetUrl).catch(() => {});
+  }
 }
 
 function createWindow(url, authToken) {
@@ -725,7 +739,12 @@ async function prepareForUpdateInstall() {
   await stopDjango();
 }
 
-ipcMain.handle("desktop:open-app-data-directory", async () => {
+ipcMain.handle("desktop:open-app-data-directory", async (event) => {
+  // Only pages from the local Django origin may use the preload bridge.
+  if (!isTrustedIpcSender(event, currentAppUrl)) {
+    throw new Error("desktop:open-app-data-directory is only available to the local Django app.");
+  }
+
   const folderPath = app.getPath("userData");
   await shell.openPath(folderPath);
   return { path: folderPath };

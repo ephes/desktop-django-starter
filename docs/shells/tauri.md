@@ -32,6 +32,7 @@ Scope boundaries:
 - Tauri is still experimental in this slice
 - `.github/workflows/tauri-packages.yml` now provides an updater-capable GitHub Actions workflow for this shell while still staying artifact-only
 - Electron remains the most complete shell path
+- the Tauri main window has no navigation or redirect guard yet (no `on_navigation` handler), and it injects the `window.desktop` bridge into every page it loads; unlike Electron, a link or server-side redirect to another origin loads inside the app window with the bridge attached
 - Tauri uses a bootstrap HttpOnly cookie instead of Electron's hidden per-request header injection because this Tauri path does not currently have an Electron-equivalent external-localhost outgoing request header hook
 - the Tauri updater uses `tauri-plugin-updater`, not a Django localhost API or a broadened shell bridge
 - `tauri.conf.json` keeps a placeholder `plugins.updater` block because Tauri requires it when `bundle.createUpdaterArtifacts` is enabled; the real endpoint list and public key still come from `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS` plus `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY`
