@@ -32,11 +32,11 @@ class DesktopAuthTokenMiddleware:
             return self._bootstrap(request, expected_token)
 
         request_token = request.headers.get(DESKTOP_AUTH_HEADER, "")
-        if secrets.compare_digest(request_token, expected_token):
+        if _tokens_match(request_token, expected_token):
             return self.get_response(request)
 
         cookie_token = request.COOKIES.get(DESKTOP_AUTH_COOKIE, "")
-        if secrets.compare_digest(cookie_token, expected_token):
+        if _tokens_match(cookie_token, expected_token):
             return self.get_response(request)
 
         logger.warning(
@@ -47,7 +47,7 @@ class DesktopAuthTokenMiddleware:
 
     def _bootstrap(self, request: HttpRequest, expected_token: str) -> HttpResponse:
         request_token = request.GET.get("token", "")
-        if not secrets.compare_digest(request_token, expected_token):
+        if not _tokens_match(request_token, expected_token):
             logger.warning(
                 "Rejected desktop Django auth bootstrap with missing or invalid token."
             )
@@ -67,6 +67,15 @@ class DesktopAuthTokenMiddleware:
             samesite="Strict",
         )
         return response
+
+
+def _tokens_match(candidate: str, expected: str) -> bool:
+    # `compare_digest` raises TypeError for non-ASCII `str` input, which would
+    # turn a bogus token into a 500. Comparing bytes keeps it a clean 403.
+    return secrets.compare_digest(
+        candidate.encode("utf-8", "surrogatepass"),
+        expected.encode("utf-8", "surrogatepass"),
+    )
 
 
 def _is_safe_relative_redirect(next_path: str) -> bool:

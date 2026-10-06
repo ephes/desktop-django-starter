@@ -209,7 +209,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "packaged-app copy first" in architecture
     assert "shell-local splash window" in architecture
     assert "The current implementation follows this sequence" in architecture
-    expected = "fallback `DJANGO_SECRET_KEY` only when the environment does not provide one"
+    expected = "generate a per-install `DJANGO_SECRET_KEY` in the app-data directory"
     assert expected in architecture
     assert "per-session shell-to-Django auth token" in architecture
     assert "release-validated updater lane" in architecture
@@ -320,7 +320,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     expected = "from installed `0.1.2` to published `v0.1.4` now proves detection"
     assert expected in electron_doc
     assert "Tauri uses a bootstrap HttpOnly cookie" in tauri_doc
-    assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in positron_doc
+    assert "per-install `DJANGO_SECRET_KEY`" in positron_doc
     assert "not a release-parity path in this slice" in positron_doc
     assert "Positron uses a bootstrap HttpOnly cookie" in positron_doc
     assert "manual-only for now" in positron_doc

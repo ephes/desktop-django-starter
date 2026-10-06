@@ -298,8 +298,9 @@ Packaged mode still sets a small runtime environment at launch time:
 - `DESKTOP_DJANGO_APP_DATA_DIR` for writable SQLite/app data
 - `DESKTOP_DJANGO_BUNDLE_DIR` for bundle-relative assets
 - `DESKTOP_DJANGO_HOST` and `DESKTOP_DJANGO_PORT` for localhost startup
-- `DJANGO_SECRET_KEY` if one is not already supplied
 - `PYTHONUNBUFFERED=1`
+
+Shells do not inject a `DJANGO_SECRET_KEY`. Packaged settings generate one per install in the app-data directory (owner-only `secret_key` file) on first start and reuse it; an explicit `DJANGO_SECRET_KEY` environment variable still wins. See [`docs/release.md`](docs/release.md#django-secret-key-handling).
 
 ## What This Repo Should Eventually Provide
 

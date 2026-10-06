@@ -41,7 +41,7 @@ def test_positron_docs_and_commands_state_scope_honestly() -> None:
     )
     assert expected in shell_doc
     assert "Briefcase development refresh flows" in shell_doc
-    assert "fallback `DJANGO_SECRET_KEY` value as Electron and Tauri" in shell_doc
+    assert "per-install `DJANGO_SECRET_KEY`" in shell_doc
     assert "not a release-parity path in this slice" in shell_doc
     assert "no dedicated Positron GitHub packaging workflow" in release
     assert "just positron-package-dmg" in release
@@ -83,7 +83,8 @@ def test_positron_runtime_reuses_shared_django_and_brand_assets() -> None:
     assert "rsvg-convert" in icon_script
 
 
-def test_positron_runtime_helpers_resolve_repo_paths(tmp_path) -> None:
+def test_positron_runtime_helpers_resolve_repo_paths(tmp_path, monkeypatch) -> None:
+    monkeypatch.delenv("DJANGO_SECRET_KEY", raising=False)
     sys.path.insert(0, str(POSITRON_SRC))
     try:
         from desktop_django_starter_positron import runtime
@@ -122,7 +123,9 @@ def test_positron_runtime_helpers_resolve_repo_paths(tmp_path) -> None:
     assert env["DESKTOP_DJANGO_BUNDLE_DIR"] == str(tmp_path / "bundle")
     assert env["DESKTOP_DJANGO_PORT"] == "9042"
     assert env["DESKTOP_DJANGO_AUTH_TOKEN"] == "positron-test-token"
-    assert env["DJANGO_SECRET_KEY"] == "desktop-django-starter-packaged-runtime-secret"
+    # Packaged settings generate a per-install key; the shell must not inject one.
+    assert "DJANGO_SECRET_KEY" not in env
+    assert not hasattr(runtime, "PACKAGED_RUNTIME_SECRET_KEY")
 
 
 def test_positron_instance_lock_blocks_a_second_process(tmp_path) -> None:

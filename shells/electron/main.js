@@ -28,9 +28,6 @@ const STARTUP_TIMEOUT_MS = 15000;
 const POLL_INTERVAL_MS = 250;
 const MINIMUM_SPLASH_DURATION_MS = 2400;
 const APP_ICON_PATH = path.join(__dirname, "assets", "icons", "app-icon.png");
-// Local packaged-like runs still need a Django secret key, but we do not want
-// this teaching slice to require end-user env setup before Electron can boot.
-const PACKAGED_RUNTIME_SECRET_KEY = "desktop-django-starter-packaged-runtime-secret";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 
@@ -296,10 +293,6 @@ function getDjangoEnvironment(port, runtimeMode, backendRoot, authToken = "") {
     DESKTOP_DJANGO_PORT: String(port),
     PYTHONUNBUFFERED: "1"
   };
-
-  if (runtimeMode === "packaged" && !environment.DJANGO_SECRET_KEY) {
-    environment.DJANGO_SECRET_KEY = PACKAGED_RUNTIME_SECRET_KEY;
-  }
 
   return environment;
 }

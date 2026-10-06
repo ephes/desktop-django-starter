@@ -577,7 +577,18 @@ The packaged SQLite config is intentionally stronger than the repo-default devel
 That means a normal reinstall or manual update should replace the installed application files while leaving user data in place, including:
 
 - the SQLite database at `app.sqlite3`
+- the per-install Django secret key at `secret_key`
 - future writable files placed under the same per-user app-data directory
+
+## Django Secret Key Handling
+
+Release artifacts do not contain a Django `SECRET_KEY`, and none of the shells inject one. On first start, the packaged settings generate a random key (`secrets.token_urlsafe(50)`) and store it as `secret_key` in the per-user app-data directory, created owner-only (`0600` on macOS and Linux; on Windows the file relies on the per-user app-data directory ACLs). Later starts reuse that file, so sessions and CSRF tokens stay valid across relaunches, updates, and reinstalls, while two installs never share a key.
+
+- Setting `DJANGO_SECRET_KEY` in the environment still overrides the file, for example for managed deployments.
+- Deleting `secret_key` (or the whole app-data directory) generates a new key on the next start and signs out existing sessions.
+- An empty or non-ASCII `secret_key` file stops startup with `ImproperlyConfigured` instead of silently replacing the key; delete it to regenerate.
+- Builds made before this change shipped a shared, public fallback key. Upgrading such an install generates a new per-install key once, which signs users out of the local app a single time.
+- The build-time `stage-backend` step still uses a stage-only placeholder key for `collectstatic` and similar commands, so staging never writes a `secret_key` file into build output.
 
 Local state is only lost if the user or administrator explicitly removes the app-data directory, or if a future installer is configured to wipe that directory.
 

@@ -319,7 +319,11 @@ class DesktopAuthTokenMiddleware:
             return self.get_response(request)
 
         request_token = request.headers.get(DESKTOP_AUTH_HEADER, "")
-        if secrets.compare_digest(request_token, expected_token):
+        # Compare bytes: compare_digest raises TypeError for non-ASCII str input.
+        if secrets.compare_digest(
+            request_token.encode("utf-8", "surrogatepass"),
+            expected_token.encode("utf-8", "surrogatepass"),
+        ):
             return self.get_response(request)
 
         return HttpResponseForbidden("Forbidden")
@@ -407,11 +411,15 @@ def _seed_desktop_content() -> None:
     : "";
   return `from __future__ import annotations
 
+import os
+import secrets
 import shutil
+import stat
 import threading
 from pathlib import Path
 
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.core.management import call_command
 from django.db import connections
 
@@ -471,6 +479,57 @@ def ensure_runtime_database() -> None:
 ${seedInvocationBlock}        _runtime_database_ready = True
 
 ${seedFunctionBlock}
+def load_or_create_secret_key(app_data_dir: Path) -> str:
+    """Return this install's secret key, creating it (owner-only) on first start.
+
+    The key is written to a private temp file and hard-linked into place, so a
+    concurrent process either wins the link or reads the complete winner's key.
+    """
+
+    key_path = app_data_dir / "secret_key"
+    existing_key = _read_secret_key(key_path)
+    if existing_key is not None:
+        return existing_key
+
+    app_data_dir.mkdir(parents=True, exist_ok=True)
+    temp_path = app_data_dir / f".secret_key.{secrets.token_hex(8)}.tmp"
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_BINARY", 0)
+    file_descriptor = os.open(temp_path, flags, 0o600)
+    try:
+        with os.fdopen(file_descriptor, "wb") as temp_file:
+            temp_file.write(secrets.token_urlsafe(50).encode("ascii"))
+            temp_file.flush()
+            os.fsync(temp_file.fileno())
+        try:
+            os.link(temp_path, key_path)
+        except FileExistsError:
+            pass
+    finally:
+        temp_path.unlink(missing_ok=True)
+
+    created_key = _read_secret_key(key_path)
+    if created_key is None:
+        raise ImproperlyConfigured(f"Could not create the packaged secret key at {key_path}.")
+    return created_key
+
+
+def _read_secret_key(key_path: Path) -> str | None:
+    try:
+        raw_key = key_path.read_bytes()
+    except FileNotFoundError:
+        return None
+
+    if os.name != "nt" and stat.S_IMODE(key_path.stat().st_mode) & 0o077:
+        os.chmod(key_path, 0o600)
+    key = raw_key.decode("ascii").strip() if raw_key.isascii() else ""
+    if not key:
+        raise ImproperlyConfigured(
+            f"The packaged secret key file {key_path} is empty or invalid. "
+            "Delete it to generate a new key."
+        )
+    return key
+
+
 def bootstrap_packaged_runtime(
     app_data_dir: Path,
     seed_database_path: Path | None,
@@ -511,10 +570,8 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from django.core.exceptions import ImproperlyConfigured
-
 ${baseSettingsImport}
-from .desktop_runtime import bootstrap_packaged_runtime
+from .desktop_runtime import bootstrap_packaged_runtime, load_or_create_secret_key
 
 DEBUG = False
 DESKTOP_PACKAGED_RUNTIME = True
@@ -531,11 +588,9 @@ app_data_dir = Path(
     os.environ.get("DESKTOP_DJANGO_APP_DATA_DIR", base_dir_path / ".desktop-data")
 )
 
-secret_key = os.environ.get("DJANGO_SECRET_KEY")
-if not secret_key:
-    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set for packaged settings.")
-
-SECRET_KEY = secret_key
+# An explicit DJANGO_SECRET_KEY wins; otherwise each install generates its own
+# key once and keeps it, owner-only, in the app-data directory.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or load_or_create_secret_key(app_data_dir)
 seed_database_path = ${seedDatabasePath}
 seed_media_path = ${seedMediaPath}
 database_path, media_root = bootstrap_packaged_runtime(

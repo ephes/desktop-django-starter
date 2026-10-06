@@ -23,7 +23,6 @@ const STARTUP_TIMEOUT_MS: u64 = 15_000;
 const POLL_INTERVAL_MS: u64 = 250;
 const MINIMUM_SPLASH_DURATION_MS: u64 = 2_400;
 const SHUTDOWN_GRACE_PERIOD_MS: u64 = 2_000;
-const PACKAGED_RUNTIME_SECRET_KEY: &str = "desktop-django-starter-packaged-runtime-secret";
 const RUNTIME_MANIFEST_FILENAME: &str = "runtime-manifest.json";
 const SPLASH_WINDOW_LABEL: &str = "splash";
 const DESKTOP_AUTH_HEADER: &str = "X-Desktop-Django-Token";
@@ -405,10 +404,6 @@ fn configure_manage_command(
         .env("DESKTOP_DJANGO_PORT", port.to_string())
         .env("PYTHONUNBUFFERED", "1")
         .arg("manage.py");
-
-    if runtime_mode == RuntimeMode::Packaged && env::var("DJANGO_SECRET_KEY").is_err() {
-        command.env("DJANGO_SECRET_KEY", PACKAGED_RUNTIME_SECRET_KEY);
-    }
 
     for argument in manage_args {
         command.arg(argument);

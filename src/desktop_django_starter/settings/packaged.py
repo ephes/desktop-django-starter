@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from django.core.exceptions import ImproperlyConfigured
+from desktop_django_starter.runtime_secret import load_or_create_secret_key
 
 from . import base as base_settings
 from .base import *  # noqa: F403
@@ -31,11 +31,9 @@ bundle_dir = Path(os.environ.get("DESKTOP_DJANGO_BUNDLE_DIR", BASE_DIR))  # noqa
 app_data_dir = Path(os.environ.get("DESKTOP_DJANGO_APP_DATA_DIR", BASE_DIR / "var"))  # noqa: F405
 app_data_dir.mkdir(parents=True, exist_ok=True)
 
-secret_key = os.environ.get("DJANGO_SECRET_KEY")
-if not secret_key:
-    raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set for packaged settings.")
-
-SECRET_KEY = secret_key
+# An explicit DJANGO_SECRET_KEY wins. Otherwise each install generates its own
+# random key once and keeps it, owner-only, in the app-data directory.
+SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or load_or_create_secret_key(app_data_dir)
 DATABASES = {  # noqa: F405
     **base_settings.DATABASES,
     "default": {

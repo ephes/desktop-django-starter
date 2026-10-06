@@ -35,6 +35,23 @@ def test_configured_token_rejects_wrong_header(client) -> None:
     assert response.content == b"Forbidden"
 
 
+def test_configured_token_rejects_non_ascii_header(client) -> None:
+    with override_settings(DESKTOP_DJANGO_AUTH_TOKEN=TOKEN):
+        response = client.get("/health/", HTTP_X_DESKTOP_DJANGO_TOKEN="t\u00e4st")
+
+    assert response.status_code == 403
+    assert response.content == b"Forbidden"
+
+
+def test_configured_token_rejects_non_ascii_cookie(client) -> None:
+    client.cookies[DESKTOP_AUTH_COOKIE] = "t\u00e4st"
+    with override_settings(DESKTOP_DJANGO_AUTH_TOKEN=TOKEN):
+        response = client.get("/health/")
+
+    assert response.status_code == 403
+    assert response.content == b"Forbidden"
+
+
 def test_configured_token_accepts_health_request_with_correct_header(client) -> None:
     with override_settings(DESKTOP_DJANGO_AUTH_TOKEN=TOKEN):
         response = client.get("/health/", **HEADER)
@@ -61,6 +78,14 @@ def test_bootstrap_rejects_missing_token(client) -> None:
 def test_bootstrap_rejects_wrong_token(client) -> None:
     with override_settings(DESKTOP_DJANGO_AUTH_TOKEN=TOKEN):
         response = client.get(BOOTSTRAP_PATH, {"token": "wrong", "next": "/"})
+
+    assert response.status_code == 403
+    assert response.content == b"Forbidden"
+
+
+def test_bootstrap_rejects_non_ascii_token(client) -> None:
+    with override_settings(DESKTOP_DJANGO_AUTH_TOKEN=TOKEN):
+        response = client.get(f"{BOOTSTRAP_PATH}?token=%C3%A4&next=/")
 
     assert response.status_code == 403
     assert response.content == b"Forbidden"

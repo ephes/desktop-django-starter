@@ -44,7 +44,7 @@ Scope boundaries:
 - Positron is still experimental and local-only in this slice
 - GitHub Actions artifact generation remains out of scope
 - Electron remains the most complete shell path
-- packaged startup uses the same fallback `DJANGO_SECRET_KEY` value as Electron and Tauri when the environment does not provide one; this is only a local bootstrap convenience, not a release secret
+- like Electron and Tauri, the shell does not inject a secret; packaged settings use a per-install `DJANGO_SECRET_KEY` generated once in the app-data directory unless the environment provides one
 - Positron uses a bootstrap HttpOnly cookie instead of Electron's hidden per-request header injection because this Toga web view path does not currently have an Electron-equivalent external-localhost outgoing request header hook
 - Positron now enforces single-instance startup, but unlike Electron and Tauri it currently exits the second launch instead of focusing the existing window
 - Positron intentionally always uses the packaged Django settings module, even during local shell runs, so the experimental shell exercises the desktop-style SQLite location and collected-staticfiles path instead of Django's debug-oriented local settings

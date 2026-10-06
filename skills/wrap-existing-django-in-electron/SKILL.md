@@ -336,13 +336,19 @@ Django-side additions (paths depend on the target project's layout):
   Include `"testserver"` in `ALLOWED_HOSTS` alongside `"127.0.0.1"` and `"localhost"` so
   that Django's test client can verify the packaged settings without forcing a custom
   `HTTP_HOST`
+  Never ship a fixed `SECRET_KEY` in packaged settings or inject one from the shell.
+  Use `DJANGO_SECRET_KEY` when the environment provides it, otherwise generate a
+  per-install key once in `DESKTOP_DJANGO_APP_DATA_DIR` (owner-only file) and reuse
+  it, as the starter's `desktop_django_starter/runtime_secret.py` does
 - `runtime.py` — desktop runtime helpers (bundle dir, app data dir, host/port).
   Optional: only create this if the packaged settings need helper functions that
   don't belong inline. If the runtime logic is simple enough to live directly in
   `packaged_settings.py`, a separate `runtime.py` is not required
 - shell-token middleware and setting — add a small Django middleware that no-ops
   when `DESKTOP_DJANGO_AUTH_TOKEN` is unset and otherwise compares
-  `X-Desktop-Django-Token` with `secrets.compare_digest()`. Place it early in
+  `X-Desktop-Django-Token` with `secrets.compare_digest()` on UTF-8 bytes (not `str`:
+  `compare_digest` raises `TypeError` for non-ASCII strings, which would turn a bogus
+  token into a 500 instead of a 403). Place it early in
   `MIDDLEWARE`, after `SecurityMiddleware` is a reasonable default
 - health endpoint view at `/health/`. If the target app has a catch-all URL pattern
   (e.g., `re_path(r"", include(...))`), place the health URL before it in `urlpatterns`
