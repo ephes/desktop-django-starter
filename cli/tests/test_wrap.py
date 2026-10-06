@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from dds.cli import main
@@ -222,11 +224,29 @@ def test_load_wrapper_config_rejects_invalid_harness(tmp_path: Path) -> None:
         load_wrapper_config(config_path)
 
 
-def test_resolve_run_config_prefers_cli_harness_over_saved_config(
-    tmp_path: Path,
+def test_default_config_path_uses_isolated_xdg_config_home(
+    isolated_user_dirs: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
+    # Swap only the module's view of ``os`` so pathlib keeps the host flavour.
+    monkeypatch.setattr("dds.config.os", SimpleNamespace(name="posix", environ=os.environ))
+
+    assert default_config_path() == isolated_user_dirs / "config" / "dds" / "config.toml"
+
+
+def test_default_config_path_uses_isolated_appdata_on_windows(
+    isolated_user_dirs: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Swap only the module's view of ``os`` so pathlib keeps the host flavour.
+    monkeypatch.setattr("dds.config.os", SimpleNamespace(name="nt", environ=os.environ))
+
+    assert default_config_path() == isolated_user_dirs / "appdata-roaming" / "dds" / "config.toml"
+
+
+def test_resolve_run_config_prefers_cli_harness_over_saved_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     save_wrapper_config(WrapperConfig("claude", "saved-model"), default_config_path())
 
     resolved = _resolve_run_config("codex", None)
@@ -238,10 +258,8 @@ def test_resolve_run_config_prefers_cli_harness_over_saved_config(
 
 
 def test_resolve_run_config_prefers_cli_model_over_saved_config(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     save_wrapper_config(WrapperConfig("codex", "saved-model"), default_config_path())
 
     resolved = _resolve_run_config(None, "gpt-5.4-mini")
@@ -253,10 +271,8 @@ def test_resolve_run_config_prefers_cli_model_over_saved_config(
 
 
 def test_resolve_run_config_auto_detects_single_installed_harness(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.setattr("dds.wrap.detect_installed_harnesses", lambda: {"codex": "/bin/codex"})
 
     resolved = _resolve_run_config(None, None)
@@ -267,11 +283,9 @@ def test_resolve_run_config_auto_detects_single_installed_harness(
 
 
 def test_resolve_run_config_runs_inline_setup_for_tty_first_run(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.setattr(
         "dds.wrap.detect_installed_harnesses",
         lambda: {"claude": "/bin/claude", "codex": "/bin/codex"},
@@ -292,11 +306,9 @@ def test_resolve_run_config_runs_inline_setup_for_tty_first_run(
 
 
 def test_resolve_run_config_fails_interactive_when_no_harnesses_found(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.setattr("dds.wrap.detect_installed_harnesses", lambda: {})
     monkeypatch.setattr("dds.wrap._stdin_is_tty", lambda: True)
 
@@ -308,10 +320,8 @@ def test_resolve_run_config_fails_interactive_when_no_harnesses_found(
 
 
 def test_resolve_run_config_fails_non_interactive_when_multiple_harnesses_found(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.setattr(
         "dds.wrap.detect_installed_harnesses",
         lambda: {"claude": "/bin/claude", "codex": "/bin/codex"},
@@ -323,10 +333,8 @@ def test_resolve_run_config_fails_non_interactive_when_multiple_harnesses_found(
 
 
 def test_resolve_run_config_fails_non_interactive_when_no_harnesses_found(
-    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     monkeypatch.setattr("dds.wrap.detect_installed_harnesses", lambda: {})
     monkeypatch.setattr("dds.wrap._stdin_is_tty", lambda: False)
 
