@@ -170,8 +170,9 @@ function runPackagedManageCommand(pythonExecutable, args) {
     env: {
       ...process.env,
       DJANGO_SETTINGS_MODULE: "desktop_django_starter.settings.packaged",
-      // This stage-only fallback covers build-time manage.py commands.
-      // Electron startup uses its own packaged-runtime fallback secret.
+      // This stage-only fallback covers build-time manage.py commands so the
+      // build never writes a per-install secret_key file into stage data.
+      // Installed apps generate their own key in the app-data directory.
       DJANGO_SECRET_KEY: process.env.DJANGO_SECRET_KEY || PACKAGED_STAGE_SECRET_KEY,
       DESKTOP_DJANGO_APP_DATA_DIR: runtimeDataRoot,
       DESKTOP_DJANGO_BUNDLE_DIR: backendRoot,

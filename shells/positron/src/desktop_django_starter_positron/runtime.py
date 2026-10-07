@@ -8,7 +8,6 @@ from typing import BinaryIO
 from django.core.files import locks
 
 HOST = "127.0.0.1"
-PACKAGED_RUNTIME_SECRET_KEY = "desktop-django-starter-packaged-runtime-secret"
 POSITRON_RUNTIME_MODE = "packaged"
 POSITRON_DJANGO_SETTINGS_MODULE = "desktop_django_starter.settings.packaged"
 POSITRON_INSTANCE_LOCK_FILENAME = "desktop-django-starter-positron.lock"
@@ -118,7 +117,6 @@ def django_environment(
         "DESKTOP_DJANGO_APP_DATA_DIR": str(app_data_dir),
         "DESKTOP_DJANGO_BUNDLE_DIR": str(bundle_dir),
         "DESKTOP_DJANGO_HOST": HOST,
-        "DJANGO_SECRET_KEY": os.environ.get("DJANGO_SECRET_KEY", PACKAGED_RUNTIME_SECRET_KEY),
         "PYTHONUNBUFFERED": "1",
     }
     if port is not None:
