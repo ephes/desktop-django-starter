@@ -24,3 +24,11 @@ def test_shells_do_not_inject_a_shared_packaged_secret_key() -> None:
         assert "PACKAGED_RUNTIME_SECRET_KEY" not in source, source_path
         assert "packaged-runtime-secret" not in source, source_path
         assert "DJANGO_SECRET_KEY" not in source, source_path
+
+
+def test_electron_guards_redirects_and_bridge_sender_origin() -> None:
+    runtime = (ROOT / "shells" / "electron" / "main.js").read_text()
+
+    assert 'win.webContents.on("will-redirect"' in runtime
+    assert "getRedirectGuardAction(event, url)" in runtime
+    assert "isTrustedIpcSender(event, currentAppUrl)" in runtime

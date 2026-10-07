@@ -6,6 +6,34 @@ Keep item ids stable. Do not renumber completed work.
 
 ## Completed Entries
 
+### BL-011: Electron Redirect Guard And Bridge Sender Check
+
+Status: completed
+
+### Context
+
+BL-006 added a `will-navigate` guard, but Electron emits `will-navigate` only for renderer-initiated navigations. A server-side 3xx redirect emits `will-redirect` instead, which nothing handled. A Django response that redirected off-origin (an OAuth or allauth social login in a wrapped app, or any open redirect) therefore loaded the external page inside the main window, where it kept the `window.desktop` preload bridge. The `desktop:open-app-data-directory` IPC handler did not check which page called it.
+
+### Goal
+
+Make the documented "block top-level navigation away from the local Django origin" promise hold for redirects too, and limit the preload bridge to pages served from the local Django origin.
+
+### Implemented Summary
+
+- Added `getRedirectGuardAction` to `shells/electron/scripts/window-guards.cjs` and a `will-redirect` handler in `main.js`. Main-frame redirects to another origin are cancelled with `event.preventDefault()`, and safe `http`/`https`/`mailto` targets open in the system browser, the same policy as `will-navigate`. Missing or malformed redirect details fail closed.
+- Behavior change: an in-window OAuth or social-login redirect flow in a wrapped app now opens in the system browser instead of inside the app window. Apps that need such a flow must complete it in the browser and return to the app through a same-origin route, or adapt the guard deliberately.
+- Subframe navigation and subframe redirects are intentionally not guarded (no `will-frame-navigate` handler): subframes never get the preload bridge because `nodeIntegrationInSubFrames` stays off, the IPC handler now checks the sender origin, and blocking subframes would break ordinary embeds such as video players. Pages that must not be framed should keep using Django's `X_FRAME_OPTIONS`/CSP controls.
+- Added `isTrustedIpcSender`; the `desktop:open-app-data-directory` handler now refuses unless `event.senderFrame.url` is on the exact local Django origin (`requestUrlMatchesOrigin`), including when `senderFrame` is null.
+- Updated the `main.js` checksum in the staged wrap skill's `STARTER_TEMPLATE_CHECKSUMS`.
+- The experimental Tauri shell still has no navigation handler; the gap is recorded in its scope notes.
+
+### Validation Notes
+
+- Before the fix, the new `window-guards.test.cjs` cases failed (6 of 10: missing redirect and sender helpers, no `will-redirect` wiring in `main.js`).
+- Ran `npm --prefix shells/electron test`.
+- Ran the staged `prepare-electron-scaffold.cjs` against a throwaway target to confirm the new checksum and rewrites still apply.
+- Ran `just check`.
+
 ### BL-009: Wrapper CLI Harness Setup And First-Run UX
 
 Status: completed
@@ -194,7 +222,7 @@ Harden the Electron renderer window against unexpected navigation and window-ope
 
 - Added a shell-local `window-guards.cjs` helper that decides whether a navigation should remain in-app, be denied, or be handed off to the OS shell.
 - Added a `setWindowOpenHandler` policy in `main.js` that denies child-window creation by default.
-- Added a `will-navigate` guard in `main.js` that allows same-origin localhost navigation, blocks other top-level navigation, and opens safe external URLs through the OS shell instead of inside Electron.
+- Added a `will-navigate` guard in `main.js` that allows same-origin localhost navigation, blocks other top-level navigation, and opens safe external URLs through the OS shell instead of inside Electron. (Server-side redirects were not covered until BL-011 added the `will-redirect` guard.)
 - Kept the preload bridge unchanged and left the Django renderer model on localhost.
 - Added focused Node-side tests for the new guard helper logic.
 - Updated the Electron shell docs and docs tests to reflect the hardened window behavior and completed backlog bookkeeping.
