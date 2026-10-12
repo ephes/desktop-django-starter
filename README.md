@@ -174,7 +174,7 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 - `just dev`: same as `just electron-start`
 - `just docs`: build the docs and open the generated site
 - `just docs-serve`: run a live-reloading local docs server
-- `just loc`: print a `cloc` summary plus a per-directory code breakdown, with a Python fallback when `cloc` is absent
+- `just loc`: print a `cloc` summary plus a per-directory code breakdown, with a Python fallback when `cloc` is absent. Without Rich, empty results render table headers and borders successfully; the Python fallback also prints a zero-valued `SUM` row.
 - `just test`: run the Django and docs test suite
 - `npm --prefix shells/electron test`: run the Electron Node-side tests
 - `just typecheck`: run mypy on Python source and `node --check` on all JavaScript files

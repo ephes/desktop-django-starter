@@ -1,3 +1,6 @@
+import pytest
+
+from desktop_django_starter import devtools
 from desktop_django_starter.devtools import (
     _aggregate_cloc_csv,
     _is_excluded_dir,
@@ -86,3 +89,40 @@ def test_excluded_dirs_cover_generated_shell_artifacts() -> None:
     assert _is_excluded_dir("shells/tauri/src-tauri/target")
     assert _is_excluded_dir("tauri")
     assert _is_excluded_dir("positron")
+
+
+@pytest.mark.parametrize("backend", ["cloc", "python"])
+def test_empty_plain_line_count_succeeds(backend, monkeypatch, tmp_path, capsys) -> None:
+    monkeypatch.setattr(devtools, "Console", None)
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(devtools.shutil, "which", lambda _: "cloc" if backend == "cloc" else None)
+    monkeypatch.setattr(devtools, "_run_cloc", lambda _: "")
+
+    assert devtools.count_lines_of_code() == 0
+
+    output = capsys.readouterr().out
+    assert "Overall Summary:" in output
+    assert "| Language | Files |" in output
+    assert "Lines of Code by Directory\n" + devtools._render_table("Directory", []) in output
+    assert (
+        f"Lines of code counted successfully with {backend if backend == 'cloc' else 'Python'}!"
+        in output
+    )
+    if backend == "python":
+        assert "| SUM      |     0 |     0 |" in output
+
+
+@pytest.mark.parametrize(
+    ("rows", "expected_rows"),
+    [
+        ([("src", "1", "20")], ["| src       |     1 |    20 |"]),
+        (
+            [("src/example_app", "12", "1000"), ("tests", "2", "30")],
+            ["| src/example_app |    12 |  1000 |", "| tests           |     2 |    30 |"],
+        ),
+    ],
+)
+def test_plain_table_preserves_alignment(rows, expected_rows) -> None:
+    lines = devtools._render_table("Directory", rows).splitlines()
+    assert lines[3:-1] == expected_rows
+    assert len({len(line) for line in lines}) == 1
