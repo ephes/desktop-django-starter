@@ -86,6 +86,17 @@ package is the `cli/` subproject. Use `just cli-build` or `just cli-publish`
 instead of the root `just build` recipe for `uvx desktop-django-starter ...`
 releases.
 
+Asset staging validates every canonical input before touching the existing bundle,
+then copies into a unique sibling staging directory. A complete tree replaces the
+old bundle, removing stale files while preserving an existing `.gitkeep` and its
+contents. Copy failures leave the old bundle intact; publication failures restore
+it. If restoration itself fails, the error is propagated and the previous tree
+is retained at the printed recovery path under `cli/src/dds/.assets-sync-*/`.
+These recovery directories are ignored by Git and package builds; restore or
+remove them manually. If old-tree cleanup fails after publication, sync reports
+that cleanup failure while keeping the complete new bundle live. This is rollback protection for ordinary
+filesystem errors, not a crash-safe or concurrent-build transaction.
+
 ## Wrapper config format and saves
 
 The user config is UTF-8 TOML, with a `[wrap]` table containing `harness`
