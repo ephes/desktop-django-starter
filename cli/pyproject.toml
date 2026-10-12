@@ -7,6 +7,7 @@ name = "desktop-django-starter"
 version = "0.1.6"
 description = "Wrap any Django project in an Electron shell"
 requires-python = ">=3.10"
+dependencies = ["tomli>=2.0.1; python_version < '3.11'"]
 license = "MIT"
 readme = "README.md"
 classifiers = [

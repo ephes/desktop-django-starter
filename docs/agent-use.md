@@ -268,3 +268,22 @@ log live in this repo and persist across workspace resets.
 - the release guide defines signing inputs, installer artifacts, and the manual update model
 - the skill provides a reusable workflow for adapting another Django repo
 - the run log tracks iteration results and links them to skill/prompt versions
+
+## Wrapper config format and saves
+
+The user config is UTF-8 TOML, with a `[wrap]` table containing `harness`
+(`"claude"`, `"pi"`, or `"codex"`) and an optional string `model`. An empty
+model means no default model. TOML basic, literal and multiline strings and
+comments are supported; literal strings preserve backslashes exactly:
+
+```toml
+[wrap]
+harness = "pi"
+model = 'provider\test'
+```
+
+Invalid TOML (including duplicate keys or tables) and incorrect field types
+produce a configuration error. Unrelated valid tables and keys are ignored.
+Saves use unique temporary files in the config directory, close them before
+atomic replacement, and remove them on failure. Concurrent saves publish one
+complete configuration each; the last atomic replacement wins.

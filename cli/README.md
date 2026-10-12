@@ -85,3 +85,22 @@ The `cli-publish` recipe runs `cli-test` and `cli-build` first. The PyPI wrapper
 package is the `cli/` subproject. Use `just cli-build` or `just cli-publish`
 instead of the root `just build` recipe for `uvx desktop-django-starter ...`
 releases.
+
+## Wrapper config format and saves
+
+The user config is UTF-8 TOML, with a `[wrap]` table containing `harness`
+(`"claude"`, `"pi"`, or `"codex"`) and an optional string `model`. An empty
+model means no default model. TOML basic, literal and multiline strings and
+comments are supported; literal strings preserve backslashes exactly:
+
+```toml
+[wrap]
+harness = "pi"
+model = 'provider\test'
+```
+
+Invalid TOML (including duplicate keys or tables) and incorrect field types
+produce a configuration error. Unrelated valid tables and keys are ignored.
+Saves use unique temporary files in the config directory, close them before
+atomic replacement, and remove them on failure. Concurrent saves publish one
+complete configuration each; the last atomic replacement wins.

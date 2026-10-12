@@ -2,13 +2,20 @@
 
 from __future__ import annotations
 
-import ast
 import json
 import os
 import shutil
+import sys
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+
+# The standalone CLI supports Python 3.10, below the root project floor.
+if sys.version_info >= (3, 11):  # noqa: UP036
+    import tomllib
+else:
+    import tomli as tomllib
 
 SUPPORTED_HARNESSES = ("claude", "pi", "codex")
 _WRAP_SECTION = "wrap"
@@ -56,8 +63,8 @@ def load_wrapper_config(path: Path | None = None) -> WrapperConfig | None:
         return None
 
     try:
-        content = resolved_path.read_text()
-    except OSError as exc:
+        content = resolved_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
         raise ConfigError(f"Could not read {resolved_path}: {exc}") from exc
 
     return _parse_wrapper_config(content, resolved_path)
@@ -74,67 +81,52 @@ def save_wrapper_config(config: WrapperConfig, path: Path | None = None) -> Path
 
     lines = [
         f"[{_WRAP_SECTION}]",
-        f"harness = {json.dumps(config.harness)}",
+        f"harness = {json.dumps(config.harness, ensure_ascii=False)}",
     ]
     if config.model:
-        lines.append(f"model = {json.dumps(config.model)}")
-    content = "\n".join(lines) + "\n"
+        lines.append(f"model = {json.dumps(config.model, ensure_ascii=False)}")
+    content = ("\n".join(lines) + "\n").replace("\x7f", "\\u007f")
 
-    temp_path = resolved_path.with_suffix(f"{resolved_path.suffix}.tmp")
+    temp_path: Path | None = None
     try:
-        temp_path.write_text(content)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=resolved_path.parent,
+            prefix=f"{resolved_path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as stream:
+            temp_path = Path(stream.name)
+            stream.write(content)
         temp_path.replace(resolved_path)
-    except OSError as exc:
+    except (OSError, UnicodeError) as exc:
         raise ConfigError(f"Could not write {resolved_path}: {exc}") from exc
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
     return resolved_path
 
 
 def _parse_wrapper_config(content: str, source: Path) -> WrapperConfig:
-    section: str | None = None
-    wrap_values: dict[str, str] = {}
-    saw_wrap_section = False
+    try:
+        document = tomllib.loads(content)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError(f"{source}: invalid TOML: {exc}") from exc
 
-    for line_number, raw_line in enumerate(content.splitlines(), start=1):
-        stripped = raw_line.strip()
-        if not stripped or stripped.startswith("#"):
-            continue
-
-        if stripped.startswith("[") and stripped.endswith("]"):
-            section = stripped[1:-1].strip()
-            saw_wrap_section = saw_wrap_section or section == _WRAP_SECTION
-            continue
-
-        if "=" not in raw_line:
-            raise ConfigError(f"{source}:{line_number}: expected key = value")
-
-        if section != _WRAP_SECTION:
-            continue
-
-        key, raw_value = raw_line.split("=", 1)
-        key = key.strip()
-        raw_value = raw_value.strip()
-
-        try:
-            parsed_value = ast.literal_eval(raw_value)
-        except (SyntaxError, ValueError) as exc:
-            raise ConfigError(
-                f"{source}:{line_number}: expected a quoted string for {key!r}"
-            ) from exc
-
-        if not isinstance(parsed_value, str):
-            raise ConfigError(f"{source}:{line_number}: expected {key!r} to be a string")
-
-        if key in {"harness", "model"}:
-            wrap_values[key] = parsed_value
-
-    if not saw_wrap_section:
+    if _WRAP_SECTION not in document:
         raise ConfigError(f"{source}: missing [{_WRAP_SECTION}] section")
+    wrap_values = document[_WRAP_SECTION]
+    if not isinstance(wrap_values, dict):
+        raise ConfigError(f"{source}: expected wrap to be a table")
 
     harness = wrap_values.get("harness")
-    if harness not in SUPPORTED_HARNESSES:
+    if not isinstance(harness, str) or harness not in SUPPORTED_HARNESSES:
         supported = ", ".join(SUPPORTED_HARNESSES)
         raise ConfigError(f"{source}: expected wrap.harness to be one of: {supported}")
 
-    model = wrap_values.get("model") or None
-    return WrapperConfig(harness=harness, model=model)
+    model = wrap_values.get("model")
+    if "model" in wrap_values and not isinstance(model, str):
+        raise ConfigError(f"{source}: expected wrap.model to be a string")
+    return WrapperConfig(harness=harness, model=model or None)
