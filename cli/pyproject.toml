@@ -24,6 +24,11 @@ classifiers = [
 dds = "dds.cli:main"
 desktop-django-starter = "dds.cli:main"
 
+# Recovery directories left behind by a failed asset sync must never ship.
+# Hatch matches these patterns relative to this directory, not the repo root.
+[tool.hatch.build]
+exclude = ["/src/dds/.assets-sync-*"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/dds"]
 

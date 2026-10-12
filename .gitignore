@@ -26,6 +26,7 @@ shells/positron/resources/app-icon.png
 *.p8
 *.p12
 *.pfx
+cli/src/dds/.assets-sync-*/
 cli/src/dds/_assets/*
 !cli/src/dds/_assets/.gitkeep
 cli/dist/
