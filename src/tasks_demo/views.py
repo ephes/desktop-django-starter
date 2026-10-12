@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import random
 
+from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.views.decorators.csrf import ensure_csrf_cookie
@@ -9,6 +11,8 @@ from django.views.decorators.http import require_GET, require_POST
 
 from .models import SimulatedTask
 from .tasks import TASK_LABELS, reconcile_task_with_backend, run_simulated_task
+
+logger = logging.getLogger(__name__)
 
 
 @ensure_csrf_cookie
@@ -19,11 +23,17 @@ def task_list(request):
 
 @require_POST
 def task_create(request):
-    label = random.choice(TASK_LABELS)
-    task = SimulatedTask.objects.create(label=label)
-    backend_task = run_simulated_task.enqueue(task.pk)
-    task.backend_task_id = backend_task.id
-    task.save(update_fields=["backend_task_id"])
+    try:
+        # The configured DB queue shares this database: publish both rows together.
+        with transaction.atomic():
+            label = random.choice(TASK_LABELS)
+            task = SimulatedTask.objects.create(label=label)
+            backend_task = run_simulated_task.enqueue(task.pk)
+            task.backend_task_id = backend_task.id
+            task.save(update_fields=["backend_task_id"])
+    except Exception:
+        logger.exception("Could not queue demo routine")
+        return JsonResponse({"error": "Routine could not be queued. Please try again."}, status=503)
     return JsonResponse(
         {"id": task.pk, "label": task.label, "status": task.status},
         status=201,
@@ -47,12 +57,8 @@ def task_status(request):
                 "status": t.status,
                 "result": t.result,
                 "duration": t.duration,
-                "created_at": (
-                    t.created_at.isoformat() if t.created_at else None
-                ),
-                "completed_at": (
-                    t.completed_at.isoformat() if t.completed_at else None
-                ),
+                "created_at": (t.created_at.isoformat() if t.created_at else None),
+                "completed_at": (t.completed_at.isoformat() if t.completed_at else None),
             }
             for t in tasks
         ]

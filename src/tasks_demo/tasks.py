@@ -45,12 +45,13 @@ class SimulatedTaskFailure(RuntimeError):
 
 @task()
 def run_simulated_task(task_id: int) -> dict[str, object]:
+    claimed = SimulatedTask.objects.filter(pk=task_id, status=SimulatedTask.Status.PENDING).update(
+        status=SimulatedTask.Status.RUNNING
+    )
     task_row = SimulatedTask.objects.get(pk=task_id)
-    if task_row.status in {SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED}:
+    if not claimed:
+        # A duplicate reports the current state without executing or finalizing it.
         return _serialized_terminal_payload(task_row)
-
-    task_row.status = SimulatedTask.Status.RUNNING
-    task_row.save(update_fields=["status"])
 
     duration = round(random.uniform(*DURATION_RANGE), 1)
     time.sleep(duration)
@@ -82,16 +83,8 @@ def reconcile_task_with_backend(task_row: SimulatedTask) -> SimulatedTask:
         _mark_task_failed(task_row, MISSING_BACKEND_RESULT)
         return task_row
 
-    if backend_result.status == TaskResultStatus.READY:
-        if task_row.status != SimulatedTask.Status.PENDING:
-            task_row.status = SimulatedTask.Status.PENDING
-            task_row.save(update_fields=["status"])
-        return task_row
-
-    if backend_result.status == TaskResultStatus.RUNNING:
-        if task_row.status != SimulatedTask.Status.RUNNING:
-            task_row.status = SimulatedTask.Status.RUNNING
-            task_row.save(update_fields=["status"])
+    if backend_result.status in {TaskResultStatus.READY, TaskResultStatus.RUNNING}:
+        # Only the worker may claim the demo row; polling cannot reset a claim.
         return task_row
 
     if backend_result.status == TaskResultStatus.FAILED:
@@ -104,6 +97,8 @@ def reconcile_task_with_backend(task_row: SimulatedTask) -> SimulatedTask:
         and task_row.status != SimulatedTask.Status.DONE
     ):
         payload = backend_result.return_value or {}
+        if payload.get("status") in {SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING}:
+            return task_row
         task_row.status = payload.get("status", SimulatedTask.Status.DONE)  # type: ignore[assignment]
         task_row.result = payload.get("result") or task_row.result  # type: ignore[assignment]
         duration = payload.get("duration")
