@@ -1,9 +1,13 @@
 import json
+import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from threading import Event
 from unittest import mock
 from uuid import UUID
 
 import pytest
+from django.db import close_old_connections
 from django.db.models import QuerySet
 from django.urls import reverse
 from django.utils import timezone
@@ -398,6 +402,174 @@ class TestTaskViews:
         response = client.get(reverse("tasks_demo:task-list"))
 
         assert "csrftoken" in response.cookies
+
+
+class TestTaskClear:
+    def test_clear_preserves_active_rows_and_queue(self, client):
+        queued = SimulatedTask.objects.create(label="Queued")
+        queued_backend = enqueue_demo_task(queued)
+        running = SimulatedTask.objects.create(label="Running", status="RUNNING")
+        running_backend = enqueue_demo_task(running)
+        for status in ("DONE", "FAILED"):
+            SimulatedTask.objects.create(label=status, status=status)
+
+        response = client.post(reverse("tasks_demo:task-clear"))
+
+        assert response.status_code == 200
+        assert response.json() == {"cleared": True}
+        assert set(SimulatedTask.objects.values_list("pk", flat=True)) == {queued.pk, running.pk}
+        assert set(DBTaskResult.objects.values_list("pk", flat=True)) == {
+            queued_backend.pk,
+            running_backend.pk,
+        }
+        with (
+            mock.patch("tasks_demo.tasks.time.sleep"),
+            mock.patch("tasks_demo.tasks.random.random", return_value=1.0),
+        ):
+            result = run_simulated_task.call(queued.pk)
+        queued.refresh_from_db()
+        assert queued.status == result["status"] == "DONE"
+
+    @pytest.mark.django_db(transaction=True)
+    @pytest.mark.parametrize("failed", [False, True])
+    def test_clear_during_execution_preserves_worker_row(self, client, failed):
+        task = SimulatedTask.objects.create(label="Working")
+        backend = enqueue_demo_task(task)
+        history = SimulatedTask.objects.create(label="History", status="DONE")
+        sleeping = Event()
+        resume = Event()
+
+        def pause_at_sleep(duration):
+            sleeping.set()
+            assert resume.wait(timeout=10), "Worker was not resumed"
+
+        def execute():
+            close_old_connections()
+            try:
+                return run_simulated_task.call(task.pk)
+            finally:
+                close_old_connections()
+
+        with (
+            mock.patch("tasks_demo.tasks.time.sleep", side_effect=pause_at_sleep),
+            mock.patch("tasks_demo.tasks.random.random", return_value=0.0 if failed else 1.0),
+            ThreadPoolExecutor(max_workers=1) as executor,
+        ):
+            future = executor.submit(execute)
+            try:
+                assert sleeping.wait(timeout=10), "Worker did not reach sleep"
+                task.refresh_from_db()
+                assert task.status == "RUNNING"
+                assert client.post(reverse("tasks_demo:task-clear")).status_code == 200
+                assert not SimulatedTask.objects.filter(pk=history.pk).exists()
+                task.refresh_from_db()
+                assert task.status == "RUNNING"
+                assert DBTaskResult.objects.filter(pk=backend.pk).exists()
+            finally:
+                resume.set()
+            if failed:
+                with pytest.raises(SimulatedTaskFailure):
+                    future.result(timeout=10)
+            else:
+                assert future.result(timeout=10)["status"] == "DONE"
+        task.refresh_from_db()
+        assert task.status == ("FAILED" if failed else "DONE")
+        assert task.completed_at is not None
+        assert task.result
+
+    @pytest.mark.parametrize("overlapping_poll", [False, True])
+    def test_clear_ui_refreshes_active_rows_and_keeps_polling(self, client, overlapping_poll):
+        page = client.get(reverse("tasks_demo:task-list")).content.decode()
+        assert "Clear Finished Routines" in page
+        assert "Queued and running routines keep working." in page
+        script = next(
+            block.split("</script>")[0]
+            for block in page.split("<script>")[1:]
+            if "const STATUS_URL" in block
+        )
+        harness = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const listeners = {};
+const container = {innerHTML: ''};
+const calls = [];
+let scheduled = 0;
+let staleResponse;
+let cancelled = 0;
+const context = {
+    console,
+    document: {
+        cookie: 'csrftoken=test',
+        getElementById(id) {
+            if (id === 'task-list') return container;
+            if (id === 'empty-state-template') return {innerHTML: 'Empty'};
+            return {addEventListener(event, callback) {listeners[id] = callback;}};
+        },
+        querySelectorAll(selector) {
+            return OVERLAP && selector.includes('data-status=') ? [{}] : [];
+        },
+        createElement() {
+            return {set textContent(value) {this.innerHTML = value;}};
+        },
+    },
+    setTimeout() {scheduled++; return 1;},
+    clearTimeout() {cancelled++;},
+    fetch(url, options) {
+        calls.push({url, options});
+        if (OVERLAP && calls.length === 1) {
+            return new Promise(resolve => {staleResponse = resolve;});
+        }
+        return Promise.resolve({ok: true, json() {
+            return Promise.resolve({tasks: [{
+                id: 42, label: 'Still queued', status: 'PENDING',
+                created_at: new Date().toISOString(),
+            }]});
+        }});
+    },
+};
+vm.runInNewContext(SCRIPT, context);
+listeners['clear-tasks-btn']();
+setImmediate(() => {
+    const clearIndex = OVERLAP ? 1 : 0;
+    assert.equal(calls.length, clearIndex + 2);
+    assert.equal(calls[clearIndex].options.method, 'POST');
+    assert.equal(calls[clearIndex].options.headers['X-CSRFToken'], 'test');
+    assert.equal(calls[clearIndex + 1].url, STATUS_URL);
+    assert.equal(cancelled, 1);
+    assert.match(container.innerHTML, /Still queued/);
+    assert.match(container.innerHTML, /data-status="PENDING"/);
+    assert.equal(scheduled, 1);
+    assert.ok(listeners['clear-tasks-btn']);
+    if (OVERLAP) {
+        staleResponse({json() {return Promise.resolve({tasks: []});}});
+        setImmediate(() => {
+            assert.match(container.innerHTML, /Still queued/);
+            assert.equal(scheduled, 1);
+        });
+    }
+});
+"""
+        result = subprocess.run(
+            [
+                "node",
+                "-e",
+                "const SCRIPT = "
+                + json.dumps(script)
+                + "; const STATUS_URL = "
+                + json.dumps(reverse("tasks_demo:task-status"))
+                + "; const OVERLAP = "
+                + json.dumps(overlapping_poll)
+                + ";"
+                + harness,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        assert result.returncode == 0, result.stderr
+
+    def test_clear_only_accepts_post(self, client):
+        assert client.get(reverse("tasks_demo:task-clear")).status_code == 405
 
 
 class TestStartupReconciliation:

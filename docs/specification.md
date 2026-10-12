@@ -149,6 +149,7 @@ Extension (post-v1):
 - the backend enqueues real tasks through the `django_tasks` backport and executes them in a single database-backed `django_tasks_db` worker process supervised by Electron
 - a conditional SQLite update claims each demo row from `PENDING` to `RUNNING`; only the winner executes the simulated workload. Duplicate execution returns the current row state, and terminal retries return the stored result without rerunning work. A duplicate reporting `RUNNING` cannot finalize the row; polling never claims or resets it. A worker interrupted after claiming does not automatically rerun that row; startup reconciliation marks abandoned work failed.
 - routine creation, database-backed enqueue, and backend ID storage commit in one transaction. A failure rolls back both the demo and queue rows and returns JSON HTTP 503 (`Routine could not be queued. Please try again.`); retrying Start Routine creates a new routine. This boundary relies on the configured queue using the same SQLite database, and must be revisited before switching to an external queue.
+- Clear Finished Routines deletes only `DONE` and `FAILED` demo history. `PENDING` and `RUNNING` rows stay visible and can finish normally; clearing does not cancel or delete backend queue jobs.
 - the demo keeps its intentionally fake workload semantics: random duration, random success/failure, and starter-sized status/result reporting
 
 Rationale:
