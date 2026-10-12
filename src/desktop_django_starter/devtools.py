@@ -385,7 +385,8 @@ def _render_table(
 ) -> str:
     headers = headers or (first_column, "Files", "Lines")
     widths = [
-        max(len(header), *(len(row[index]) for row in rows)) for index, header in enumerate(headers)
+        max([len(header), *(len(row[index]) for row in rows)])
+        for index, header in enumerate(headers)
     ]
 
     border = "+-" + "-+-".join("-" * width for width in widths) + "-+"
