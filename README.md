@@ -19,7 +19,7 @@ Runnable starter slices:
 
 - Django 6.0.3 project under `src/desktop_django_starter/`
 - tiny server-rendered CRUD demo app under `src/example_app/`, themed as "My Ponies" in the Flying Stable presentation layer, with three starter ponies seeded on the first packaged launch for a brand-new per-user database in the current `v0.1.5+` line
-- background task visualization demo under `src/tasks_demo/`, themed as "Stable Routines", with animated pulse-ring indicators, polling-based live updates, and real `django_tasks` execution backed by SQLite
+- background task visualization demo under `src/tasks_demo/`, themed as "Stable Routines", with animated pulse-ring indicators, polling-based live updates, and real `django_tasks` execution backed by SQLite; Clear Finished Routines removes only done/failed history and keeps queued/running routines working
 - Electron 40 shell under `shells/electron/`
 - Tauri 2 shell under `shells/tauri/` for local experiment scope, using the same staged backend contract and child-process worker model
 - Positron shell under `shells/positron/` for local experiment scope, running Django plus the optional task worker in-process inside a Toga web view

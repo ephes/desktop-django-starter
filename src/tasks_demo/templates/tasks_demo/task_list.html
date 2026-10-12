@@ -81,11 +81,10 @@
     </div>
 </template>
 
-{% if tasks %}
 <div class="panel-footer">
-    <button type="button" class="secondary" id="clear-tasks-btn">Clear All Routines</button>
+    <span class="hint">Queued and running routines keep working.</span>
+    <button type="button" class="secondary" id="clear-tasks-btn">Clear Finished Routines</button>
 </div>
-{% endif %}
 
 <script>
 (function() {
@@ -95,6 +94,7 @@
     const POLL_INTERVAL = 2000;
 
     let pollTimer = null;
+    let pollSequence = 0;
 
     function getCookie(name) {
         const match = document.cookie.match(new RegExp("(^|;\\s*)" + name + "=([^;]*)"));
@@ -183,9 +183,11 @@
     }
 
     function poll() {
+        const sequence = ++pollSequence;
         fetch(STATUS_URL)
             .then(function(r) { return r.json(); })
             .then(function(data) {
+                if (sequence !== pollSequence) return;
                 renderTasks(data.tasks);
                 if (hasActiveTask(data.tasks)) {
                     schedulePoll();
@@ -194,6 +196,7 @@
                 }
             })
             .catch(function(err) {
+                if (sequence !== pollSequence) return;
                 console.error("Poll error:", err);
                 schedulePoll();
             });
@@ -247,17 +250,20 @@
         }
     });
 
-    // Clear all tasks
+    // Clear terminal history and refresh retained active routines
     var clearBtn = document.getElementById("clear-tasks-btn");
     if (clearBtn) {
         clearBtn.addEventListener("click", function() {
             fetch(CLEAR_URL, {
                 method: "POST",
                 headers: { "X-CSRFToken": getCookie("csrftoken") }
-            }).then(function() {
-                renderTasks([]);
-                var footer = document.querySelector(".panel-footer");
-                if (footer) footer.remove();
+            }).then(function(response) {
+                if (!response.ok) throw new Error("Could not clear finished routines");
+                clearTimeout(pollTimer);
+                pollTimer = null;
+                poll();
+            }).catch(function(err) {
+                console.error("Clear task error:", err);
             });
         });
     }

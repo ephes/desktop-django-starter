@@ -42,7 +42,9 @@ def task_create(request):
 
 @require_POST
 def task_clear(request):
-    SimulatedTask.objects.all().delete()
+    SimulatedTask.objects.filter(
+        status__in=[SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED]
+    ).delete()
     return JsonResponse({"cleared": True})
 
 
