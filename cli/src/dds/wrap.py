@@ -9,6 +9,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
@@ -32,6 +33,7 @@ SKILL_PATH = ASSETS_PATH / "skills" / "wrap-existing-django-in-electron" / "SKIL
 # it with the absolute path to the installed assets so the agent can read files.
 _STARTER_TOKEN = "../desktop-django-starter"
 DEFAULT_PI_MODEL = "openai-codex/gpt-5.4"
+_CLAUDE_TERMINATION_GRACE = 5.0
 
 
 def _summarize_claude_tool_use(content: dict[str, object]) -> str | None:
@@ -53,36 +55,60 @@ def _summarize_claude_tool_use(content: dict[str, object]) -> str | None:
     return f"claude tool: {name}"
 
 
-def _terminate_claude_process(process: subprocess.Popen[str]) -> None:
-    if process.poll() is not None:
-        return
-
-    if os.name == "nt":
-        process.terminate()
-    else:
+def _terminate_claude_leader(process: subprocess.Popen[str]) -> None:
+    """Bounded direct-child fallback, also used on Windows."""
+    if process.poll() is None:
         try:
-            os.killpg(process.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            return
-        except OSError:
             process.terminate()
-
-    try:
-        process.wait(timeout=5)
-        return
-    except subprocess.TimeoutExpired:
-        pass
-
-    if os.name == "nt":
-        process.kill()
-    else:
-        try:
-            os.killpg(process.pid, signal.SIGKILL)
         except ProcessLookupError:
-            return
-        except OSError:
+            pass
+        try:
+            process.wait(timeout=_CLAUDE_TERMINATION_GRACE)
+        except subprocess.TimeoutExpired:
             process.kill()
-    process.wait()
+    process.wait(timeout=_CLAUDE_TERMINATION_GRACE)
+
+
+def _terminate_claude_process(process: subprocess.Popen[str]) -> None:
+    """Stop the owned session's group, even after its leader has exited."""
+    if os.name == "nt":
+        _terminate_claude_leader(process)
+        return
+
+    # start_new_session makes the child's PID the process group ID. Never
+    # resolve it from the leader here: that process may already have exited.
+    group_id = process.pid
+    try:
+        os.killpg(group_id, signal.SIGTERM)
+    except OSError:
+        # macOS can report EPERM for a group containing only zombies.
+        # A changed-UID descendant may also be outside our signal permissions.
+        _terminate_claude_leader(process)
+        return
+
+    deadline = time.monotonic() + _CLAUDE_TERMINATION_GRACE
+    try:
+        while time.monotonic() < deadline:
+            process.poll()  # reap the leader without treating it as the whole group
+            try:
+                os.killpg(group_id, 0)
+            except OSError:
+                break
+            time.sleep(0.05)
+        else:
+            try:
+                os.killpg(group_id, signal.SIGKILL)
+            except OSError:
+                pass
+    except KeyboardInterrupt:
+        # A second Ctrl-C skips the remaining grace period, not the kill.
+        try:
+            os.killpg(group_id, signal.SIGKILL)
+        except OSError:
+            pass
+        _terminate_claude_leader(process)
+        raise
+    _terminate_claude_leader(process)
 
 
 def _format_claude_stream_event(line: str) -> list[str]:
@@ -213,17 +239,23 @@ def _run_claude(resolved_prompt: str, assets_str: str, model: str | None) -> Non
         start_new_session=os.name != "nt",
         text=True,
     ) as process:
-        if process.stdout is None:
-            raise RuntimeError("Claude stdout pipe was not created.")
         try:
+            if process.stdout is None:
+                raise RuntimeError("Claude stdout pipe was not created.")
             for line in process.stdout:
                 for formatted in _format_claude_stream_event(line):
                     print(formatted, flush=True)
-        except KeyboardInterrupt:
-            _terminate_claude_process(process)
-            raise
-
-        returncode = process.wait()
+            returncode = process.wait()
+        finally:
+            handling_error = sys.exc_info()[0] is not None
+            try:
+                _terminate_claude_process(process)
+            except (OSError, subprocess.TimeoutExpired):
+                if not handling_error:
+                    raise
+            finally:
+                if process.stdout is not None:
+                    process.stdout.close()
 
     if returncode != 0:
         sys.exit(returncode)

@@ -75,6 +75,17 @@ output, which could make a long wrapping run look idle until Claude exited.
 Use `--harness` and `--model` to choose the agent harness and model. `--agent`
 remains available as a backward-compatible alias.
 
+On POSIX, the Claude streaming runner owns a separate process group. When the
+stream finishes, on Ctrl-C (`KeyboardInterrupt`), or on an in-process stream/read
+error, it sends TERM to that group, waits up to five seconds, then sends KILL to
+remaining signalable members even if the leader already exited. It reaps the
+leader and closes its output reader. Leader exit alone does not interrupt a
+blocked output read: if a descendant retains stdout, use Ctrl-C to trigger cleanup.
+Descendants that leave the group or change to a user we cannot signal are outside
+this guarantee. SIGTERM/SIGHUP termination of the wrapper does not run this cleanup.
+On Windows it terminates/kills and reaps only the direct Claude process; descendant
+tree cleanup is not provided.
+
 After wrapping, the target repo has an `electron/` directory and justfile targets:
 
 ```bash
