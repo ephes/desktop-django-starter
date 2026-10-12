@@ -92,8 +92,8 @@ old bundle, removing stale files while preserving an existing `.gitkeep` and its
 contents. Copy failures leave the old bundle intact; publication failures restore
 it. If restoration itself fails, the error is propagated and the previous tree
 is retained at the printed recovery path under `cli/src/dds/.assets-sync-*/`.
-These recovery directories are ignored by Git and package builds; restore or
-remove them manually. If old-tree cleanup fails after publication, sync reports
+These recovery directories are ignored by Git and excluded from wheel and sdist
+builds by `cli/pyproject.toml`; restore or remove them manually. If old-tree cleanup fails after publication, sync reports
 that cleanup failure while keeping the complete new bundle live. This is rollback protection for ordinary
 filesystem errors, not a crash-safe or concurrent-build transaction.
 

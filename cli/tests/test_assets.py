@@ -6,7 +6,12 @@ before a broken wheel is published.
 
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 import sys
+import tarfile
+import zipfile
 from pathlib import Path
 
 import pytest
@@ -159,3 +164,49 @@ def test_old_tree_cleanup_failure_keeps_new_assets(
         sync_assets.sync()
     assert tree_bytes(assets) == {**tree_bytes(repo), ".gitkeep": b"placeholder"}
     assert "Old asset cleanup incomplete" in capsys.readouterr().out
+
+
+def test_recovery_directories_are_excluded_from_built_packages(tmp_path: Path) -> None:
+    uv = shutil.which("uv")
+    if uv is None:
+        pytest.skip("uv is required to build the package")
+    cli_root = CLI_DIR
+    project = tmp_path / "cli"
+    project.mkdir()
+    for name in ("pyproject.toml", "hatch_build.py", "README.md"):
+        shutil.copy2(cli_root / name, project / name)
+    shutil.copytree(
+        cli_root / "src",
+        project / "src",
+        ignore=shutil.ignore_patterns("_assets", ".assets-sync-*", "__pycache__"),
+    )
+    package = project / "src" / "dds"
+    skill = package / "_assets" / "skills" / "wrap-existing-django-in-electron" / "SKILL.md"
+    skill.parent.mkdir(parents=True)
+    skill.write_text("skill")
+    stale = package / ".assets-sync-recovery" / "previous" / "stale.txt"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("stale")
+
+    dist = tmp_path / "dist"
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    subprocess.run(
+        [uv, "build", "--out-dir", str(dist)],
+        cwd=project,
+        env=env,
+        check=True,
+        capture_output=True,
+    )
+
+    (wheel,) = dist.glob("*.whl")
+    (sdist,) = dist.glob("*.tar.gz")
+    with zipfile.ZipFile(wheel) as archive:
+        wheel_names = archive.namelist()
+    with tarfile.open(sdist) as archive:
+        sdist_names = archive.getnames()
+    for names in (wheel_names, sdist_names):
+        assert any(
+            name.endswith("_assets/skills/wrap-existing-django-in-electron/SKILL.md")
+            for name in names
+        )
+        assert not any(".assets-sync-" in name for name in names)
