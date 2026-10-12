@@ -1,8 +1,10 @@
+import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
 
 import pytest
+from dds import config as config_module
 from dds.config import ConfigError, WrapperConfig, load_wrapper_config, save_wrapper_config
 
 
@@ -14,10 +16,13 @@ def test_concurrent_saves_use_unique_closed_sibling_files(tmp_path, monkeypatch)
     snapshots = []
 
     def replace(source, target):
-        sources.append(source)
-        assert source.parent == destination.parent
-        barrier.wait(timeout=5)
-        snapshots.append(source.read_text())
+        # A replacement retried after a Windows sharing violation must not wait
+        # for the other thread again.
+        if source not in sources:
+            sources.append(source)
+            assert source.parent == destination.parent
+            barrier.wait(timeout=5)
+            snapshots.append(source.read_text())
         result = original_replace(source, target)
         assert load_wrapper_config(destination) in configs
         return result
@@ -35,6 +40,55 @@ def test_concurrent_saves_use_unique_closed_sibling_files(tmp_path, monkeypatch)
     }
     assert load_wrapper_config(destination) in configs
     assert list(tmp_path.iterdir()) == [destination]
+
+
+def test_save_retries_replacement_after_transient_sharing_violation(tmp_path, monkeypatch):
+    destination = tmp_path / "config.toml"
+    save_wrapper_config(WrapperConfig("codex", "original"), destination)
+    original_replace = Path.replace
+    attempts = []
+
+    def replace(source, target):
+        attempts.append(source)
+        if len(attempts) < 3:
+            raise PermissionError(13, "Access is denied", str(source))
+        return original_replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", replace)
+    monkeypatch.setattr(config_module, "_REPLACE_RETRY_DELAYS", (0, 0, 0))
+
+    assert save_wrapper_config(WrapperConfig("pi", "changed"), destination) == destination
+
+    assert len(attempts) == 3
+    assert len(set(attempts)) == 1
+    assert load_wrapper_config(destination) == WrapperConfig("pi", "changed")
+    assert list(tmp_path.iterdir()) == [destination]
+
+
+@pytest.mark.parametrize("delays", [(), (0, 0)])
+def test_persistent_permission_error_keeps_previous_config(tmp_path, monkeypatch, delays):
+    destination = tmp_path / "config.toml"
+    save_wrapper_config(WrapperConfig("codex", "original"), destination)
+    attempts = []
+
+    def replace(source, target):
+        attempts.append(source)
+        raise PermissionError(13, "Access is denied", str(source))
+
+    monkeypatch.setattr(Path, "replace", replace)
+    monkeypatch.setattr(config_module, "_REPLACE_RETRY_DELAYS", delays)
+
+    with pytest.raises(ConfigError, match="Could not write"):
+        save_wrapper_config(WrapperConfig("pi", "changed"), destination)
+
+    assert len(attempts) == len(delays) + 1
+    assert load_wrapper_config(destination) == WrapperConfig("codex", "original")
+    assert list(tmp_path.iterdir()) == [destination]
+
+
+def test_replacement_retries_only_on_windows():
+    expected = (0.01, 0.02, 0.05, 0.1, 0.2) if os.name == "nt" else ()
+    assert config_module._REPLACE_RETRY_DELAYS == expected
 
 
 @pytest.mark.parametrize("failure", ["write", "replace"])

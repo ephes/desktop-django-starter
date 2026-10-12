@@ -7,6 +7,7 @@ import os
 import shutil
 import sys
 import tempfile
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -19,6 +20,10 @@ else:
 
 SUPPORTED_HARNESSES = ("claude", "pi", "codex")
 _WRAP_SECTION = "wrap"
+# Windows refuses to replace a file while another process or thread is replacing
+# or reading it, so a concurrent save sees a short-lived PermissionError there.
+# Elsewhere a PermissionError is a real permission problem and is not retried.
+_REPLACE_RETRY_DELAYS: tuple[float, ...] = (0.01, 0.02, 0.05, 0.1, 0.2) if os.name == "nt" else ()
 
 
 class ConfigError(RuntimeError):
@@ -70,6 +75,18 @@ def load_wrapper_config(path: Path | None = None) -> WrapperConfig | None:
     return _parse_wrapper_config(content, resolved_path)
 
 
+def _replace_with_retry(source: Path, destination: Path) -> None:
+    """Atomically replace destination, waiting out transient sharing violations."""
+    for delay in _REPLACE_RETRY_DELAYS:
+        try:
+            source.replace(destination)
+        except PermissionError:
+            time.sleep(delay)
+        else:
+            return
+    source.replace(destination)
+
+
 def save_wrapper_config(config: WrapperConfig, path: Path | None = None) -> Path:
     """Persist wrapper defaults to disk."""
     if config.harness not in SUPPORTED_HARNESSES:
@@ -99,7 +116,7 @@ def save_wrapper_config(config: WrapperConfig, path: Path | None = None) -> Path
         ) as stream:
             temp_path = Path(stream.name)
             stream.write(content)
-        temp_path.replace(resolved_path)
+        _replace_with_retry(temp_path, resolved_path)
     except (OSError, UnicodeError) as exc:
         raise ConfigError(f"Could not write {resolved_path}: {exc}") from exc
     finally:
