@@ -421,6 +421,16 @@ What does not count:
 
 ## Checksum Files and Minimal Release Promotion
 
+Checksum manifest input safety: `scripts/write-checksums.py` rejects inputs that
+resolve to the output manifest, including symlink and hard-link aliases. Exclude
+the manifest from rerun globs. Artifact basenames must be unique across all input
+directories and cannot contain newlines, carriage returns, or backslashes. The basename-only format
+remains compatible with downloaded platform artifact sets. All hashes are computed
+before a complete manifest is atomically replaced; failed validation or hashing
+preserves an existing manifest.
+Existing manifest permissions and output symlinks are preserved; new manifests use the process umask.
+
+
 The Electron packaging workflow now uploads two artifact groups per platform:
 
 - the installer plus updater artifact upload (`desktop-django-starter-macos`, `desktop-django-starter-windows`, or `desktop-django-starter-linux`)

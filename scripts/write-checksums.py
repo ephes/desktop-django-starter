@@ -4,6 +4,9 @@ from __future__ import annotations
 import argparse
 import glob
 import hashlib
+import os
+import stat
+import tempfile
 from pathlib import Path
 
 
@@ -54,9 +57,39 @@ def main() -> int:
     if not matches:
         raise SystemExit(f"No artifacts matched: {', '.join(args.patterns)}")
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
+    names: set[str] = set()
+    for path in matches:
+        if path.resolve() == args.output.resolve() or (
+            args.output.exists() and path.samefile(args.output)
+        ):
+            raise SystemExit(f"Manifest output is also an input: {path}")
+        if path.name in names:
+            raise SystemExit(f"Ambiguous artifact basename: {path.name}")
+        if "\n" in path.name or "\r" in path.name or "\\" in path.name:
+            raise SystemExit(f"Unsupported artifact basename: {path.name!r}")
+        names.add(path.name)
+
+    output = args.output.resolve()
+    output.parent.mkdir(parents=True, exist_ok=True)
+    if output.exists():
+        mode = stat.S_IMODE(output.stat().st_mode)
+    else:
+        creation_mask = os.umask(0)
+        os.umask(creation_mask)
+        mode = 0o666 & ~creation_mask
     lines = [f"{sha256_digest(path)}  {path.name}" for path in matches]
-    args.output.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    temporary = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", encoding="utf-8", dir=output.parent, delete=False
+        ) as handle:
+            temporary = Path(handle.name)
+            handle.write("\n".join(lines) + "\n")
+        temporary.chmod(mode)
+        os.replace(temporary, output)
+    finally:
+        if temporary is not None:
+            temporary.unlink(missing_ok=True)
     print(f"Wrote {args.output} for {len(matches)} artifact(s)")
     return 0
 
