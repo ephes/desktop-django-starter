@@ -4,6 +4,7 @@ from unittest import mock
 from uuid import UUID
 
 import pytest
+from django.db.models import QuerySet
 from django.urls import reverse
 from django.utils import timezone
 from django_tasks import TaskResultStatus
@@ -88,6 +89,100 @@ class TestRunSimulatedTask:
         assert task.duration == 3.0
         assert task.completed_at is not None
 
+    def test_interleaved_claim_runs_body_once(self, client):
+        task = SimulatedTask.objects.create(label="Overlapping task")
+        scheduled_task = enqueue_demo_task(task)
+        scheduled_task.status = TaskResultStatus.RUNNING
+        scheduled_task.save(update_fields=["status"])
+        original_update = QuerySet.update
+        loser_results = []
+        interleaved = False
+
+        def interleave(queryset, **kwargs):
+            nonlocal interleaved
+            if (
+                queryset.model is SimulatedTask
+                and kwargs == {"status": "RUNNING"}
+                and not interleaved
+            ):
+                interleaved = True
+                loser_results.append(run_simulated_task.call(task.pk))
+            return original_update(queryset, **kwargs)
+
+        with (
+            mock.patch("django.db.models.QuerySet.update", autospec=True, side_effect=interleave),
+            mock.patch("tasks_demo.tasks.time.sleep") as sleep,
+            mock.patch("tasks_demo.tasks.random.uniform", return_value=4.0) as uniform,
+            mock.patch("tasks_demo.tasks.random.random", return_value=1.0),
+            mock.patch("tasks_demo.tasks.random.choice", return_value="Winner result"),
+        ):
+            result = run_simulated_task.call(task.pk)
+
+        assert interleaved
+        sleep.assert_called_once_with(4.0)
+        uniform.assert_called_once()
+        task.refresh_from_db()
+        assert task.status == "DONE"
+        assert task.result == "Winner result"
+        assert loser_results[0]["status"] == "DONE"
+        assert result == loser_results[0]
+
+    def test_duplicate_during_work_preserves_running_row(self, client):
+        task = SimulatedTask.objects.create(label="Winner still working")
+        enqueue_demo_task(task)
+        duplicates = []
+
+        def during_work(duration):
+            # READY queue state must not let polling reset the worker's claim.
+            assert (
+                client.get(reverse("tasks_demo:task-status")).json()["tasks"][0]["status"]
+                == "RUNNING"
+            )
+            duplicates.append(run_simulated_task.call(task.pk))
+            task.refresh_from_db()
+            assert task.status == "RUNNING"
+            assert task.completed_at is None
+
+        with (
+            mock.patch("tasks_demo.tasks.time.sleep", side_effect=during_work) as sleep,
+            mock.patch("tasks_demo.tasks.random.uniform", return_value=4.0),
+            mock.patch("tasks_demo.tasks.random.random", return_value=1.0),
+            mock.patch("tasks_demo.tasks.random.choice", return_value="Winner finished"),
+        ):
+            result = run_simulated_task.call(task.pk)
+        sleep.assert_called_once_with(4.0)
+        assert duplicates[0]["status"] == "RUNNING"
+        task.refresh_from_db()
+        assert task.status == "DONE"
+        assert task.result == result["result"] == "Winner finished"
+
+    def test_running_duplicate_does_not_finalize_winner(self, client):
+        task = SimulatedTask.objects.create(label="Running duplicate")
+        scheduled_task = enqueue_demo_task(task)
+        task.status = SimulatedTask.Status.RUNNING
+        task.save(update_fields=["status"])
+        with mock.patch("tasks_demo.tasks.time.sleep") as sleep:
+            payload = run_simulated_task.call(task.pk)
+        sleep.assert_not_called()
+        assert payload["status"] == "RUNNING"
+        assert payload["completed_at"] is None
+        scheduled_task.status = TaskResultStatus.SUCCESSFUL
+        scheduled_task.return_value = payload
+        scheduled_task.save(update_fields=["status", "return_value"])
+        response = client.get(reverse("tasks_demo:task-status"))
+        task.refresh_from_db()
+        assert response.json()["tasks"][0]["status"] == "RUNNING"
+        assert task.completed_at is None
+
+    def test_ready_backend_does_not_reset_claim(self, client):
+        task = SimulatedTask.objects.create(label="Claimed task")
+        enqueue_demo_task(task)
+        task.status = SimulatedTask.Status.RUNNING
+        task.save(update_fields=["status"])
+        client.get(reverse("tasks_demo:task-status"))
+        task.refresh_from_db()
+        assert task.status == "RUNNING"
+
     def test_terminal_tasks_are_left_unchanged(self):
         completed_at = timezone.now()
         task = SimulatedTask.objects.create(
@@ -145,6 +240,44 @@ class TestTaskViews:
         assert UUID(task.backend_task_id)
         assert scheduled_task.status == TaskResultStatus.READY
 
+    def test_enqueue_failure_rolls_back_and_returns_controlled_error(self, client):
+        with mock.patch.object(
+            type(run_simulated_task), "enqueue", side_effect=RuntimeError("offline")
+        ):
+            response = client.post(reverse("tasks_demo:task-run"))
+        assert response.status_code == 503
+        assert response.json() == {"error": "Routine could not be queued. Please try again."}
+        assert not SimulatedTask.objects.exists()
+        assert not DBTaskResult.objects.exists()
+        assert client.get(reverse("tasks_demo:task-status")).json() == {"tasks": []}
+
+    def test_enqueue_signal_failure_rolls_back_queue_and_demo(self, client):
+        from django_tasks.signals import task_enqueued
+
+        def fail_after_insert(sender, **kwargs):
+            assert DBTaskResult.objects.count() == 1
+            raise RuntimeError("notification failed")
+
+        task_enqueued.connect(fail_after_insert)
+        try:
+            response = client.post(reverse("tasks_demo:task-run"))
+        finally:
+            task_enqueued.disconnect(fail_after_insert)
+        assert response.status_code == 503
+        assert not DBTaskResult.objects.exists()
+        assert not SimulatedTask.objects.exists()
+        retry = client.post(reverse("tasks_demo:task-run"))
+        assert retry.status_code == 201
+        task = SimulatedTask.objects.get(pk=retry.json()["id"])
+        assert DBTaskResult.objects.filter(pk=task.backend_task_id).exists()
+        with (
+            mock.patch("tasks_demo.tasks.time.sleep"),
+            mock.patch("tasks_demo.tasks.random.random", return_value=1.0),
+        ):
+            run_simulated_task.call(task.pk)
+        task.refresh_from_db()
+        assert task.status == "DONE"
+
     def test_task_create_only_accepts_post(self, client):
         response = client.get(reverse("tasks_demo:task-run"))
 
@@ -172,7 +305,7 @@ class TestTaskViews:
         assert task_data["created_at"] is not None
         assert task_data["completed_at"] is not None
 
-    def test_task_status_promotes_ready_backend_task_to_running(self, client):
+    def test_task_status_does_not_claim_before_worker(self, client):
         task = SimulatedTask.objects.create(label="Queued task")
         scheduled_task = enqueue_demo_task(task)
         scheduled_task.status = TaskResultStatus.RUNNING
@@ -184,8 +317,8 @@ class TestTaskViews:
         task.refresh_from_db()
         data = json.loads(response.content)
         assert response.status_code == 200
-        assert task.status == SimulatedTask.Status.RUNNING
-        assert data["tasks"][0]["status"] == "RUNNING"
+        assert task.status == SimulatedTask.Status.PENDING
+        assert data["tasks"][0]["status"] == "PENDING"
 
     def test_task_status_recovers_successful_backend_result(self, client):
         task = SimulatedTask.objects.create(
