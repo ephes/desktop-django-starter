@@ -183,6 +183,10 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 - `just build`: build the Python package metadata scaffold
 - `just cli-build`: build the PyPI wrapper package used by `uvx desktop-django-starter ...`
 
+GitHub Actions runs the same typecheck commands with locked Python dependencies
+on Linux, macOS, and Windows (using Bash for the JavaScript syntax-check loop),
+alongside lint, Python/CLI tests, Electron Node-side tests, and the docs build.
+
 ## Quickstart
 
 1. `just install`
