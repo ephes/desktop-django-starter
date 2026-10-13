@@ -11,6 +11,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 # The standalone CLI supports Python 3.10, below the root project floor.
 if sys.version_info >= (3, 11):  # noqa: UP036
@@ -21,9 +22,10 @@ else:
 SUPPORTED_HARNESSES = ("claude", "pi", "codex")
 _WRAP_SECTION = "wrap"
 # Windows refuses to replace a file while another process or thread is replacing
-# or reading it, so a concurrent save sees a short-lived PermissionError there.
-# Elsewhere a PermissionError is a real permission problem and is not retried.
-_REPLACE_RETRY_DELAYS: tuple[float, ...] = (0.01, 0.02, 0.05, 0.1, 0.2) if os.name == "nt" else ()
+# or reading it, and refuses to open one that is being replaced, so a concurrent
+# save or load sees a short-lived PermissionError there. Elsewhere a
+# PermissionError is a real permission problem and is not retried.
+_SHARING_RETRY_DELAYS: tuple[float, ...] = (0.01, 0.02, 0.05, 0.1, 0.2) if os.name == "nt" else ()
 
 
 class ConfigError(RuntimeError):
@@ -68,23 +70,21 @@ def load_wrapper_config(path: Path | None = None) -> WrapperConfig | None:
         return None
 
     try:
-        content = resolved_path.read_text(encoding="utf-8")
+        content: str = _retry_sharing_violation(lambda: resolved_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError) as exc:
         raise ConfigError(f"Could not read {resolved_path}: {exc}") from exc
 
     return _parse_wrapper_config(content, resolved_path)
 
 
-def _replace_with_retry(source: Path, destination: Path) -> None:
-    """Atomically replace destination, waiting out transient sharing violations."""
-    for delay in _REPLACE_RETRY_DELAYS:
+def _retry_sharing_violation(operation: Callable[[], Any]) -> Any:
+    """Run a file operation, waiting out transient sharing violations."""
+    for delay in _SHARING_RETRY_DELAYS:
         try:
-            source.replace(destination)
+            return operation()
         except PermissionError:
             time.sleep(delay)
-        else:
-            return
-    source.replace(destination)
+    return operation()
 
 
 def save_wrapper_config(config: WrapperConfig, path: Path | None = None) -> Path:
@@ -116,7 +116,7 @@ def save_wrapper_config(config: WrapperConfig, path: Path | None = None) -> Path
         ) as stream:
             temp_path = Path(stream.name)
             stream.write(content)
-        _replace_with_retry(temp_path, resolved_path)
+        _retry_sharing_violation(lambda: temp_path.replace(resolved_path))
     except (OSError, UnicodeError) as exc:
         raise ConfigError(f"Could not write {resolved_path}: {exc}") from exc
     finally:

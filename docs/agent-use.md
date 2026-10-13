@@ -302,5 +302,6 @@ produce a configuration error. Unrelated valid tables and keys are ignored.
 Saves use unique temporary files in the config directory, close them before
 atomic replacement, and remove them on failure. Concurrent saves publish one
 complete configuration each; the last atomic replacement wins. On Windows,
-where a file cannot be replaced while another save or reader has it open, the
-replacement is retried briefly before a configuration error is reported.
+where a file cannot be replaced while another save or reader has it open and
+cannot be opened while it is being replaced, the replacement and the read are
+each retried briefly before a configuration error is reported.

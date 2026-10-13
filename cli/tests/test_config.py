@@ -55,7 +55,7 @@ def test_save_retries_replacement_after_transient_sharing_violation(tmp_path, mo
         return original_replace(source, target)
 
     monkeypatch.setattr(Path, "replace", replace)
-    monkeypatch.setattr(config_module, "_REPLACE_RETRY_DELAYS", (0, 0, 0))
+    monkeypatch.setattr(config_module, "_SHARING_RETRY_DELAYS", (0, 0, 0))
 
     assert save_wrapper_config(WrapperConfig("pi", "changed"), destination) == destination
 
@@ -76,7 +76,7 @@ def test_persistent_permission_error_keeps_previous_config(tmp_path, monkeypatch
         raise PermissionError(13, "Access is denied", str(source))
 
     monkeypatch.setattr(Path, "replace", replace)
-    monkeypatch.setattr(config_module, "_REPLACE_RETRY_DELAYS", delays)
+    monkeypatch.setattr(config_module, "_SHARING_RETRY_DELAYS", delays)
 
     with pytest.raises(ConfigError, match="Could not write"):
         save_wrapper_config(WrapperConfig("pi", "changed"), destination)
@@ -86,9 +86,47 @@ def test_persistent_permission_error_keeps_previous_config(tmp_path, monkeypatch
     assert list(tmp_path.iterdir()) == [destination]
 
 
-def test_replacement_retries_only_on_windows():
+def test_load_retries_read_after_transient_sharing_violation(tmp_path, monkeypatch):
+    destination = tmp_path / "config.toml"
+    save_wrapper_config(WrapperConfig("codex", "original"), destination)
+    original_read_text = Path.read_text
+    attempts = []
+
+    def read_text(path, *args, **kwargs):
+        attempts.append(path)
+        if len(attempts) < 3:
+            raise PermissionError(13, "Permission denied", str(path))
+        return original_read_text(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    monkeypatch.setattr(config_module, "_SHARING_RETRY_DELAYS", (0, 0, 0))
+
+    assert load_wrapper_config(destination) == WrapperConfig("codex", "original")
+    assert attempts == [destination] * 3
+
+
+@pytest.mark.parametrize("delays", [(), (0, 0)])
+def test_persistent_read_permission_error_raises_config_error(tmp_path, monkeypatch, delays):
+    destination = tmp_path / "config.toml"
+    save_wrapper_config(WrapperConfig("codex", "original"), destination)
+    attempts = []
+
+    def read_text(path, *args, **kwargs):
+        attempts.append(path)
+        raise PermissionError(13, "Permission denied", str(path))
+
+    monkeypatch.setattr(Path, "read_text", read_text)
+    monkeypatch.setattr(config_module, "_SHARING_RETRY_DELAYS", delays)
+
+    with pytest.raises(ConfigError, match="Could not read"):
+        load_wrapper_config(destination)
+
+    assert len(attempts) == len(delays) + 1
+
+
+def test_sharing_violation_retries_only_on_windows():
     expected = (0.01, 0.02, 0.05, 0.1, 0.2) if os.name == "nt" else ()
-    assert config_module._REPLACE_RETRY_DELAYS == expected
+    assert config_module._SHARING_RETRY_DELAYS == expected
 
 
 @pytest.mark.parametrize("failure", ["write", "replace"])
