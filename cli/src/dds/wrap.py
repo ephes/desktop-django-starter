@@ -119,6 +119,9 @@ def _format_claude_stream_event(line: str) -> list[str]:
         stripped = line.strip()
         return [stripped] if stripped else []
 
+    if not isinstance(event, dict):
+        return []
+
     event_type = event.get("type")
     if event_type == "system" and event.get("subtype") == "init":
         session_id = event.get("session_id")
@@ -167,7 +170,8 @@ def _format_claude_stream_event(line: str) -> list[str]:
                 and content.get("is_error") is True
             ):
                 result = content.get("content", "")
-                result_text = str(result).strip().splitlines()[0] if result else "unknown error"
+                result_lines = str(result).strip().splitlines() if result else []
+                result_text = result_lines[0] if result_lines else "unknown error"
                 lines.append(f"claude tool error: {result_text}")
         return lines
 
