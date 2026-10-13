@@ -109,7 +109,7 @@ def reconcile_task_with_backend(task_row: SimulatedTask) -> SimulatedTask:
             if completed_at
             else (task_row.completed_at or backend_result.finished_at or timezone.now())
         )
-        task_row.save(update_fields=["status", "result", "duration", "completed_at"])
+        _save_reconciled_task(task_row, ["status", "result", "duration", "completed_at"])
         return task_row
 
     if backend_result.status != TaskResultStatus.SUCCESSFUL:
@@ -131,7 +131,17 @@ def _mark_task_failed(task_row: SimulatedTask, result: str) -> None:
     task_row.status = SimulatedTask.Status.FAILED
     task_row.result = result
     task_row.completed_at = task_row.completed_at or timezone.now()
-    task_row.save(update_fields=["status", "result", "completed_at"])
+    _save_reconciled_task(task_row, ["status", "result", "completed_at"])
+
+
+def _save_reconciled_task(task_row: SimulatedTask, fields: list[str]) -> None:
+    updated = SimulatedTask.objects.filter(
+        pk=task_row.pk,
+        status__in=[SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING],
+    ).update(**{field: getattr(task_row, field) for field in fields})
+    if not updated:
+        # The worker finalized the row after polling loaded it; keep its result.
+        task_row.refresh_from_db()
 
 
 def _backend_failure_message(backend_result) -> str:

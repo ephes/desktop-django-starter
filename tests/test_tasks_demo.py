@@ -617,3 +617,57 @@ class TestStartupReconciliation:
         assert task.status == SimulatedTask.Status.DONE
         assert task.result == "All good"
         assert task.completed_at == completed_at
+
+
+@pytest.mark.parametrize("worker_status", [SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED])
+@pytest.mark.parametrize("backend_outcome", ["missing", "failed", "successful", "unexpected"])
+def test_reconciliation_preserves_worker_finalized_row(worker_status, backend_outcome):
+    from types import SimpleNamespace
+
+    from django_tasks.exceptions import TaskResultDoesNotExist
+
+    from tasks_demo.tasks import reconcile_task_with_backend
+
+    task = SimulatedTask.objects.create(
+        label="Concurrent completion",
+        backend_task_id="backend-id",
+        status=SimulatedTask.Status.RUNNING,
+    )
+    stale = SimulatedTask.objects.get(pk=task.pk)
+    completed_at = timezone.now() - timedelta(seconds=1)
+    worker_values = {
+        "status": worker_status,
+        "result": "Exact worker result",
+        "duration": 7.25,
+        "completed_at": completed_at,
+    }
+
+    def lookup(backend_id):
+        assert backend_id == task.backend_task_id
+        SimulatedTask.objects.filter(pk=task.pk).update(**worker_values)
+        if backend_outcome == "missing":
+            raise TaskResultDoesNotExist
+        return SimpleNamespace(
+            status={
+                "failed": TaskResultStatus.FAILED,
+                "successful": TaskResultStatus.SUCCESSFUL,
+                "unexpected": "UNKNOWN",
+            }[backend_outcome],
+            errors=[],
+            return_value={
+                "status": SimulatedTask.Status.DONE,
+                "result": "Stale backend result",
+                "duration": 2.0,
+                "completed_at": timezone.now().isoformat(),
+            },
+        )
+
+    with mock.patch.object(
+        type(run_simulated_task), "get_result", side_effect=lookup
+    ) as get_result:
+        reconciled = reconcile_task_with_backend(stale)
+    get_result.assert_called_once_with(task.backend_task_id)
+    task.refresh_from_db()
+    for field, value in worker_values.items():
+        assert getattr(task, field) == value
+        assert getattr(reconciled, field) == value
