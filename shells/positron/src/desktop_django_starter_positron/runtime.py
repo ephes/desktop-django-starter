@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sys
+from contextlib import suppress
 from pathlib import Path
 from typing import BinaryIO
 
@@ -81,23 +82,41 @@ def instance_lock_path(app_data_dir: Path) -> Path:
 def acquire_instance_lock(app_data_dir: Path) -> BinaryIO | None:
     app_data_dir.mkdir(parents=True, exist_ok=True)
     lock_file = instance_lock_path(app_data_dir).open("a+b")
-    if not locks.lock(lock_file, locks.LOCK_EX | locks.LOCK_NB):
-        lock_file.close()
-        return None
+    acquired = False
+    try:
+        acquired = locks.lock(lock_file, locks.LOCK_EX | locks.LOCK_NB)
+        if not acquired:
+            lock_file.close()
+            return None
 
-    lock_file.seek(0)
-    lock_file.truncate()
-    lock_file.write(f"{os.getpid()}\n".encode("ascii"))
-    lock_file.flush()
-    return lock_file
+        lock_file.seek(0)
+        lock_file.truncate()
+        lock_file.write(f"{os.getpid()}\n".encode("ascii"))
+        lock_file.flush()
+        return lock_file
+    except BaseException:
+        # Cleanup must not replace the acquisition/initialization failure.
+        with suppress(BaseException):
+            if acquired:
+                release_instance_lock(lock_file)
+            else:
+                lock_file.close()
+        raise
 
 
 def release_instance_lock(lock_file: BinaryIO | None) -> None:
     if lock_file is None:
         return
 
-    locks.unlock(lock_file)
-    lock_file.close()
+    try:
+        locks.unlock(lock_file)
+    except BaseException:
+        # Closing releases the OS lock even when explicit unlock fails.
+        with suppress(BaseException):
+            lock_file.close()
+        raise
+    else:
+        lock_file.close()
 
 
 def django_environment(
