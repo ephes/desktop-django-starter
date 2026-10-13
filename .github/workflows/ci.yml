@@ -50,6 +50,12 @@ jobs:
       - name: Lint
         run: uv run ruff check .
 
+      - name: Typecheck
+        shell: bash
+        run: |
+          uv run --locked mypy src/
+          for f in shells/electron/main.js shells/electron/preload.cjs shells/electron/electron-builder.config.cjs shells/electron/scripts/*.cjs scripts/*.cjs shells/tauri/scripts/*.mjs; do node --check "$f" || exit 1; done
+
       - name: Run tests
         run: uv run pytest
 
