@@ -17,6 +17,11 @@ Current responsibilities:
 - reuse the shared brand source under `assets/brand/` and generate shell-local icon outputs into `shells/positron/resources/`
 - keep Positron-specific runtime behavior under `shells/positron/src/desktop_django_starter_positron/`
 
+Lock acquisition and PID initialization failures close the opened handle and
+release any acquired lock. Shutdown also closes the handle when explicit unlock
+fails. Cleanup preserves the original failure, so a retained traceback does not
+keep the instance locked.
+
 Local commands:
 
 - `just positron-install`
