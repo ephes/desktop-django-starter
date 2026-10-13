@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import signal
 import subprocess
@@ -193,3 +194,40 @@ def test_cleanup_error_does_not_replace_reader_error(monkeypatch):
     with pytest.raises(ValueError, match="original reader error"):
         wrap._run_claude("unused", "unused", None)
     assert len(cleanup_calls) == 1
+
+
+@pytest.mark.parametrize("record", ["null", "[]", "42", '"text"', "true", "whitespace-error"])
+@pytest.mark.parametrize("returncode", [0, 7])
+def test_malformed_progress_preserves_completion(monkeypatch, capsys, record, returncode):
+    if record == "whitespace-error":
+        record = json.dumps(
+            {
+                "type": "user",
+                "message": {
+                    "content": [{"type": "tool_result", "is_error": True, "content": " \t\n "}]
+                },
+            }
+        )
+    records = [
+        json.dumps(
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": "before"}]}}
+        ),
+        record,
+        json.dumps(
+            {"type": "assistant", "message": {"content": [{"type": "text", "text": "after"}]}}
+        ),
+        json.dumps({"type": "result", "is_error": False}),
+    ]
+    script = f"print({chr(10).join(records)!r}); raise SystemExit({returncode})"
+    monkeypatch.setattr(wrap, "_claude_command", lambda *args: [sys.executable, "-c", script])
+    if returncode:
+        with pytest.raises(SystemExit) as error:
+            wrap._run_claude("unused", "unused", None)
+        assert error.value.code == returncode
+    else:
+        wrap._run_claude("unused", "unused", None)
+    output = capsys.readouterr().out
+    expected = "before\n"
+    if "tool_result" in record:
+        expected += "claude tool error: unknown error\n"
+    assert expected + "after\nclaude finished" in output

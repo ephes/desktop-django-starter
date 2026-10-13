@@ -70,7 +70,11 @@ the same setup flow inline. Non-interactive runs never prompt; if the harness
 is ambiguous they fail and point to `dds init` or `--harness`.
 
 When using the `claude` harness, current `dds` builds stream concise progress
-while the agent works. Older builds delegated to Claude's default `-p` text
+while the agent works. Successfully decoded JSON records that are not objects
+are skipped; empty or
+whitespace-only tool errors display `claude tool error: unknown error`. These
+formatted records do not interrupt progress or change the child process exit code.
+Older builds delegated to Claude's default `-p` text
 output, which could make a long wrapping run look idle until Claude exited.
 Use `--harness` and `--model` to choose the agent harness and model. `--agent`
 remains available as a backward-compatible alias.
