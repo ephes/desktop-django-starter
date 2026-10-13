@@ -5,6 +5,7 @@ import io
 import shutil
 import subprocess
 import sys
+import tempfile
 from collections import defaultdict
 from collections.abc import Sequence
 from pathlib import Path
@@ -17,6 +18,7 @@ except ImportError:  # pragma: no cover - exercised only when rich is unavailabl
     Table = None  # type: ignore[misc,assignment]
 
 EXCLUDED_LANGUAGES = "JSON,Markdown"
+CLOC_TIMEOUT_SECONDS = 30
 FALLBACK_LANGUAGE_BY_NAME = {
     "Justfile": "Justfile",
     "justfile": "Justfile",
@@ -118,13 +120,34 @@ def _count_with_cloc() -> int:
 
 def _run_cloc(command: list[str]) -> str:
     try:
-        result = subprocess.run(command, check=True, capture_output=True, text=True)
-    except subprocess.CalledProcessError as exc:
-        stderr = exc.stderr.strip()
-        if stderr:
-            print(stderr, file=sys.stderr)
-        raise SystemExit(exc.returncode) from exc
-    return result.stdout
+        # Regular files avoid waiting for descendant-held pipes during Windows timeout cleanup.
+        with (
+            tempfile.TemporaryFile(mode="w+") as output,
+            tempfile.TemporaryFile(mode="w+") as errors,
+        ):
+            try:
+                subprocess.run(
+                    command,
+                    check=True,
+                    stdout=output,
+                    stderr=errors,
+                    text=True,
+                    timeout=CLOC_TIMEOUT_SECONDS,
+                )
+            except subprocess.CalledProcessError as exc:
+                errors.seek(0)
+                stderr = errors.read().strip()
+                if stderr:
+                    print(stderr, file=sys.stderr)
+                raise SystemExit(exc.returncode) from exc
+            output.seek(0)
+            return output.read()
+    except subprocess.TimeoutExpired as exc:
+        print(f"cloc timed out after {CLOC_TIMEOUT_SECONDS} seconds.", file=sys.stderr)
+        raise SystemExit(1) from exc
+    except OSError as exc:
+        print("Could not start cloc.", file=sys.stderr)
+        raise SystemExit(1) from exc
 
 
 def _aggregate_cloc_csv(csv_output: str) -> dict[str, dict[str, int]]:

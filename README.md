@@ -183,6 +183,13 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 - `just build`: build the Python package metadata scaffold
 - `just cli-build`: build the PyPI wrapper package used by `uvx desktop-django-starter ...`
 
+For `just loc`, each `cloc` invocation (summary and detail) has a 30-second execution timeout.
+A timeout, startup failure, or failed run exits nonzero without printing a success
+summary or falling back to Python; timed-out direct child processes are killed
+and reaped by `subprocess.run`. Output is captured in temporary files so inherited
+output handles cannot keep timeout cleanup waiting on pipes. This cleans up the
+direct child; descendant processes are not terminated by this command.
+
 GitHub Actions runs the same typecheck commands with locked Python dependencies
 on Linux, macOS, and Windows (using Bash for the JavaScript syntax-check loop),
 alongside lint, Python/CLI tests, Electron Node-side tests, and the docs build.

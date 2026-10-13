@@ -126,3 +126,112 @@ def test_plain_table_preserves_alignment(rows, expected_rows) -> None:
     lines = devtools._render_table("Directory", rows).splitlines()
     assert lines[3:-1] == expected_rows
     assert len({len(line) for line in lines}) == 1
+
+
+@pytest.mark.parametrize("failed_invocation", [1, 2])
+@pytest.mark.parametrize(
+    ("error", "message"),
+    [
+        (devtools.subprocess.TimeoutExpired("cloc", 30), "cloc timed out after 30 seconds."),
+        (FileNotFoundError("missing"), "Could not start cloc."),
+        (PermissionError("denied"), "Could not start cloc."),
+    ],
+)
+def test_cloc_execution_failures_exit_without_summary(
+    failed_invocation, error, message, monkeypatch, capsys
+):
+    from unittest.mock import Mock
+
+    monkeypatch.setattr(devtools.shutil, "which", lambda _: "cloc")
+    run = Mock(
+        side_effect=[devtools.subprocess.CompletedProcess([], 0, stdout="")]
+        * (failed_invocation - 1)
+        + [error]
+    )
+    monkeypatch.setattr(devtools.subprocess, "run", run)
+    fallback = Mock()
+    monkeypatch.setattr(devtools, "_count_with_python", fallback)
+
+    with pytest.raises(SystemExit) as exc:
+        devtools.count_lines_of_code()
+
+    assert exc.value.code == 1
+    assert run.call_count == failed_invocation
+    for call in run.call_args_list:
+        assert call.kwargs == {
+            "check": True,
+            "stdout": call.kwargs["stdout"],
+            "stderr": call.kwargs["stderr"],
+            "text": True,
+            "timeout": 30,
+        }
+        assert call.kwargs["stdout"].closed
+        assert call.kwargs["stderr"].closed
+    fallback.assert_not_called()
+    captured = capsys.readouterr()
+    assert captured.err == message + "\n"
+    assert captured.out == ""
+
+
+def test_cloc_success_runs_summary_and_detail_with_timeout(monkeypatch, capsys):
+    from unittest.mock import Mock
+
+    monkeypatch.setattr(devtools, "Console", None)
+    monkeypatch.setattr(devtools.shutil, "which", lambda _: "cloc")
+
+    def successful_run(command, **kwargs):
+        csv = (
+            "language,filename,blank,comment,code\nPython,src/app/a.py,0,0,5\n"
+            if "--by-file" in command
+            else "files,language,blank,comment,code\n1,Python,0,0,5\n"
+        )
+        kwargs["stdout"].write(csv)
+        return devtools.subprocess.CompletedProcess(command, 0)
+
+    run = Mock(side_effect=successful_run)
+    monkeypatch.setattr(devtools.subprocess, "run", run)
+
+    assert devtools.count_lines_of_code() == 0
+    assert run.call_count == 2
+    assert "--by-file" not in run.call_args_list[0].args[0]
+    assert "--by-file" in run.call_args_list[1].args[0]
+    assert all(call.kwargs["timeout"] == 30 for call in run.call_args_list)
+    output = capsys.readouterr().out
+    assert "Python" in output
+    assert "src/app" in output
+    assert "Lines of code counted successfully with cloc!" in output
+
+
+def test_cloc_real_child_is_killed_and_reaped_on_timeout(monkeypatch, capsys):
+    processes = []
+    real_popen = devtools.subprocess.Popen
+
+    def record_process(*args, **kwargs):
+        process = real_popen(*args, **kwargs)
+        processes.append(process)
+        return process
+
+    monkeypatch.setattr(devtools.subprocess, "Popen", record_process)
+    monkeypatch.setattr(devtools, "CLOC_TIMEOUT_SECONDS", 0.1)
+    with pytest.raises(SystemExit) as exc:
+        devtools._run_cloc([devtools.sys.executable, "-c", "import time; time.sleep(60)"])
+    assert exc.value.code == 1
+    assert len(processes) == 1
+    assert processes[0].returncode is not None
+    assert processes[0].returncode != 0
+    assert capsys.readouterr().err == "cloc timed out after 0.1 seconds.\n"
+
+
+def test_cloc_nonzero_child_preserves_stderr_and_exit_code(capsys):
+    with pytest.raises(SystemExit) as exc:
+        devtools._run_cloc(
+            [
+                devtools.sys.executable,
+                "-c",
+                "import sys; print('cloc failed', file=sys.stderr); sys.exit(3)",
+            ]
+        )
+    assert exc.value.code == 3
+    captured = capsys.readouterr()
+    assert captured.err == "cloc failed\n"
+    assert captured.out == ""
