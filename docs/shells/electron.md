@@ -21,6 +21,8 @@ Current responsibilities:
 
 Use this shell when you need the most complete desktop path in the repo today.
 
+Installing the shell's npm dependencies (`just electron-install`) needs Node.js 22.12 or newer, the minimum declared by Electron 40.10 and electron-builder 26.
+
 Current update scope:
 
 - default feed: GitHub Releases for this repo, configurable through the Electron builder config environment variables documented in the release guide
