@@ -638,7 +638,11 @@ function createWindow(url, authToken) {
 
   win.once("ready-to-show", async () => {
     await waitForMinimumSplashDuration();
-    win.show();
+    // The app can quit while the minimum splash time is still running (the
+    // smoke test quits shortly after the first page load).
+    if (!win.isDestroyed()) {
+      win.show();
+    }
     closeSplashWindow();
   });
 
