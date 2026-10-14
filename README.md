@@ -196,6 +196,8 @@ alongside lint, Python/CLI tests, Electron Node-side tests, and the docs build.
 
 ## Quickstart
 
+The Electron shell needs Node.js 22.12 or newer (required by Electron 40.10 and electron-builder); CI uses Node 22.
+
 1. `just install`
 2. `just electron-install`
 3. `just dev`
