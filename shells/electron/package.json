@@ -15,10 +15,13 @@
     "dist:dir": "npm run stage-backend && electron-builder --dir --config ./electron-builder.config.cjs"
   },
   "devDependencies": {
-    "electron": "40.10.6",
+    "electron": "44.5.1",
     "electron-builder": "26.15.3"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"
+  },
+  "overrides": {
+    "global-agent": "^4.1.3"
   }
 }
