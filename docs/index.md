@@ -12,6 +12,7 @@ specification
 architecture
 decisions
 release
+plans/2026-10-21-emudhra-security-backport
 backlog
 done
 agent-use

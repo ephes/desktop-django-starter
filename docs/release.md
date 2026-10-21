@@ -615,3 +615,10 @@ This slice is intentionally incomplete in a few areas:
 - no Linux signing baseline and no Linux verification expectation for this slice
 - no opinionated Windows EV-token or self-hosted-runner guidance
 - no release promotion workflow beyond uploading GitHub Actions artifacts and their checksum manifests
+
+## Proposed eMudhra security backport
+
+The [security-only release-base plan](plans/2026-10-21-emudhra-security-backport.md)
+proposes an artifact-only `0.1.7-rc.1` candidate from the installed `v0.1.6` source.
+It is awaiting owner approval; implementation, builds, publication and installed-app
+replacement are not approved or completed by recording that plan.
