@@ -47,6 +47,7 @@ cp "$starter_root/scripts/bundled-python.cjs" "$target_electron/scripts/bundled-
 cp "$starter_root/scripts/materialize-symlinks.cjs" "$target_electron/scripts/materialize-symlinks.cjs"
 cp "$starter_root/scripts/stage-backend.cjs" "$target_electron/scripts/stage-backend.cjs"
 cp "$starter_root/scripts/prune-bundled-python-runtime.cjs" "$target_electron/scripts/prune-bundled-python-runtime.cjs"
+cp "$starter_root/scripts/desktop_process_guard.py" "$target_electron/scripts/desktop_process_guard.py"
 
 node "$starter_root/skills/wrap-existing-django-in-electron-staged/scripts/prepare-electron-scaffold.cjs" \
   "$target_root"

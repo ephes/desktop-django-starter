@@ -22,6 +22,7 @@ const uvCommand = process.platform === "win32" ? "uv.exe" : "uv";
 const bundledPythonRequest = process.env.DESKTOP_DJANGO_BUNDLED_PYTHON_VERSION
   || DEFAULT_BUNDLED_PYTHON_VERSION;
 const PACKAGED_STAGE_SECRET_KEY = "desktop-django-starter-packaged-stage-secret";
+const PROCESS_GUARD_FILENAME = "desktop_process_guard.py";
 
 function copyRequiredFiles() {
   fs.rmSync(stageRoot, { recursive: true, force: true });
@@ -32,6 +33,16 @@ function copyRequiredFiles() {
 
   fs.cpSync(path.join(repoRoot, "manage.py"), path.join(backendRoot, "manage.py"));
   fs.cpSync(path.join(repoRoot, "src"), path.join(backendRoot, "src"), { recursive: true });
+  copyProcessGuard();
+}
+
+function copyProcessGuard() {
+  // The shells start every backend process through this launcher (job object
+  // on Windows, exit when the shell's stdin pipe closes, orphan marker).
+  fs.cpSync(
+    path.join(__dirname, PROCESS_GUARD_FILENAME),
+    path.join(backendRoot, PROCESS_GUARD_FILENAME)
+  );
 }
 
 function run(command, args, options = {}) {

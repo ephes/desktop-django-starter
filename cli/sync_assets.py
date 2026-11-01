@@ -31,6 +31,8 @@ CANONICAL_ASSETS: list[str] = [
     "shells/electron/scripts/window-guards.cjs",
     "shells/electron/scripts/process-exit-policy.cjs",
     "shells/electron/scripts/updates.cjs",
+    "shells/electron/scripts/orphan-processes.cjs",
+    "shells/electron/scripts/quit-guard.cjs",
     "shells/electron/scripts/bundled-python.test.cjs",
     "shells/electron/scripts/electron-builder-config.test.cjs",
     "shells/electron/scripts/auth-token.test.cjs",
@@ -49,6 +51,7 @@ CANONICAL_ASSETS: list[str] = [
     "scripts/bundled-python.cjs",
     "scripts/materialize-symlinks.cjs",
     "scripts/prune-bundled-python-runtime.cjs",
+    "scripts/desktop_process_guard.py",
     # Wrapping skill and prompt
     "skills/wrap-existing-django-in-electron/SKILL.md",
     "skills/wrap-existing-django-in-electron/prompt.md",

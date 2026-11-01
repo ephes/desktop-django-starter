@@ -24,12 +24,19 @@ const {
 } = require("./scripts/window-guards.cjs");
 const { shouldShowManagedProcessExitDialog } = require("./scripts/process-exit-policy.cjs");
 const { createElectronUpdateController } = require("./scripts/updates.cjs");
+const {
+  beginSession,
+  endSession,
+  stopOrphanedBackendProcesses
+} = require("./scripts/orphan-processes.cjs");
+const { createQuitGuard } = require("./scripts/quit-guard.cjs");
 
 const HOST = "127.0.0.1";
 const STARTUP_TIMEOUT_MS = 15000;
 const POLL_INTERVAL_MS = 250;
 const MINIMUM_SPLASH_DURATION_MS = 2400;
 const APP_ICON_PATH = path.join(__dirname, "assets", "icons", "app-icon.png");
+const PROCESS_GUARD_FILENAME = "desktop_process_guard.py";
 
 const repoRoot = path.resolve(__dirname, "..", "..");
 
@@ -42,6 +49,8 @@ let mainWindow = null;
 let splashWindow = null;
 let splashShownAt = null;
 let updateInstallInProgress = false;
+let shellSession = null;
+const runId = crypto.randomBytes(8).toString("hex");
 const intentionallyStoppedManagedProcesses = new WeakSet();
 
 function focusExistingWindow() {
@@ -261,6 +270,38 @@ function getHealthStatus(url, authToken = "") {
   });
 }
 
+function getActivity(url, authToken = "") {
+  return new Promise((resolve, reject) => {
+    const request = http.get(
+      new URL("/desktop/activity/", url),
+      { headers: buildDesktopAuthHeaders(authToken) },
+      (response) => {
+        let body = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          body += chunk;
+        });
+        response.on("end", () => {
+          if (response.statusCode !== 200) {
+            reject(new Error(`Activity check returned ${response.statusCode}.`));
+            return;
+          }
+          try {
+            resolve(JSON.parse(body));
+          } catch (error) {
+            reject(error);
+          }
+        });
+      }
+    );
+
+    request.on("error", reject);
+    request.setTimeout(1000, () => {
+      request.destroy(new Error("Activity check timed out."));
+    });
+  });
+}
+
 async function waitForDjango(url, authToken = "", timeoutMs = STARTUP_TIMEOUT_MS) {
   const deadline = Date.now() + timeoutMs;
 
@@ -289,6 +330,7 @@ function getDjangoEnvironment(port, runtimeMode, backendRoot, authToken = "") {
     ...process.env,
     DJANGO_SETTINGS_MODULE: settingsModule,
     DESKTOP_DJANGO_APP_DATA_DIR: app.getPath("userData"),
+    DESKTOP_DJANGO_APP_VERSION: app.getVersion(),
     DESKTOP_DJANGO_AUTH_TOKEN: authToken,
     DESKTOP_DJANGO_BUNDLE_DIR: backendRoot,
     DESKTOP_DJANGO_HOST: HOST,
@@ -304,7 +346,15 @@ function getPackagedDatabasePath(runtimeMode) {
     return null;
   }
 
-  return path.join(app.getPath("userData"), "app.sqlite3");
+  // Packaged settings keep each version's database under state/<version>/
+  // (see src/desktop_django_starter/app_state.py).
+  return path.join(app.getPath("userData"), "state", getStateDirName(app.getVersion()), "app.sqlite3");
+}
+
+// Mirrors state_dir_name() in desktop_django_starter/app_state.py.
+function getStateDirName(version) {
+  const cleaned = String(version).trim().replace(/[^0-9A-Za-z.+_-]/g, "_").replace(/^\.+|\.+$/g, "");
+  return cleaned || "unversioned";
 }
 
 function getPythonLaunchSpec(runtimeMode, backendRoot) {
@@ -328,14 +378,52 @@ function getPythonLaunchSpec(runtimeMode, backendRoot) {
   };
 }
 
+function getProcessGuardPath(runtimeMode, backendRoot) {
+  const candidates = runtimeMode === "packaged"
+    ? [path.join(backendRoot, PROCESS_GUARD_FILENAME)]
+    : [
+        path.join(__dirname, "scripts", PROCESS_GUARD_FILENAME),
+        path.join(repoRoot, "scripts", PROCESS_GUARD_FILENAME)
+      ];
+  return candidates.find((candidate) => fs.existsSync(candidate)) || null;
+}
+
 function buildManageInvocation(runtimeMode, backendRoot, manageArgs) {
   const { command, prefixArgs } = getPythonLaunchSpec(runtimeMode, backendRoot);
+  const guardPath = getProcessGuardPath(runtimeMode, backendRoot);
+  // The guard exits when our stdin pipe closes (we crashed or were killed),
+  // joins a kill-on-close job object on Windows, and carries the app key that
+  // lets the next start find leftovers. Without it, run manage.py directly.
+  const guardArgs = guardPath && shellSession
+    ? [
+        guardPath,
+        "--app-key", shellSession.app_key,
+        "--instance", runId,
+        "--watch-stdin",
+        "--"
+      ]
+    : [];
 
   return {
     command,
     cwd: backendRoot,
-    args: [...prefixArgs, "manage.py", ...manageArgs]
+    args: [...prefixArgs, ...guardArgs, "manage.py", ...manageArgs]
   };
+}
+
+function spawnBackendProcess(invocation, environment) {
+  const child = spawn(invocation.command, invocation.args, {
+    cwd: invocation.cwd,
+    env: environment,
+    // stdin stays an open pipe that we never write to: when this process
+    // dies, the OS closes it and the guard in the child exits.
+    stdio: ["pipe", "pipe", "pipe"],
+    // python.exe is a console program; without this, a packaged Windows
+    // app opens a console window for every backend process.
+    windowsHide: true
+  });
+  child.stdin.on("error", () => {});
+  return child;
 }
 
 function validatePackagedBackendRoot(backendRoot) {
@@ -367,14 +455,10 @@ function runManageCommand(args, port, runtimeMode, backendRoot, authToken) {
   const invocation = buildManageInvocation(runtimeMode, backendRoot, args);
 
   return new Promise((resolve, reject) => {
-    const child = spawn(invocation.command, invocation.args, {
-      cwd: invocation.cwd,
-      env: getDjangoEnvironment(port, runtimeMode, backendRoot, authToken),
-      stdio: ["ignore", "pipe", "pipe"],
-      // python.exe is a console program; without this, a packaged Windows
-      // app opens a console window for every backend process.
-      windowsHide: true
-    });
+    const child = spawnBackendProcess(
+      invocation,
+      getDjangoEnvironment(port, runtimeMode, backendRoot, authToken)
+    );
 
     let stderr = "";
 
@@ -445,14 +529,10 @@ function startManagedProcess({
   return new Promise((resolve, reject) => {
     let spawnFailed = false;
 
-    const child = spawn(invocation.command, invocation.args, {
-      cwd: invocation.cwd,
-      env: getDjangoEnvironment(port, runtimeMode, backendRoot, authToken),
-      stdio: ["ignore", "pipe", "pipe"],
-      // python.exe is a console program; without this, a packaged Windows
-      // app opens a console window for every backend process.
-      windowsHide: true
-    });
+    const child = spawnBackendProcess(
+      invocation,
+      getDjangoEnvironment(port, runtimeMode, backendRoot, authToken)
+    );
 
     if (processName === "django") {
       djangoProcess = child;
@@ -636,6 +716,19 @@ function createWindow(url, authToken) {
   currentAppUrl = url;
   currentAuthToken = authToken;
 
+  win.on("close", (event) => {
+    if (!quitGuard.needsCheck()) {
+      return;
+    }
+
+    event.preventDefault();
+    quitGuard.shouldProceed().then((proceed) => {
+      if (proceed && !win.isDestroyed()) {
+        win.close();
+      }
+    });
+  });
+
   win.on("closed", () => {
     if (mainWindow === win) {
       mainWindow = null;
@@ -738,6 +831,15 @@ async function bootstrap() {
     validatePackagedBackendRoot(backendRoot);
   }
 
+  // The session file marks this run as live. If the previous run never marked
+  // itself finished, it crashed or was killed: stop whatever backend processes
+  // it left behind before they can hold the database or the worker queue.
+  const { session, previousRunWasUnclean } = beginSession(app.getPath("userData"));
+  shellSession = session;
+  if (previousRunWasUnclean) {
+    await stopOrphanedBackendProcesses(session.app_key);
+  }
+
   await runManageCommand(["migrate", "--noinput"], port, runtimeMode, backendRoot, authToken);
   if (shouldSeedDemoContent) {
     await runManageCommand(["seed_demo_content"], port, runtimeMode, backendRoot, authToken);
@@ -776,11 +878,47 @@ if (!gotSingleInstanceLock) {
   app.quit();
 }
 
+const quitGuard = createQuitGuard({
+  fetchActivity: () => getActivity(currentAppUrl, currentAuthToken),
+  confirmQuit: async (detail) => {
+    const options = {
+      type: "warning",
+      buttons: ["Quit", "Cancel"],
+      defaultId: 1,
+      cancelId: 1,
+      message: "A background task is still running",
+      detail
+    };
+    const parent = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+    const { response } = parent
+      ? await dialog.showMessageBox(parent, options)
+      : await dialog.showMessageBox(options);
+    return response === 0;
+  },
+  // Quit without asking before the app is up, for update installs, and in
+  // the smoke test.
+  skip: () => (
+    !currentAppUrl
+    || updateInstallInProgress
+    || process.env.DESKTOP_DJANGO_SMOKE_TEST === "1"
+  )
+});
+
 app.on("second-instance", () => {
   focusExistingWindow();
 });
 
-app.on("before-quit", () => {
+app.on("before-quit", (event) => {
+  if (quitGuard.needsCheck()) {
+    event.preventDefault();
+    quitGuard.shouldProceed().then((proceed) => {
+      if (proceed) {
+        app.quit();
+      }
+    });
+    return;
+  }
+
   quitting = true;
 });
 
@@ -796,6 +934,12 @@ app.on("activate", () => {
 
 app.whenReady()
   .then(async () => {
+    // A second launch only hands focus to the running instance (see
+    // "second-instance"); it must not start a backend or clean up processes.
+    if (!gotSingleInstanceLock) {
+      return;
+    }
+
     try {
       setApplicationIcon();
       installApplicationMenu(createElectronUpdateController({
@@ -824,6 +968,10 @@ app.on("will-quit", async (event) => {
   try {
     await stopTaskWorker();
     await stopDjango();
+    if (shellSession) {
+      // Children are stopped: the next start does not need to look for leftovers.
+      endSession(app.getPath("userData"), shellSession);
+    }
   } catch (_error) {
     // Continue quitting even if child-process cleanup fails.
   }

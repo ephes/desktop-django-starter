@@ -105,15 +105,21 @@ Notes:
 
 The current implementation follows this sequence:
 
-1. Electron creates a local splash window immediately after `app.whenReady()`.
-2. Electron chooses an open localhost port.
-3. Electron runs migrations using either the bundled runtime or a local development interpreter.
-4. Electron starts Django.
-5. Django exposes a dedicated health endpoint.
-6. Electron polls that endpoint until it succeeds or times out.
-7. Electron starts the single `db_worker` process only after Django is healthy.
-8. Electron loads the main app window only after both backend processes have started cleanly, then closes the splash window once the main window is ready to show.
-9. Closing the desktop app shuts down both child processes; on Windows, the current Electron implementation does this with explicit forced process-tree termination rather than a graceful drain.
+1. Electron takes the single-instance lock; a second launch only focuses the running window and never reaches the steps below.
+2. Electron chooses an open localhost port and creates a local splash window.
+3. Electron reads `desktop-shell-session.json` in the app-data directory. If the previous run never marked itself finished (a crash, a force quit, power loss), Electron stops backend processes that run left behind: every backend process carries this install's random app key on its command line, so they can be found without touching other apps.
+4. Electron runs migrations using either the bundled runtime or a local development interpreter. In packaged mode, the first start of a new app version prepares that version's state directory first (see Data and Files).
+5. Electron starts Django.
+6. Django exposes a dedicated health endpoint.
+7. Electron polls that endpoint until it succeeds or times out (15 seconds).
+8. Electron starts the single `db_worker` process only after Django is healthy.
+9. Electron loads the main app window, then closes the splash window once the main window is ready to show.
+10. When the user closes the window or quits while background tasks are running or queued (`/desktop/activity/`), Electron asks first. Quitting then stops both child processes; on Windows with explicit forced process-tree termination (`taskkill /t /f`) rather than a graceful drain. Electron marks the session finished once the children are stopped.
+
+Every backend process (`migrate`, `seed_demo_content`, `runserver`, `db_worker`) is started through `desktop_process_guard.py`, a small standard-library launcher staged next to `manage.py`. It runs `manage.py` in the same process and adds two safety nets for the case where the shell dies without cleaning up:
+
+- the shell keeps an open pipe on the child's stdin; when the shell process ends for any reason, the operating system closes it and the guard exits the backend process
+- on Windows the guard puts the backend into a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so anything the backend starts dies with it
 
 Single-instance expectation:
 
@@ -148,6 +154,10 @@ Expected persistence rules:
 
 - SQLite is the only database in starter v1
 - packaged apps write the database under the platform user-data directory, not inside a read-only app bundle
+- packaged state is version-isolated: the database, media and file cache live in `<app-data>/state/<app version>/` (`app.sqlite3`, `media/`, `cache/`), so an upgrade or a rollback never runs one version's code against another version's migrations or files
+- the first start of a new version creates its state directory from a copy of the newest older version's state, or from the pre-versioning `<app-data>/app.sqlite3`, then runs its migrations on the copy; the SQLite copy uses the backup API, so data still in the `-wal` file after an unclean shutdown is included, and the directory appears atomically (staged, then renamed)
+- older state directories are kept for rollback: going back to an older version reopens that version's own directory with its data as that version left it; changes made in the newer version do not travel back. State from a newer version is never imported into an older one, so a rollback to a version that never ran on this machine starts empty and logs a warning
+- old state directories are not pruned automatically; the secret key (`secret_key`) and the shell session file stay in the app-data root
 - static files are collected as part of packaging, not generated on end-user machines
 - packaged mode needs an explicit static-file strategy that works when `DEBUG=False`
 
@@ -208,9 +218,11 @@ Shutdown handling must be treated as a cross-platform lifecycle concern, not as 
 
 - macOS and Linux can usually terminate the Django and task worker child processes with normal process signals
 - Windows needs explicit handling because process-tree shutdown is less predictable
-- the current Electron implementation on Windows uses explicit forced child-process tree termination via `taskkill /t /f`
-- that forced tree kill is acceptable for this starter, but it is not the same as a graceful drain, a dedicated local shutdown endpoint, or a Job Object-based production approach
-- because Windows is a required proof point, reliable shutdown is part of the starter contract
+- the current Electron implementation on Windows uses explicit forced child-process tree termination via `taskkill /t /f` (from `%SystemRoot%\System32`, falling back to a plain kill if it fails)
+- that forced tree kill is not a graceful drain: a running task is interrupted, which is why the shells ask before quitting while tasks are running; queued tasks stay in the database and run on the next start
+- for the cases normal shutdown cannot cover, every backend process runs under `desktop_process_guard.py`: it exits when the shell's stdin pipe closes, and on Windows it holds a kill-on-close Job Object for its process tree; a later start also stops leftovers it finds by app key
+- the Job Object is created by the backend process for itself and its descendants, not by Electron for its children (Node.js has no Job Object API); the stdin pipe is what ties the backend to the shell
+- verified on macOS: `kill -9` of the Electron main process ends `runserver` and `db_worker` within three seconds, and a planted leftover is stopped on the next start. The Windows paths (Job Object, `taskkill`, PowerShell process listing) are implemented but not yet validated on a live Windows machine
 
 ## Deferred Areas
 

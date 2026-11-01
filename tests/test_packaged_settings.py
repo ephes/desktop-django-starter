@@ -111,11 +111,15 @@ def test_packaged_settings_use_app_data_dir(monkeypatch, tmp_path: Path) -> None
     monkeypatch.setenv("DJANGO_SECRET_KEY", "packaged-test-secret")
     monkeypatch.setenv("DESKTOP_DJANGO_APP_DATA_DIR", str(tmp_path))
     monkeypatch.setenv("DESKTOP_DJANGO_BUNDLE_DIR", str(bundle_dir))
+    monkeypatch.setenv("DESKTOP_DJANGO_APP_VERSION", "1.2.3")
     unload_packaged_settings()
 
     settings = importlib.import_module(MODULE)
 
-    assert settings.DATABASES["default"]["NAME"] == tmp_path / "app.sqlite3"
+    state_dir = tmp_path / "state" / "1.2.3"
+    assert settings.DATABASES["default"]["NAME"] == state_dir / "app.sqlite3"
+    assert settings.MEDIA_ROOT == state_dir / "media"
+    assert settings.CACHES["default"]["LOCATION"] == state_dir / "cache"
     assert settings.DATABASES["default"]["OPTIONS"]["transaction_mode"] == "IMMEDIATE"
     assert settings.DATABASES["default"]["OPTIONS"]["timeout"] == 20
     init_command = settings.DATABASES["default"]["OPTIONS"]["init_command"]

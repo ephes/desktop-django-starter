@@ -186,6 +186,8 @@ function buildConfig(env = process.env, detectionOptions = {}) {
       "scripts/process-exit-policy.cjs",
       "scripts/window-guards.cjs",
       "scripts/updates.cjs",
+      "scripts/orphan-processes.cjs",
+      "scripts/quit-guard.cjs",
       "assets/icons/app-icon.png",
       {
         from: "../../scripts",

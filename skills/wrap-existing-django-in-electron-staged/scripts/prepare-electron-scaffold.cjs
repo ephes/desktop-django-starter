@@ -17,10 +17,10 @@ const IGNORED_DIRS = new Set([
   "venv"
 ]);
 const STARTER_TEMPLATE_CHECKSUMS = {
-  "main.js": "09423cc555a210d67005b3bf8601afc112873bf34f2ad6d5fbe144100c0da2d1",
-  "scripts/electron-builder-config.cjs": "0f1bd0754248cfcc86396da326302cfa166b76060a9d12f98fc03149e5364580",
+  "main.js": "89bfa370c3fb9d57ccb523e7de2b9218a382894f294e893521c7b81179c422ad",
+  "scripts/electron-builder-config.cjs": "5ad0f8c441f0290bf11d76e442d66c3542129127d93379452f2c13e954664264",
   "scripts/launch-electron.cjs": "c383e90dc8ab279dcff53f4ba67375e17917bc7878df13a0a12e1b5244b9b0da",
-  "scripts/stage-backend.cjs": "dde66036ee00f1e012fa34fd0997658ed137f91144fc1c98273f817718b12dc3",
+  "scripts/stage-backend.cjs": "d287b0c5c74190533a2ca16fe50484855e27e438ccd439d1c730ce3159e696eb",
   "scripts/bundled-python.cjs": "7f2961a6edf7d8ccf495fdf95564f2ce62b7a78423eb2b731e19af88c20ad046"
 };
 
@@ -654,6 +654,7 @@ function updateLaunchScripts(electronRoot, targetConfig, slug) {
       + '    ...process.env,\n'
       + '    DJANGO_SETTINGS_MODULE: settingsModule,\n'
       + '    DESKTOP_DJANGO_APP_DATA_DIR: app.getPath("userData"),\n'
+      + '    DESKTOP_DJANGO_APP_VERSION: app.getVersion(),\n'
       + '    DESKTOP_DJANGO_AUTH_TOKEN: authToken,\n'
       + '    DESKTOP_DJANGO_BUNDLE_DIR: backendRoot,\n'
       + '    DESKTOP_DJANGO_HOST: HOST,\n'
@@ -666,6 +667,7 @@ function updateLaunchScripts(electronRoot, targetConfig, slug) {
       + '    DESKTOP_AUTO_LOGIN_ENABLED: process.env.DESKTOP_AUTO_LOGIN_ENABLED || "1",\n'
       + '    DESKTOP_AUTO_LOGIN_USERNAME: process.env.DESKTOP_AUTO_LOGIN_USERNAME || "",\n'
       + '    DESKTOP_DJANGO_APP_DATA_DIR: app.getPath("userData"),\n'
+      + '    DESKTOP_DJANGO_APP_VERSION: app.getVersion(),\n'
       + '    DESKTOP_DJANGO_AUTH_TOKEN: authToken,\n'
       + '    DESKTOP_DJANGO_BUNDLE_DIR: backendRoot,\n'
       + '    DESKTOP_DJANGO_HOST: HOST,\n'
@@ -676,28 +678,18 @@ function updateLaunchScripts(electronRoot, targetConfig, slug) {
   );
   mainSource = replaceRequired(
     mainSource,
-    'function buildManageInvocation(runtimeMode, backendRoot, manageArgs) {\n'
-      + '  const { command, prefixArgs } = getPythonLaunchSpec(runtimeMode, backendRoot);\n'
-      + '\n'
-      + '  return {\n'
-      + '    command,\n'
-      + '    cwd: backendRoot,\n'
-      + '    args: [...prefixArgs, "manage.py", ...manageArgs]\n'
-      + '  };\n'
-      + '}',
+    'function getProcessGuardPath(runtimeMode, backendRoot) {',
     'function getManagePyPath(_runtimeMode) {\n'
       + `  return ${JSON.stringify(targetConfig.packagedManagePath)};\n`
       + '}\n'
       + '\n'
-      + 'function buildManageInvocation(runtimeMode, backendRoot, manageArgs) {\n'
-      + '  const { command, prefixArgs } = getPythonLaunchSpec(runtimeMode, backendRoot);\n'
-      + '\n'
-      + '  return {\n'
-      + '    command,\n'
-      + '    cwd: backendRoot,\n'
-      + '    args: [...prefixArgs, getManagePyPath(runtimeMode), ...manageArgs]\n'
-      + '  };\n'
-      + '}',
+      + 'function getProcessGuardPath(runtimeMode, backendRoot) {',
+    mainPath
+  );
+  mainSource = replaceRequired(
+    mainSource,
+    '    args: [...prefixArgs, ...guardArgs, "manage.py", ...manageArgs]',
+    '    args: [...prefixArgs, ...guardArgs, getManagePyPath(runtimeMode), ...manageArgs]',
     mainPath
   );
   const packagedRequiredPaths = [

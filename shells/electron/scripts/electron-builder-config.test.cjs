@@ -39,6 +39,8 @@ test("electron-builder config ships the staged backend as a packaged resource", 
     "scripts/process-exit-policy.cjs",
     "scripts/window-guards.cjs",
     "scripts/updates.cjs",
+    "scripts/orphan-processes.cjs",
+    "scripts/quit-guard.cjs",
     "assets/icons/app-icon.png",
     {
       from: "../../scripts",

@@ -93,3 +93,25 @@ def test_tauri_runtime_keeps_tasks_demo_subprocess_model() -> None:
     assert "splash window immediately" in docs
     assert "SIGTERM" in docs
     assert "2-second grace period" in docs
+
+
+def test_tauri_runtime_lifecycle_guards() -> None:
+    runtime = (ROOT / "shells" / "tauri" / "src-tauri" / "src" / "lib.rs").read_text()
+    docs = (ROOT / "docs" / "shells" / "tauri.md").read_text()
+
+    assert "DESKTOP_DJANGO_APP_VERSION" in runtime
+    assert "fn state_dir_name" in runtime
+    assert '"desktop_process_guard.py"' in runtime
+    assert '"--watch-stdin"' in runtime
+    assert "Stdio::piped()" in runtime
+    assert '"desktop-shell-session.json"' in runtime
+    assert "stop_orphaned_processes" in runtime
+    assert '"-axww", "-o", "pid=,command="' in runtime
+    assert "Get-CimInstance Win32_Process" in runtime
+    assert '"/desktop/activity/"' in runtime
+    assert "api.prevent_exit()" in runtime
+    assert "api.prevent_close()" in runtime
+    assert "A background task is still running" in runtime
+    assert "<app-data>/state/<version>/" in docs
+    assert "desktop-shell-session.json" in docs
+    assert "not yet validated on a live Windows machine" in docs

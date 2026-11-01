@@ -241,7 +241,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "Positron is manual-only for updates in this repo" in llms
     assert "per-session shell-to-Django auth token" in llms
     expected = (
-        "seed a small Flying Stable pony roster only when the per-user "
+        "seed a small Flying Stable pony roster only when the current version's "
         "`app.sqlite3` does not exist yet"
     )
     assert expected in llms
@@ -262,7 +262,7 @@ def test_release_docs_cover_signing_and_manual_updates() -> None:
     assert "still not a release-validated updater lane" in docs_llms
     assert "Positron is manual-only for updates in this repo" in docs_llms
     expected = (
-        "seed a small Flying Stable pony roster only when the per-user "
+        "seed a small Flying Stable pony roster only when the current version's "
         "`app.sqlite3` does not exist yet"
     )
     assert expected in docs_llms

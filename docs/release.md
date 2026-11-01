@@ -578,7 +578,7 @@ Windows-specific note:
 
 Packaged mode keeps writable state outside the app bundle.
 
-Electron sets `DESKTOP_DJANGO_APP_DATA_DIR` from `app.getPath("userData")`, and packaged Django settings store the SQLite database there as `app.sqlite3`.
+Electron sets `DESKTOP_DJANGO_APP_DATA_DIR` from `app.getPath("userData")` and `DESKTOP_DJANGO_APP_VERSION` from `app.getVersion()`. Packaged Django settings store each app version's database, media and file cache in its own directory: `state/<version>/app.sqlite3`, `state/<version>/media/`, `state/<version>/cache/`.
 
 For the current Electron shell, that `userData` path resolves to `~/Library/Application Support/desktop-django-starter-electron` on macOS because the shell package name is `desktop-django-starter-electron`. The in-app `Open App Data Folder` action is the most reliable way to confirm the live path for an installed build.
 
@@ -586,9 +586,17 @@ The packaged SQLite config is intentionally stronger than the repo-default devel
 
 That means a normal reinstall or manual update should replace the installed application files while leaving user data in place, including:
 
-- the SQLite database at `app.sqlite3`
+- the per-version state directories under `state/`, with their SQLite databases and media
 - the per-install Django secret key at `secret_key`
-- future writable files placed under the same per-user app-data directory
+- the shell session file `desktop-shell-session.json` (an app key and a running flag used to clean up after crashes)
+
+### Upgrades and rollbacks
+
+- **Upgrade:** the first start of a new version finds no `state/<new version>/`, copies the newest older version's state (SQLite backup API, plus `media/`; the cache is not copied), renames the copy into place, and only then runs `migrate` on it. User data carries forward; the older directory stays exactly as that version left it.
+- **From a pre-versioning release:** the old `<app-data>/app.sqlite3` is copied the same way and left in place, so going back to such a release still finds its database.
+- **Rollback:** an older version reopens its own `state/<old version>/` with the data and schema it had. Changes made while the newer version ran are not carried back; that is the price of never running old code against new migrations. If the older version never ran on this machine, it starts empty (state from newer versions is never imported) and logs a warning.
+- **Disk use:** old state directories are kept and not pruned automatically. Removing `state/<version>/` for versions you will not roll back to is safe while the app is closed.
+- `state/<version>/state.json` records when the directory was created and what it was copied from.
 
 ## Django Secret Key Handling
 

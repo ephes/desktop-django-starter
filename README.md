@@ -283,7 +283,7 @@ Connected and manual update model for this repo:
 - connected Tauri installs: build with `DESKTOP_DJANGO_TAURI_UPDATE_ENDPOINTS`, `DESKTOP_DJANGO_TAURI_UPDATE_PUBLIC_KEY`, and `TAURI_SIGNING_PRIVATE_KEY`, host the generated updater bundle plus `.sig` files behind the configured HTTPS endpoint, then let the packaged app check on startup and prompt before download/install
 - connected manual installs: download the installer plus its matching SHA-256 file from GitHub Actions artifacts, a GitHub Release, or your internal release channel, verify the checksum, then run the installer manually
 - air-gapped installs: transfer the DMG or `.exe` plus its matching SHA-256 file through the approved offline channel, verify version and integrity, then run the installer manually
-- local writable state survives reinstall/update because packaged mode keeps it under Electron's per-user app-data directory, with the SQLite database stored as `app.sqlite3` and packaged SQLite tuned for desktop use with `transaction_mode=IMMEDIATE`, WAL, `synchronous=NORMAL`, a 20-second timeout, and modest cache/mmap pragmas
+- local writable state survives reinstall/update because packaged mode keeps it under Electron's per-user app-data directory, with the SQLite database, media and cache stored per app version in `state/<version>/` (a new version starts from a copy of the previous version's state; see [`docs/release.md`](docs/release.md#what-survives-reinstall-or-update)) and packaged SQLite tuned for desktop use with `transaction_mode=IMMEDIATE`, WAL, `synchronous=NORMAL`, a 20-second timeout, and modest cache/mmap pragmas
 
 ## Staged Bundled Runtime Contract
 
@@ -312,6 +312,7 @@ Packaged mode still sets a small runtime environment at launch time:
 - `DESKTOP_DJANGO_APP_DATA_DIR` for writable SQLite/app data
 - `DESKTOP_DJANGO_BUNDLE_DIR` for bundle-relative assets
 - `DESKTOP_DJANGO_HOST` and `DESKTOP_DJANGO_PORT` for localhost startup
+- `DESKTOP_DJANGO_APP_VERSION` for the version-isolated state directory (`state/<version>/`)
 - `DESKTOP_DJANGO_AUTH_TOKEN` for the per-session shell-to-Django token; packaged settings refuse every request when it is missing, so a shell that forgets to pass it fails closed
 - `PYTHONUNBUFFERED=1`
 

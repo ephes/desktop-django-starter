@@ -65,7 +65,17 @@ def test_positron_runtime_reuses_shared_django_and_brand_assets() -> None:
     assert "collectstatic" in app
     assert "clear=False" in app
     assert "seed_demo_content" in app
-    assert '"app.sqlite3"' in app
+    # Seeding is decided from the versioned database path Django reports,
+    # not a hard-coded <app-data>/app.sqlite3.
+    assert 'settings.DATABASES["default"]["NAME"]' in app
+    assert '"app.sqlite3"' not in app
+    assert "app_version=positron_app_version(self.version)" in app
+    assert "self.on_exit = self.confirm_exit" in app
+    assert "async def confirm_exit" in app
+    assert "background_task_counts" in app
+    assert "toga.QuestionDialog" in app
+    assert "self.request_exit()" in app
+    assert "DESKTOP_DJANGO_APP_VERSION" in runtime
     assert "acquire_instance_lock" in app
     assert "Worker(" in app
     assert "secrets.token_hex(32)" in app
@@ -103,6 +113,7 @@ def test_positron_runtime_helpers_resolve_repo_paths(tmp_path, monkeypatch) -> N
         bundle_dir=tmp_path / "bundle",
         port=9042,
         auth_token="positron-test-token",
+        app_version="0.1.0",
     )
 
     assert lock_file is not None
@@ -123,6 +134,10 @@ def test_positron_runtime_helpers_resolve_repo_paths(tmp_path, monkeypatch) -> N
     assert env["DESKTOP_DJANGO_BUNDLE_DIR"] == str(tmp_path / "bundle")
     assert env["DESKTOP_DJANGO_PORT"] == "9042"
     assert env["DESKTOP_DJANGO_AUTH_TOKEN"] == "positron-test-token"
+    assert env["DESKTOP_DJANGO_APP_VERSION"] == "0.1.0"
+    assert runtime.positron_app_version("9.9.9") == "9.9.9"
+    # Falls back to the installed distribution, which the root test env lacks.
+    assert runtime.positron_app_version(None) in {None, "0.1.0"}
     # Packaged settings generate a per-install key; the shell must not inject one.
     assert "DJANGO_SECRET_KEY" not in env
     assert not hasattr(runtime, "PACKAGED_RUNTIME_SECRET_KEY")
@@ -212,3 +227,19 @@ def test_positron_runtime_validation_raises_clear_error_when_src_missing(tmp_pat
 
     assert "Could not locate the shared Django source tree" in message
     assert "desktop_django_starter" in message
+
+
+def test_positron_exit_confirmation_message() -> None:
+    sys.path.insert(0, str(POSITRON_SRC))
+    try:
+        from desktop_django_starter_positron import runtime
+    finally:
+        sys.path.remove(str(POSITRON_SRC))
+
+    assert runtime.exit_confirmation_message({"running_tasks": 0, "queued_tasks": 0}) is None
+    message = runtime.exit_confirmation_message({"running_tasks": 1, "queued_tasks": 2})
+    assert message is not None
+    assert message.startswith(
+        "Quitting now stops 1 running background task. "
+        "2 queued tasks will start the next time the app runs."
+    )

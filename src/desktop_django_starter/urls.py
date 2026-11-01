@@ -8,9 +8,16 @@ from django.shortcuts import render
 from django.urls import include, path, re_path
 from django.views.static import serve as static_serve
 
+from desktop_django_starter.activity import background_task_counts
+
 
 def health_view(_request):
     return JsonResponse({"status": "ok"})
+
+
+def activity_view(_request):
+    """Report background work so a desktop shell can ask before quitting."""
+    return JsonResponse(background_task_counts())
 
 
 def packaged_static_view(request, path):
@@ -29,6 +36,7 @@ def splash_view(request):
 urlpatterns = [
     path("splash/", splash_view, name="splash"),
     path("health/", health_view, name="health"),
+    path("desktop/activity/", activity_view, name="desktop-activity"),
     path("", include("example_app.urls")),
     path("tasks/", include("tasks_demo.urls")),
     re_path(r"^static/(?P<path>.*)$", packaged_static_view, name="packaged-static"),

@@ -13,6 +13,8 @@ Current responsibilities:
 - enforce a single running instance per app-data directory with a lock file before the in-process server starts
 - run the optional `tasks_demo` worker in-process on a background thread
 - always boot Django with `desktop_django_starter.settings.packaged` so local Positron runs validate the packaged-style app-data and staticfiles contract
+- pass `DESKTOP_DJANGO_APP_VERSION` (Toga's `App.version`, falling back to the installed `desktop-django-starter-positron` distribution's version, because Toga derives its metadata lookup from the app ID and usually finds none) so packaged settings keep the database, media and cache in `<app-data>/state/<version>/`; demo content is seeded when the database path Django reports does not exist yet
+- ask before quitting while background tasks are running or queued: the async `on_exit` handler reads `background_task_counts()` in a worker thread and, if tasks are active, shows a Toga `QuestionDialog`; answering No returns `False`, which cancels the exit. Idle, a failed count, or smoke mode exit normally, and a second quit request while the dialog is open is ignored
 - refresh collected static files on startup without clearing the cache-backed staticfiles tree on every launch
 - reuse the shared brand source under `assets/brand/` and generate shell-local icon outputs into `shells/positron/resources/`
 - keep Positron-specific runtime behavior under `shells/positron/src/desktop_django_starter_positron/`
@@ -58,6 +60,7 @@ Scope boundaries:
 - Positron is not a release-parity path in this slice
 - Windows packaged-build parity is not claimed for Positron yet
 - local macOS packaging uses Briefcase and currently depends on ad-hoc signing
+- Positron does not use `desktop_process_guard.py`, the shell session file or orphan cleanup: Django, the WSGI server and the task worker all run inside the Positron process, so a crash or force-quit ends them together and there are no child processes to leave behind
 
 `tasks_demo` posture in this slice:
 

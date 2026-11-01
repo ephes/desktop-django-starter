@@ -327,11 +327,25 @@ target-project/
 │       ├── stage-backend.cjs                # backend staging for packaged mode
 │       ├── electron-builder-config.cjs      # builder config details
 │       ├── materialize-symlinks.cjs         # portability: symlinks → copies
-│       └── prune-bundled-python-runtime.cjs # strip tkinter/idle from bundle
+│       ├── prune-bundled-python-runtime.cjs # strip tkinter/idle from bundle
+│       ├── auth-token.cjs, window-guards.cjs, process-exit-policy.cjs, updates.cjs
+│       ├── orphan-processes.cjs, quit-guard.cjs  # required by main.js
+│       └── desktop_process_guard.py         # copied from the starter's scripts/;
+│                                            # staged next to manage.py
 ├── .stage/                                  # (gitignored) staged backend
 └── .github/workflows/                       # (optional — see completeness checklist)
     └── desktop-packages.yml                 # cross-platform packaging CI
 ```
+
+`main.js` starts backend processes through `desktop_process_guard.py` when it finds it
+(next to `manage.py` in packaged mode, in `electron/scripts/` in development) and falls
+back to plain `manage.py` otherwise, so copy it along with `stage-backend.cjs`: it is what
+stops `runserver` and `db_worker` when Electron crashes. The quit prompt calls
+`/desktop/activity/`; a target without that route simply quits without asking. To keep
+it, add a view returning `{"running_tasks": n, "queued_tasks": m}` behind the auth-token
+middleware (see `src/desktop_django_starter/activity.py`). Packaged settings should key
+the database, media and cache on `DESKTOP_DJANGO_APP_VERSION` the way
+`desktop_django_starter.app_state` does, or keep a single database deliberately.
 
 Django-side additions (paths depend on the target project's layout):
 
