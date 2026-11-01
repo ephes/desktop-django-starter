@@ -44,7 +44,7 @@ def test_guard_runs_manage_py_in_process_with_its_arguments(tmp_path: Path) -> N
     manage.write_text(
         "import json, os, sys\n"
         "if __name__ == '__main__':\n"
-        "    print(json.dumps([os.getpid(), sys.argv[1:], sys.path[0]]))\n"
+        "    print(json.dumps([os.getpid(), os.getppid(), sys.argv[1:], sys.path[0]]))\n"
     )
 
     process = subprocess.Popen(
@@ -54,8 +54,11 @@ def test_guard_runs_manage_py_in_process_with_its_arguments(tmp_path: Path) -> N
     )
     output, _ = process.communicate(timeout=20)
 
-    pid, args, path0 = json.loads(output)
-    assert pid == process.pid
+    pid, parent_pid, args, path0 = json.loads(output)
+    # manage.py runs inside the guard's own interpreter, not in a child the
+    # guard starts. On Windows a venv's python.exe is a launcher that runs the
+    # real interpreter as its child, so there the parent is the PID we started.
+    assert process.pid in {pid, parent_pid}
     assert args == ["check", "--deploy"]
     assert path0 == str(tmp_path)
 

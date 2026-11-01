@@ -1,0 +1,5 @@
+# Check text files out with LF on every platform. The staged wrap skill pins
+# SHA-256 checksums of starter templates (prepare-electron-scaffold.cjs), and a
+# CRLF checkout on Windows would change those bytes.
+* text=auto eol=lf
+*.bat text eol=crlf
