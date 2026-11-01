@@ -114,10 +114,10 @@ function buildRuntimeManifest(backendRoot, runtimeInfo) {
       settingsModule: "desktop_django_starter.settings.packaged",
       environment: [
         "DESKTOP_DJANGO_APP_DATA_DIR",
+        "DESKTOP_DJANGO_AUTH_TOKEN",
         "DESKTOP_DJANGO_BUNDLE_DIR",
         "DESKTOP_DJANGO_HOST",
         "DESKTOP_DJANGO_PORT",
-        "DJANGO_SECRET_KEY",
         "PYTHONUNBUFFERED"
       ]
     }

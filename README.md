@@ -178,7 +178,7 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 - `just test`: run the Django and docs test suite
 - `npm --prefix shells/electron test`: run the Electron Node-side tests
 - `just typecheck`: run mypy on Python source and `node --check` on all JavaScript files
-- `just check`: run the default full validation suite: lint, typecheck, Python tests, Electron Node-side tests, and docs build
+- `just check`: run the default full validation suite: lint, typecheck, Python tests, Electron Node-side tests, `dds` CLI tests, and docs build
 - `just cli-test`: run the packaged wrapper CLI test suite
 - `just build`: build the Python package metadata scaffold
 - `just cli-build`: build the PyPI wrapper package used by `uvx desktop-django-starter ...`
@@ -304,7 +304,7 @@ Electron and Tauri now supervise two backend commands from that staged bundle:
 - `manage.py runserver ...` for the local web app
 - `manage.py db_worker --queue-name default ...` for the `/tasks/` demo worker
 
-Dependencies are installed into the staged runtime under `backend/python/lib/python3.14/site-packages` on the current macOS/Linux path. On Windows, the same contract is expected to resolve inside the staged `python/` tree rather than the repo environment.
+`just packaged-stage` installs the runtime dependencies from `uv.lock` (exported with hashes and installed with `--require-hashes`), then the project wheel without dependencies, so packaged builds ship the versions CI tested. A wrapped project without a `uv.lock` falls back to resolving from the index and prints a warning. Dependencies are installed into the staged runtime under `backend/python/lib/python3.14/site-packages` on the current macOS/Linux path. On Windows, the same contract is expected to resolve inside the staged `python/` tree rather than the repo environment.
 
 Packaged mode still sets a small runtime environment at launch time:
 
@@ -312,7 +312,10 @@ Packaged mode still sets a small runtime environment at launch time:
 - `DESKTOP_DJANGO_APP_DATA_DIR` for writable SQLite/app data
 - `DESKTOP_DJANGO_BUNDLE_DIR` for bundle-relative assets
 - `DESKTOP_DJANGO_HOST` and `DESKTOP_DJANGO_PORT` for localhost startup
+- `DESKTOP_DJANGO_AUTH_TOKEN` for the per-session shell-to-Django token; packaged settings refuse every request when it is missing, so a shell that forgets to pass it fails closed
 - `PYTHONUNBUFFERED=1`
+
+Packaged settings create the app-data directory owner-only (`0700` on macOS and Linux), because it holds the SQLite database and the secret key. Django's request log redacts the token in `/desktop-auth/bootstrap/?token=...` lines, so the Tauri and Positron bootstrap URL does not end up in terminal or system logs.
 
 Shells do not inject a `DJANGO_SECRET_KEY`. Packaged settings generate one per install in the app-data directory (owner-only `secret_key` file) on first start and reuse it; an explicit `DJANGO_SECRET_KEY` environment variable still wins. See [`docs/release.md`](docs/release.md#django-secret-key-handling).
 

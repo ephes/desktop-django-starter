@@ -26,6 +26,12 @@ class DesktopAuthTokenMiddleware:
     def __call__(self, request: HttpRequest) -> HttpResponse:
         expected_token = getattr(settings, "DESKTOP_DJANGO_AUTH_TOKEN", "")
         if not expected_token:
+            if getattr(settings, "DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN", False):
+                logger.error(
+                    "Refused request because DESKTOP_DJANGO_AUTH_TOKEN is not set: %r",
+                    request.path,
+                )
+                return HttpResponseForbidden("Forbidden")
             return self.get_response(request)
 
         if request.path == DESKTOP_AUTH_BOOTSTRAP_PATH:
@@ -40,7 +46,7 @@ class DesktopAuthTokenMiddleware:
             return self.get_response(request)
 
         logger.warning(
-            "Rejected desktop Django request with missing or invalid auth token: %s",
+            "Rejected desktop Django request with missing or invalid auth token: %r",
             request.path,
         )
         return HttpResponseForbidden("Forbidden")

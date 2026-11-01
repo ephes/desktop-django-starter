@@ -155,3 +155,17 @@ def test_packaged_sqlite_pragmas_apply_on_connection(
 
     assert journal_mode.lower() == "wal"
     assert synchronous == 1
+
+
+def test_packaged_settings_require_token_and_keep_app_data_private(
+    monkeypatch, tmp_path: Path
+) -> None:
+    app_data_dir = tmp_path / "app-data"
+    app_data_dir.mkdir(mode=0o755)
+
+    settings_module = load_packaged_settings(monkeypatch, app_data_dir)
+
+    assert settings_module.DEBUG is False
+    assert settings_module.DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN is True
+    if os.name != "nt":
+        assert stat.S_IMODE(app_data_dir.stat().st_mode) == 0o700

@@ -176,3 +176,38 @@ def test_configured_token_protects_packaged_static_route(client, tmp_path: Path)
 
 def test_csrf_middleware_remains_enabled() -> None:
     assert "django.middleware.csrf.CsrfViewMiddleware" in settings.MIDDLEWARE
+
+
+def test_required_token_fails_closed_when_not_configured(client) -> None:
+    with override_settings(DESKTOP_DJANGO_AUTH_TOKEN="", DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN=True):
+        health = client.get("/health/")
+        bootstrap = client.get(BOOTSTRAP_PATH, {"token": "", "next": "/"})
+
+    assert health.status_code == 403
+    assert bootstrap.status_code == 403
+
+
+def test_request_log_redacts_bootstrap_token() -> None:
+    import logging
+
+    from desktop_django_starter.log_filters import RedactDesktopAuthToken
+
+    record = logging.LogRecord(
+        "django.server",
+        logging.INFO,
+        __file__,
+        1,
+        '"%s" %s %s',
+        (f"GET {BOOTSTRAP_PATH}?token={TOKEN}&next=%2F HTTP/1.1", "302", "0"),
+        None,
+    )
+    RedactDesktopAuthToken().filter(record)
+
+    message = record.getMessage()
+    assert TOKEN not in message
+    assert f"{BOOTSTRAP_PATH}?token=[redacted]&next=%2F" in message
+
+
+def test_request_log_filter_is_installed_on_django_server_handler() -> None:
+    handler = settings.LOGGING["handlers"]["django.server"]
+    assert "redact_desktop_auth_token" in handler["filters"]

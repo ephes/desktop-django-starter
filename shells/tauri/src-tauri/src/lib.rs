@@ -20,6 +20,7 @@ use url::Url;
 
 const HOST: &str = "127.0.0.1";
 const STARTUP_TIMEOUT_MS: u64 = 15_000;
+const HEALTH_REQUEST_TIMEOUT_MS: u64 = 1_000;
 const POLL_INTERVAL_MS: u64 = 250;
 const MINIMUM_SPLASH_DURATION_MS: u64 = 2_400;
 const SHUTDOWN_GRACE_PERIOD_MS: u64 = 2_000;
@@ -242,7 +243,13 @@ fn get_open_port() -> Result<u16, String> {
 }
 
 fn health_status(port: u16, auth_token: &str) -> Option<u16> {
-    let mut stream = TcpStream::connect((HOST, port)).ok()?;
+    // Bounded timeouts keep a listener that accepts but never answers from
+    // blocking past the startup deadline.
+    let address = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let timeout = Duration::from_millis(HEALTH_REQUEST_TIMEOUT_MS);
+    let mut stream = TcpStream::connect_timeout(&address, timeout).ok()?;
+    stream.set_read_timeout(Some(timeout)).ok()?;
+    stream.set_write_timeout(Some(timeout)).ok()?;
     let auth_header = if auth_token.is_empty() {
         String::new()
     } else {
@@ -377,18 +384,34 @@ fn validate_packaged_backend_root(backend_root: &Path) -> Result<(), String> {
     ))
 }
 
+/// Creates a command for a console program without a visible console window.
+///
+/// python.exe and taskkill.exe are console programs; from a GUI-subsystem
+/// parent on Windows each would otherwise open its own console window.
+fn background_command(program: impl AsRef<std::ffi::OsStr>) -> Command {
+    #[allow(unused_mut)]
+    let mut command = Command::new(program);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
 fn base_command(runtime_mode: RuntimeMode, backend_root: &Path) -> Result<Command, String> {
     if let Ok(path) = env::var("DESKTOP_DJANGO_PYTHON") {
-        return Ok(Command::new(path));
+        return Ok(background_command(path));
     }
 
     if runtime_mode == RuntimeMode::Packaged {
-        return Ok(Command::new(resolve_bundled_python_executable(
+        return Ok(background_command(resolve_bundled_python_executable(
             backend_root,
         )?));
     }
 
-    let mut command = Command::new(if cfg!(target_os = "windows") {
+    let mut command = background_command(if cfg!(target_os = "windows") {
         "uv.exe"
     } else {
         "uv"
@@ -750,10 +773,13 @@ fn open_path(path: &Path) -> Result<(), String> {
             .status()
             .map_err(|error| error.to_string())?
     } else if cfg!(target_os = "windows") {
+        // explorer.exe exits with status 1 even when it opened the folder, so
+        // only a failure to launch it counts as an error.
         Command::new("explorer")
             .arg(path)
             .status()
-            .map_err(|error| error.to_string())?
+            .map_err(|error| error.to_string())?;
+        return Ok(());
     } else {
         Command::new("xdg-open")
             .arg(path)
@@ -879,7 +905,7 @@ fn stop_child(child: ManagedChild) {
     };
 
     if cfg!(target_os = "windows") {
-        let _ = Command::new("taskkill")
+        let _ = background_command("taskkill")
             .args(["/pid", &process.id().to_string(), "/t", "/f"])
             .status();
     } else {

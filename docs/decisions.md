@@ -48,7 +48,7 @@ The `tasks_demo` app remains an optional post-v1 extension. It defines and enque
 
 ## D-012: Per-session shell-to-Django auth token for Electron
 
-Electron adds a per-session shell-to-Django auth token to the localhost request channel. The main process generates a random token at startup, passes it to Django as `DESKTOP_DJANGO_AUTH_TOKEN`, and injects `X-Desktop-Django-Token` only for the exact `http://127.0.0.1:<random-port>` Django origin. Django rejects requests with missing or wrong tokens only when that setting is configured.
+Electron adds a per-session shell-to-Django auth token to the localhost request channel. The main process generates a random token at startup, passes it to Django as `DESKTOP_DJANGO_AUTH_TOKEN`, and injects `X-Desktop-Django-Token` only for the exact `http://127.0.0.1:<random-port>` Django origin. Django rejects requests with missing or wrong tokens when that setting is configured. Packaged settings also set `DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN = True`, so a packaged backend started without a token refuses every request instead of silently serving unauthenticated; local development settings keep the check optional.
 
 The token is not exposed through preload or normal page JavaScript and does not replace Django's CSRF middleware. Electron keeps the token out of query strings and cookies because its `webRequest.onBeforeSendHeaders` path can inject the header for the exact Django origin.
 

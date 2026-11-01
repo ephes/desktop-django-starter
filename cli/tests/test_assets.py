@@ -7,6 +7,7 @@ before a broken wheel is published.
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -30,6 +31,27 @@ REPO_ROOT = CLI_DIR.parent
 def test_canonical_asset_exists(rel_path: str) -> None:
     full = REPO_ROOT / rel_path
     assert full.is_file(), f"canonical asset missing: {full}"
+
+
+_RELATIVE_REQUIRE = re.compile(r"""require\(\s*["'](\.{1,2}/[^"']+)["']\s*\)""")
+
+
+@pytest.mark.parametrize(
+    "rel_path", [rel for rel in CANONICAL_ASSETS if rel.endswith((".js", ".cjs"))]
+)
+def test_bundled_relative_requires_resolve_inside_assets(rel_path: str) -> None:
+    """Every relative require() in a bundled script must point at a bundled file.
+
+    The wrap prompt copies these files into another repo, so a module that is
+    required but not bundled makes the wrapped app fail at startup.
+    """
+    bundled = set(CANONICAL_ASSETS)
+    source = (REPO_ROOT / rel_path).read_text()
+    base = Path(rel_path).parent
+    for target in _RELATIVE_REQUIRE.findall(source):
+        resolved = os.path.normpath(base / target).replace(os.sep, "/")
+        candidates = {resolved, f"{resolved}.js", f"{resolved}.cjs"}
+        assert candidates & bundled, f"{rel_path} requires {target}, which is not bundled"
 
 
 @pytest.fixture

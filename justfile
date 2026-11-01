@@ -27,6 +27,7 @@ check:
     just typecheck
     just test
     npm --prefix shells/electron test
+    just cli-test
     just docs-build
 
 migrate:
@@ -281,7 +282,7 @@ loc:
 
 # CLI package (cli/)
 cli-sync-assets:
-    python cli/sync_assets.py
+    uv run python cli/sync_assets.py
 
 cli-build: cli-sync-assets
     rm -rf cli/dist

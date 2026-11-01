@@ -17,11 +17,11 @@ const IGNORED_DIRS = new Set([
   "venv"
 ]);
 const STARTER_TEMPLATE_CHECKSUMS = {
-  "main.js": "e3842b18512ef030e95f623ae313440b6664a335dd204fe3dd089bfacad49e97",
+  "main.js": "09423cc555a210d67005b3bf8601afc112873bf34f2ad6d5fbe144100c0da2d1",
   "scripts/electron-builder-config.cjs": "0f1bd0754248cfcc86396da326302cfa166b76060a9d12f98fc03149e5364580",
   "scripts/launch-electron.cjs": "c383e90dc8ab279dcff53f4ba67375e17917bc7878df13a0a12e1b5244b9b0da",
-  "scripts/stage-backend.cjs": "e90fd0d3d4a6cc5801f485091d5ed1f6ab55a8b8f9fe5f2d7352fa8a4764189a",
-  "scripts/bundled-python.cjs": "69008cc5b84665fc66b9aa3a6e81e8f3daee41ac208c533b78b9b7fd9274b071"
+  "scripts/stage-backend.cjs": "dde66036ee00f1e012fa34fd0997658ed137f91144fc1c98273f817718b12dc3",
+  "scripts/bundled-python.cjs": "7f2961a6edf7d8ccf495fdf95564f2ce62b7a78423eb2b731e19af88c20ad046"
 };
 
 function fail(message) {

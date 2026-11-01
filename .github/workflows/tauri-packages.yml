@@ -129,6 +129,7 @@ jobs:
           args: ${{ env.TAURI_SIGNING_PRIVATE_KEY != '' && matrix.bundle_args || format('--no-sign {0}', matrix.bundle_args) }}
 
       - name: Generate artifact checksums
+        shell: bash
         run: |
           python scripts/write-checksums.py \
             --glob "${{ matrix.installer_glob }}" \

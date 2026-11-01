@@ -147,21 +147,54 @@ function buildWheel() {
   return path.join(buildRoot, wheelName);
 }
 
-function installBundledPackages(pythonExecutable, wheelPath) {
+function exportLockedRequirements() {
+  const lockPath = path.join(repoRoot, "uv.lock");
+  if (!fs.existsSync(lockPath)) {
+    return null;
+  }
+
+  const requirementsPath = path.join(buildRoot, "requirements.txt");
   run(
     uvCommand,
     [
-      "pip",
-      "install",
-      "--python",
-      pythonExecutable,
-      "--system",
-      "--break-system-packages",
-      "--reinstall",
-      wheelPath
+      "export",
+      "--frozen",
+      "--no-dev",
+      "--no-emit-project",
+      "--format",
+      "requirements.txt",
+      "--output-file",
+      requirementsPath
     ],
     { cwd: repoRoot }
   );
+  return requirementsPath;
+}
+
+function installBundledPackages(pythonExecutable, wheelPath) {
+  const pipInstall = [
+    "pip",
+    "install",
+    "--no-config",
+    "--python",
+    pythonExecutable,
+    "--system",
+    "--break-system-packages"
+  ];
+  const requirementsPath = exportLockedRequirements();
+
+  if (requirementsPath) {
+    // Install exactly the versions and hashes from uv.lock, then the app wheel
+    // without letting it pull anything else from the index.
+    run(uvCommand, [...pipInstall, "--require-hashes", "-r", requirementsPath], { cwd: repoRoot });
+    run(uvCommand, [...pipInstall, "--reinstall", "--no-deps", wheelPath], { cwd: repoRoot });
+    return;
+  }
+
+  process.stderr.write(
+    "warning: no uv.lock next to the project; resolving bundled dependencies from the index.\n"
+  );
+  run(uvCommand, [...pipInstall, "--reinstall", wheelPath], { cwd: repoRoot });
 }
 
 function runPackagedManageCommand(pythonExecutable, args) {

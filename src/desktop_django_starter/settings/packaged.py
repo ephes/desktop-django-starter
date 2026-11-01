@@ -11,6 +11,7 @@ from . import base as base_settings
 from .base import *  # noqa: F403
 
 DEBUG = False
+DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN = True
 
 # These rely on Django 5.1+ SQLite support for `transaction_mode`
 # and `init_command`, which matches the repo's current Django 6.x baseline.
@@ -29,7 +30,10 @@ PACKAGED_SQLITE_OPTIONS = {
 
 bundle_dir = Path(os.environ.get("DESKTOP_DJANGO_BUNDLE_DIR", BASE_DIR))  # noqa: F405
 app_data_dir = Path(os.environ.get("DESKTOP_DJANGO_APP_DATA_DIR", BASE_DIR / "var"))  # noqa: F405
-app_data_dir.mkdir(parents=True, exist_ok=True)
+# The database and secret key live here, so keep the directory owner-only.
+app_data_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+if os.name != "nt":
+    app_data_dir.chmod(0o700)
 
 # An explicit DJANGO_SECRET_KEY wins. Otherwise each install generates its own
 # random key once and keeps it, owner-only, in the app-data directory.

@@ -85,3 +85,40 @@ SECRET_KEY = os.environ.get(
 DEBUG = False
 ALLOWED_HOSTS = _allowed_hosts()
 DESKTOP_DJANGO_AUTH_TOKEN = os.environ.get("DESKTOP_DJANGO_AUTH_TOKEN", "")
+# When True, requests are refused if no shell token was configured, so a shell
+# that forgets to pass the token fails closed. Packaged settings turn this on.
+DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN = False
+
+# Same request log as Django's default `django.server` config, plus a filter
+# that keeps the auth bootstrap token out of the log.
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "filters": {
+        "redact_desktop_auth_token": {
+            "()": "desktop_django_starter.log_filters.RedactDesktopAuthToken",
+        },
+    },
+    "formatters": {
+        "django.server": {
+            "()": "django.utils.log.ServerFormatter",
+            "format": "[{server_time}] {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "django.server": {
+            "level": "INFO",
+            "class": "logging.StreamHandler",
+            "formatter": "django.server",
+            "filters": ["redact_desktop_auth_token"],
+        },
+    },
+    "loggers": {
+        "django.server": {
+            "handlers": ["django.server"],
+            "level": "INFO",
+            "propagate": False,
+        },
+    },
+}

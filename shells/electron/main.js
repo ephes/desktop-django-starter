@@ -370,7 +370,10 @@ function runManageCommand(args, port, runtimeMode, backendRoot, authToken) {
     const child = spawn(invocation.command, invocation.args, {
       cwd: invocation.cwd,
       env: getDjangoEnvironment(port, runtimeMode, backendRoot, authToken),
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
+      // python.exe is a console program; without this, a packaged Windows
+      // app opens a console window for every backend process.
+      windowsHide: true
     });
 
     let stderr = "";
@@ -445,7 +448,10 @@ function startManagedProcess({
     const child = spawn(invocation.command, invocation.args, {
       cwd: invocation.cwd,
       env: getDjangoEnvironment(port, runtimeMode, backendRoot, authToken),
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["ignore", "pipe", "pipe"],
+      // python.exe is a console program; without this, a packaged Windows
+      // app opens a console window for every backend process.
+      windowsHide: true
     });
 
     if (processName === "django") {
@@ -678,12 +684,21 @@ async function stopManagedProcess(processToStop) {
 
   if (process.platform === "win32") {
     await new Promise((resolve) => {
-      const killer = spawn("taskkill", ["/pid", String(processToStop.pid), "/t", "/f"], {
-        stdio: "ignore"
+      // Use the system copy of taskkill rather than whatever PATH finds first.
+      const taskkill = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
+      const killer = spawn(taskkill, ["/pid", String(processToStop.pid), "/t", "/f"], {
+        stdio: "ignore",
+        windowsHide: true
       });
 
-      killer.on("error", () => resolve());
-      killer.on("exit", () => resolve());
+      const fallBackToKill = () => {
+        if (processToStop.exitCode === null) {
+          processToStop.kill();
+        }
+        resolve();
+      };
+      killer.on("error", fallBackToKill);
+      killer.on("exit", (code) => (code === 0 ? resolve() : fallBackToKill()));
     });
     return;
   }
