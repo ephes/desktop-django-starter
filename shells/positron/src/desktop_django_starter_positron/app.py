@@ -152,7 +152,7 @@ class DesktopDjangoStarterPositron(toga.App):
         if self._task_worker_thread is not None and self._task_worker_thread.is_alive():
             return
 
-        from django_tasks import DEFAULT_TASK_BACKEND_ALIAS
+        from django.tasks import DEFAULT_TASK_BACKEND_ALIAS
         from django_tasks_db.management.commands.db_worker import Worker
 
         self._task_worker = Worker(
@@ -163,6 +163,7 @@ class DesktopDjangoStarterPositron(toga.App):
             startup_delay=True,
             max_tasks=None,
             worker_id=WORKER_ID,
+            excluded_queue_names=[],
         )
         self._task_worker_thread = Thread(target=self._task_worker.run, daemon=True)
         self._task_worker_thread.start()

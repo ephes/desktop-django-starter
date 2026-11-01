@@ -71,24 +71,24 @@ jobs:
             checksum_path: shells/electron/dist/desktop-django-starter-linux-sha256.txt
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Set up Node.js
-        uses: actions/setup-node@v5
+        uses: actions/setup-node@v7
         with:
           node-version: "22"
           cache: npm
           cache-dependency-path: shells/electron/package-lock.json
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           # Packaging uses the staged bundled runtime, while validation CI
           # continues to run on 3.13.
           python-version: "3.13"
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@v10.3.3
         with:
           enable-cache: true
 
@@ -163,14 +163,14 @@ jobs:
         run: python scripts/write-checksums.py ${{ matrix.checksum_args }} --output "${{ matrix.checksum_path }}"
 
       - name: Upload packaged desktop artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: ${{ matrix.artifact_paths }}
           if-no-files-found: error
 
       - name: Upload packaged desktop artifact checksums
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.checksum_artifact_name }}
           path: ${{ matrix.checksum_path }}

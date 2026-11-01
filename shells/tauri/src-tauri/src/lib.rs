@@ -43,6 +43,7 @@ struct AppState {
     processes: Mutex<ProcessState>,
     quitting: AtomicBool,
     update_check_started: AtomicBool,
+    django_origin: Mutex<Option<String>>,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
@@ -72,13 +73,31 @@ struct UpdaterConfig {
 }
 
 #[tauri::command]
-fn open_app_data_directory(app: AppHandle) -> Result<OpenPathResponse, String> {
+fn open_app_data_directory(
+    app: AppHandle,
+    webview: tauri::Webview,
+) -> Result<OpenPathResponse, String> {
+    // The capability allows any 127.0.0.1 port; only the exact Django origin
+    // of this session may use the bridge.
+    let expected_origin = app.state::<AppState>().django_origin.lock().unwrap().clone();
+    let caller_url = webview.url().map_err(|error| error.to_string())?;
+    if !is_trusted_bridge_caller(&caller_url, expected_origin.as_deref()) {
+        return Err("The desktop bridge is only available to the local Django app.".to_string());
+    }
+
     let app_data_dir = resolve_app_data_dir(&app).map_err(|error| error.to_string())?;
     open_path(&app_data_dir).map_err(|error| error.to_string())?;
 
     Ok(OpenPathResponse {
         path: app_data_dir.display().to_string(),
     })
+}
+
+fn is_trusted_bridge_caller(caller_url: &Url, expected_origin: Option<&str>) -> bool {
+    match expected_origin.and_then(|origin| Url::parse(origin).ok()) {
+        Some(expected) => caller_url.origin() == expected.origin(),
+        None => false,
+    }
 }
 
 fn get_runtime_mode() -> RuntimeMode {
@@ -764,6 +783,7 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
     let base_url = format!("http://{HOST}:{port}");
     let auth_token = generate_desktop_auth_token()?;
     let bootstrap_url = build_bootstrap_url(&base_url, &auth_token)?;
+    *app.state::<AppState>().django_origin.lock().unwrap() = Some(base_url.clone());
     let should_seed_demo_content = match packaged_database_path(app, runtime_mode)? {
         Some(database_path) => !database_path.exists(),
         None => false,
@@ -943,7 +963,21 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
-    use super::parse_updater_endpoints;
+    use super::{is_trusted_bridge_caller, parse_updater_endpoints};
+    use url::Url;
+
+    #[test]
+    fn bridge_caller_must_match_the_exact_django_origin() {
+        let expected = Some("http://127.0.0.1:51234");
+        let same = Url::parse("http://127.0.0.1:51234/items/?page=2").unwrap();
+        let other_port = Url::parse("http://127.0.0.1:8000/").unwrap();
+        let other_host = Url::parse("http://localhost:51234/").unwrap();
+
+        assert!(is_trusted_bridge_caller(&same, expected));
+        assert!(!is_trusted_bridge_caller(&other_port, expected));
+        assert!(!is_trusted_bridge_caller(&other_host, expected));
+        assert!(!is_trusted_bridge_caller(&same, None));
+    }
 
     #[test]
     fn updater_endpoint_parser_accepts_commas_and_newlines() {

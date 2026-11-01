@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-open-app-data-directory"
+description = "Enables the open_app_data_directory command without any pre-configured scope."
+commands.allow = ["open_app_data_directory"]
+
+[[permission]]
+identifier = "deny-open-app-data-directory"
+description = "Denies the open_app_data_directory command without any pre-configured scope."
+commands.deny = ["open_app_data_directory"]

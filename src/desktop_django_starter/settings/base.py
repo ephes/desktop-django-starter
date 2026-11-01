@@ -19,7 +19,6 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.sessions",
     "django.contrib.staticfiles",
-    "django_tasks",
     "django_tasks_db",
     "desktop_django_starter",
     "example_app",

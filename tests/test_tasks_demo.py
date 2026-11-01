@@ -9,9 +9,9 @@ from uuid import UUID
 import pytest
 from django.db import close_old_connections
 from django.db.models import QuerySet
+from django.tasks import TaskResultStatus
 from django.urls import reverse
 from django.utils import timezone
-from django_tasks import TaskResultStatus
 from django_tasks_db.models import DBTaskResult
 
 from tasks_demo.apps import TasksDemoConfig
@@ -256,7 +256,7 @@ class TestTaskViews:
         assert client.get(reverse("tasks_demo:task-status")).json() == {"tasks": []}
 
     def test_enqueue_signal_failure_rolls_back_queue_and_demo(self, client):
-        from django_tasks.signals import task_enqueued
+        from django.tasks.signals import task_enqueued
 
         def fail_after_insert(sender, **kwargs):
             assert DBTaskResult.objects.count() == 1
@@ -624,7 +624,7 @@ class TestStartupReconciliation:
 def test_reconciliation_preserves_worker_finalized_row(worker_status, backend_outcome):
     from types import SimpleNamespace
 
-    from django_tasks.exceptions import TaskResultDoesNotExist
+    from django.tasks.exceptions import TaskResultDoesNotExist
 
     from tasks_demo.tasks import reconcile_task_with_backend
 

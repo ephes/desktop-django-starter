@@ -1,0 +1,11 @@
+{
+  "identifier": "django-pages",
+  "description": "Lets pages served by the local Django origin call the one desktop bridge command",
+  "windows": ["main"],
+  "remote": {
+    "urls": ["http://127.0.0.1:*"]
+  },
+  "permissions": [
+    "allow-open-app-data-directory"
+  ]
+}

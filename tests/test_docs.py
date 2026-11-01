@@ -65,7 +65,7 @@ def test_ci_workflow_covers_root_cli_and_electron_validation() -> None:
     workflow = (ROOT / ".github" / "workflows" / "ci.yml").read_text()
     readme = (ROOT / "README.md").read_text()
 
-    assert "actions/setup-node@v5" in workflow
+    assert "actions/setup-node@v7" in workflow
     assert "shells/electron/package-lock.json" in workflow
     assert "npm --prefix shells/electron ci" in workflow
     assert "npm --prefix shells/electron test" in workflow
@@ -390,11 +390,11 @@ def test_tauri_packaging_workflow_mentions_tauri_action_and_checksums() -> None:
     workflow = (ROOT / ".github" / "workflows" / "tauri-packages.yml").read_text()
     justfile = (ROOT / "justfile").read_text()
 
-    assert "tauri-apps/tauri-action@v0" in workflow
+    assert "tauri-apps/tauri-action@v1" in workflow
     assert "projectPath: shells/tauri" in workflow
     assert "npm --prefix shells/tauri run stage-backend" in workflow
     assert "shells/tauri/package-lock.json" in workflow
-    assert "actions/setup-node@v5" in workflow
+    assert "actions/setup-node@v7" in workflow
     assert "dtolnay/rust-toolchain@stable" in workflow
     assert "swatinem/rust-cache@v2" in workflow
     assert "--no-install-recommends --no-install-suggests" in workflow

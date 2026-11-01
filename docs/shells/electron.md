@@ -21,9 +21,9 @@ Current responsibilities:
 
 Use this shell when you need the most complete desktop path in the repo today.
 
-Installing the shell's npm dependencies (`just electron-install`) needs Node.js 22.12 or newer, the minimum declared by Electron 44 and electron-builder 26.
+Installing the shell's npm dependencies (`just electron-install`) needs Node.js 22.12 or newer, the minimum declared by Electron 45.
 
-The shell tracks a supported Electron major (currently Electron 44). Since Electron 42 the `electron` npm package no longer downloads its binary in a `postinstall` script; the first `npm start`, `just packaged-smoke` or other launch through `scripts/launch-electron.cjs` downloads it on demand (or run `npx install-electron --no` in `shells/electron/` ahead of time, for example before going offline). Electron 44 requires macOS 13 (Ventura) or newer and publishes 64-bit builds only, so Windows x86 (ia32) and Linux 32-bit ARM (armv7l) packages are no longer possible.
+The shell tracks a supported Electron major (currently Electron 45). Since Electron 42 the `electron` npm package no longer downloads its binary in a `postinstall` script; the first `npm start`, `just packaged-smoke` or other launch through `scripts/launch-electron.cjs` downloads it on demand (or run `npx install-electron --no` in `shells/electron/` ahead of time, for example before going offline). Electron 45 requires macOS 13 (Ventura) or newer and publishes 64-bit builds only, so Windows x86 (ia32) and Linux 32-bit ARM (armv7l) packages are no longer possible.
 
 `shells/electron/package.json` overrides `global-agent` to 4.x. electron-builder 26 still pulls `@electron/get` 3, whose optional proxy helper `global-agent` 3 depends on `roarr` and a `sprintf-js` version with a denial-of-service advisory; `global-agent` 4 keeps the same `bootstrap()` API without that chain. Drop the override once a stable electron-builder release depends on `@electron/get` 5 or newer.
 

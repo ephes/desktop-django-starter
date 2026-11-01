@@ -85,7 +85,7 @@ That path intentionally stays narrower than Electron:
 
 The dedicated Tauri workflow under `.github/workflows/tauri-packages.yml` follows the official Tauri GitHub pipeline shape closely:
 
-- it uses `tauri-apps/tauri-action@v0`
+- it uses `tauri-apps/tauri-action@v1`
 - it sets `projectPath: shells/tauri` because the Tauri app is not at repo root
 - it runs in build-only mode by omitting `tagName`, `releaseName`, and `releaseId`
 - it stages `.stage/backend` before bundling so the hosted build uses the same packaged-runtime contract as local Tauri packaging

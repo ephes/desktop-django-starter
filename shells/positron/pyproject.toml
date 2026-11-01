@@ -12,10 +12,9 @@ authors = [
     { name = "Jochen Wersdoerfer" },
 ]
 dependencies = [
-    "Django==6.0.3",
+    "Django==6.1.2",
     "django-browser-reload>=1.21.0",
-    "django-tasks==0.12.0",
-    "django-tasks-db==0.12.0",
+    "django-tasks-db==0.13.0",
     "toga-cocoa~=0.5.0; sys_platform == 'darwin'",
     "toga-gtk~=0.5.0; sys_platform == 'linux'",
     "pygobject<3.52.1; sys_platform == 'linux'",
@@ -47,9 +46,8 @@ sources = [
 ]
 test_sources = []
 requires = [
-    "Django==6.0.3",
-    "django-tasks==0.12.0",
-    "django-tasks-db==0.12.0",
+    "Django==6.1.2",
+    "django-tasks-db==0.13.0",
 ]
 test_requires = []
 icon = "resources/app-icon"

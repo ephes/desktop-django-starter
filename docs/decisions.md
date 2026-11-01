@@ -42,9 +42,9 @@ The starter does not need a full auto-updater in v1, but it does need a document
 
 Cross-platform validation should run on GitHub-hosted Linux, macOS, and Windows runners from the start.
 
-## D-011: Tasks demo uses the original-author task backport with one database-backed worker
+## D-011: Tasks demo uses Django's built-in task API with one database-backed worker
 
-The `tasks_demo` app remains an optional post-v1 extension, but it now uses the `django_tasks` backport together with `django_tasks_db` and one supervised `db_worker` process. The UI contract stays starter-sized: the app keeps its own demo row, the renderer continues to poll, and Electron owns the worker lifecycle. Product-sized worker registries, cancellation flows, and broader orchestration remain out of scope.
+The `tasks_demo` app remains an optional post-v1 extension. It defines and enqueues tasks through Django's built-in `django.tasks` API (Django 6.0+) and stores and runs them through the `django_tasks_db` database backend and one supervised `db_worker` process. Earlier versions used the original author's `django_tasks` backport; `django_tasks_db` 0.13 builds on the built-in API on Django 6, so the backport is no longer installed. The UI contract stays starter-sized: the app keeps its own demo row, the renderer continues to poll, and Electron owns the worker lifecycle. Product-sized worker registries, cancellation flows, and broader orchestration remain out of scope.
 
 ## D-012: Per-session shell-to-Django auth token for Electron
 

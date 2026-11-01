@@ -4,9 +4,9 @@ import random
 import time
 from datetime import datetime
 
+from django.tasks import TaskResultStatus, task
+from django.tasks.exceptions import TaskResultDoesNotExist, TaskResultMismatch
 from django.utils import timezone
-from django_tasks import TaskResultStatus, task
-from django_tasks.exceptions import TaskResultDoesNotExist, TaskResultMismatch
 
 from .models import SimulatedTask
 

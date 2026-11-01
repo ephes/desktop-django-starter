@@ -141,12 +141,12 @@ Background work is not part of the minimum starter slice but an optional post-v1
 Decision for starter v1:
 
 - do not include a worker framework, queue, or `django.tasks` example in the core v1 implementation
-- the repo now includes an optional `tasks_demo` app that demonstrates background task visualization using `django_tasks`, `django_tasks_db`, and animated pulse-ring indicators
+- the repo now includes an optional `tasks_demo` app that demonstrates background task visualization using Django's built-in `django.tasks`, `django_tasks_db`, and animated pulse-ring indicators
 
 Extension (post-v1):
 
 - `src/tasks_demo/` provides a separate page with a "Start Routine" button, animated status indicators, and polling-based live updates
-- the backend enqueues real tasks through the `django_tasks` backport and executes them in a single database-backed `django_tasks_db` worker process supervised by Electron
+- the backend enqueues real tasks through Django's built-in `django.tasks` API and executes them in a single database-backed `django_tasks_db` worker process supervised by Electron
 - a conditional SQLite update claims each demo row from `PENDING` to `RUNNING`; only the winner executes the simulated workload. Duplicate execution returns the current row state, and terminal retries return the stored result without rerunning work. A duplicate reporting `RUNNING` cannot finalize the row; polling never claims or resets it. A worker interrupted after claiming does not automatically rerun that row; startup reconciliation marks abandoned work failed.
 - routine creation, database-backed enqueue, and backend ID storage commit in one transaction. A failure rolls back both the demo and queue rows and returns JSON HTTP 503 (`Routine could not be queued. Please try again.`); retrying Start Routine creates a new routine. This boundary relies on the configured queue using the same SQLite database, and must be revisited before switching to an external queue.
 - Clear Finished Routines deletes only `DONE` and `FAILED` demo history. `PENDING` and `RUNNING` rows stay visible and can finish normally; clearing does not cancel or delete backend queue jobs.

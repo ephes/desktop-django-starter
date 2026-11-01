@@ -17,10 +17,10 @@ This repository now includes a runnable development slice, a staged packaged-bac
 
 Runnable starter slices:
 
-- Django 6.0.3 project under `src/desktop_django_starter/`
+- Django 6.1.2 project under `src/desktop_django_starter/`
 - tiny server-rendered CRUD demo app under `src/example_app/`, themed as "My Ponies" in the Flying Stable presentation layer, with three starter ponies seeded on the first packaged launch for a brand-new per-user database in the current `v0.1.5+` line
-- background task visualization demo under `src/tasks_demo/`, themed as "Stable Routines", with animated pulse-ring indicators, polling-based live updates, and real `django_tasks` execution backed by SQLite; Clear Finished Routines removes only done/failed history and keeps queued/running routines working
-- Electron 44 shell under `shells/electron/`
+- background task visualization demo under `src/tasks_demo/`, themed as "Stable Routines", with animated pulse-ring indicators, polling-based live updates, and real execution through Django's built-in `django.tasks` with the `django_tasks_db` database backend on SQLite; Clear Finished Routines removes only done/failed history and keeps queued/running routines working
+- Electron 45 shell under `shells/electron/`
 - Tauri 2 shell under `shells/tauri/` for local experiment scope, using the same staged backend contract and child-process worker model
 - Positron shell under `shells/positron/` for local experiment scope, running Django plus the optional task worker in-process inside a Toga web view
 - localhost startup on `127.0.0.1` with a random port and `/health/` readiness polling
@@ -196,8 +196,8 @@ alongside lint, Python/CLI tests, Electron Node-side tests, and the docs build.
 
 ## Quickstart
 
-The Electron shell needs Node.js 22.12 or newer (required by Electron 44 and electron-builder); CI uses Node 22.
-Electron 44 apps run on macOS 13 (Ventura) or newer and on 64-bit Windows and Linux only.
+The Electron shell needs Node.js 22.12 or newer (required by Electron 45); CI uses Node 22.
+Electron 45 apps run on macOS 13 (Ventura) or newer and on 64-bit Windows and Linux only.
 
 1. `just install`
 2. `just electron-install`
