@@ -66,7 +66,9 @@ dependencies = [
     { name = "django" },
     { name = "django-browser-reload" },
     { name = "django-tasks-db" },
+    { name = "packaging" },
     { name = "pygobject", marker = "sys_platform == 'linux'" },
+    { name = "semver" },
     { name = "toga-cocoa", marker = "sys_platform == 'darwin'" },
     { name = "toga-gtk", marker = "sys_platform == 'linux'" },
     { name = "toga-winforms", marker = "sys_platform == 'win32'" },
@@ -77,7 +79,9 @@ requires-dist = [
     { name = "django", specifier = "==6.1.2" },
     { name = "django-browser-reload", specifier = ">=1.21.0" },
     { name = "django-tasks-db", specifier = "==0.13.0" },
+    { name = "packaging", specifier = ">=24.2" },
     { name = "pygobject", marker = "sys_platform == 'linux'", specifier = "<3.52.1" },
+    { name = "semver", specifier = ">=3.0.4" },
     { name = "toga-cocoa", marker = "sys_platform == 'darwin'", specifier = "~=0.5.0" },
     { name = "toga-gtk", marker = "sys_platform == 'linux'", specifier = "~=0.5.0" },
     { name = "toga-winforms", marker = "sys_platform == 'win32'", specifier = "~=0.5.0" },
@@ -246,6 +250,15 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/46/7a/b90db65d32583ecace5164420ec93a5321a0b90e7951f6b93aebd3e70eee/rubicon_objc-0.5.7.tar.gz", hash = "sha256:ed2a56284a18ceb6370276069e8aab685b5465bbb457a5f13e09e37d0618703d", size = 197088, upload-time = "2026-09-30T04:12:18.303Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/09/68/f2548a31901e437c49b676a395bb7bef9f879d4df496e0a18e17160816ad/rubicon_objc-0.5.7-py3-none-any.whl", hash = "sha256:3dc76bc29f300ee6b9a4f408748099f70f8472ca59fe70cca42dfa1f2f1bfe3f", size = 64666, upload-time = "2026-09-30T04:12:16.966Z" },
+]
+
+[[package]]
+name = "semver"
+version = "3.1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/92/f5/e1dfe8e1d91c54ce212fd93916eb01fd1c590f413be0a0978c39a97aa1bb/semver-3.1.0.tar.gz", hash = "sha256:14bc073439513d7773662a338f4db9829cf16c12b74b9568e2d2689975fbd7fc", size = 304162, upload-time = "2026-09-12T18:38:14.045Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/be/02/bce7a1d70e9d0f6ea8623c16386138c251b5855af6cd3a11433d3fba4e66/semver-3.1.0-py3-none-any.whl", hash = "sha256:6e4998f8b4762acdfea85f9bfd5b4032e0bb50038dc04bf82011b42d5d1145c5", size = 18783, upload-time = "2026-09-12T18:38:12.457Z" },
 ]
 
 [[package]]
