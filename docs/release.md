@@ -598,6 +598,25 @@ That means a normal reinstall or manual update should replace the installed appl
 - **Disk use:** old state directories are kept and not pruned automatically. Removing `state/<version>/` for versions you will not roll back to is safe while the app is closed.
 - `state/<version>/state.json` records when the directory was created and what it was copied from.
 
+## Recovering a local backend rebuild
+
+A staging build keeps the last successful `.stage/backend` until its replacement
+has copied sources, installed the bundled Python/packages, collected static
+files and passed structural validation. Builds use private build-only app data;
+`.stage/runtime-data` and unrelated `.stage` entries survive failed and successful
+rebuilds. Run staging with the packaged-like app closed, and run one build at a
+time. Publication briefly renames the old backend aside, then restores it if
+replacement fails. If rollback itself fails, the diagnostic names the private
+`previous-backend` retained for manual restoration; do not delete that tree.
+Normal failed builds remove only their own private tree. An interrupted build
+may leave a private tree; retain any previous backend it holds before cleanup.
+
+Symlink materialization copies the target and preserves its mode in a private
+sibling entry before replacing the link. Copy or chmod failure leaves the
+original link and target intact; broken links still produce an error. Failed
+replacement restores the original link, and a rollback failure reports the
+retained link path for manual restoration.
+
 ## Django Secret Key Handling
 
 Release artifacts do not contain a Django `SECRET_KEY`, and none of the shells inject one. On first start, the packaged settings generate a random key (`secrets.token_urlsafe(50)`) and store it as `secret_key` in the per-user app-data directory, created owner-only (`0600` on macOS and Linux; on Windows the file relies on the per-user app-data directory ACLs). Later starts reuse that file, so sessions and CSRF tokens stay valid across relaunches, updates, and reinstalls, while two installs never share a key.
