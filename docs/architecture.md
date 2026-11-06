@@ -37,6 +37,14 @@ Key expectations:
 - Tauri and Positron use the bootstrap cookie flow because their current web view paths do not have an Electron-equivalent external-localhost per-request header injection path
 - SQLite lives in a writable per-user app-data directory and stores both app data and task queue rows
 
+Shell authentication runs before CSRF validation. Both header and cookie
+credentials still require a valid Django CSRF token for mutations. When the
+browser sends an Origin header, it must match an allowed origin. On plain HTTP,
+Django also accepts token-valid requests without an Origin header. Integration tests use `Client(enforce_csrf_checks=True)` to exercise
+item deletion/clearing and task creation/clearing: missing or invalid CSRF and
+foreign origins leave both application rows and queue rows unchanged, valid
+same-origin requests succeed, and requests without shell credentials are denied.
+
 Current shell split note:
 
 - Electron remains the baseline shell and the most complete release-oriented packaging lane
