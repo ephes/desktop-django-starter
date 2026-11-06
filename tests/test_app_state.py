@@ -220,3 +220,76 @@ def test_equivalent_predecessors_have_deterministic_tie_break(tmp_path: Path, na
         make_database(tmp_path / "state" / name / "app.sqlite3", name)
     stable = prepare_versioned_state(tmp_path, "0.2.0")
     assert read_markers(stable / "app.sqlite3") == ["0.2.0rc1"]
+
+
+def test_disappeared_source_is_not_recreated(monkeypatch, tmp_path: Path) -> None:
+    from desktop_django_starter import app_state
+
+    source = tmp_path / "state" / "0.1.0" / "app.sqlite3"
+    make_database(source, "previous")
+    real_copy = app_state._copy_state
+
+    def remove_then_copy(source_dir, destination):
+        source.unlink()
+        real_copy(source_dir, destination)
+
+    monkeypatch.setattr(app_state, "_copy_state", remove_then_copy)
+    with pytest.raises(sqlite3.OperationalError):
+        prepare_versioned_state(tmp_path, "0.2.0")
+    assert not source.exists()
+    assert sorted(p.name for p in (tmp_path / "state").iterdir()) == ["0.1.0"]
+
+
+def test_invalid_source_publishes_nothing(tmp_path: Path) -> None:
+    source = tmp_path / "state" / "0.1.0" / "app.sqlite3"
+    source.parent.mkdir(parents=True)
+    source.write_bytes(b"invalid database")
+    with pytest.raises(sqlite3.DatabaseError):
+        prepare_versioned_state(tmp_path, "0.2.0")
+    assert source.read_bytes() == b"invalid database"
+    assert sorted(p.name for p in (tmp_path / "state").iterdir()) == ["0.1.0"]
+
+
+def test_source_uri_escapes_path_and_keeps_wal(tmp_path: Path) -> None:
+    app_data = tmp_path / "space ? # % unicode-é"
+    source = app_data / "state" / "0.1.0" / "app.sqlite3"
+    connection = make_database(source, "wal", keep_open=True)
+    try:
+        state = prepare_versioned_state(app_data, "0.2.0")
+    finally:
+        connection.close()
+    assert read_markers(state / "app.sqlite3") == ["wal"]
+    assert read_markers(source) == ["wal"]
+
+
+@pytest.mark.parametrize(
+    ("pathname", "expected"),
+    [
+        (
+            r"C:\Users\synthetic user\a?#%.sqlite3",
+            "file:///C:/Users/synthetic%20user/a%3F%23%25.sqlite3?mode=ro",
+        ),
+        (
+            r"\\server\share\synthetic user\app.sqlite3",
+            "file:////server/share/synthetic%20user/app.sqlite3?mode=ro",
+        ),
+        (r"\\?\UNC\server\share\app.sqlite3", "file:////server/share/app.sqlite3?mode=ro"),
+        (r"\\?\C:\synthetic user\app.sqlite3", "file:///C:/synthetic%20user/app.sqlite3?mode=ro"),
+    ],
+)
+def test_readonly_uri_handles_windows_paths_on_every_platform(pathname, expected) -> None:
+    from pathlib import PureWindowsPath
+
+    from desktop_django_starter.app_state import _readonly_database_uri
+
+    assert _readonly_database_uri(PureWindowsPath(pathname)) == expected
+
+
+def test_readonly_uri_handles_lowercase_extended_unc() -> None:
+    from pathlib import PureWindowsPath
+
+    from desktop_django_starter.app_state import _readonly_database_uri
+
+    assert _readonly_database_uri(PureWindowsPath(r"\\?\unc\server\share\app.sqlite3")) == (
+        "file:////server/share/app.sqlite3?mode=ro"
+    )

@@ -83,3 +83,11 @@ is retained for retry and rollback.
 
 Positron’s canonical Python a/b/rc prereleases use equivalent SemVer precedence;
 see [the supported version forms](release.md#upgrades-and-rollbacks).
+
+## D-018: Existing runtime inputs are descriptor-validated
+
+Open SQLite backup sources in read-only URI mode so vanished sources cannot be
+recreated empty. Read an existing secret key through one bounded descriptor,
+refusing special files and final symlinks/reparse points before reading. Use
+POSIX descriptor ownership/permissions, and Windows' public CreateFile API plus
+the existing per-user app-data ACL boundary.
