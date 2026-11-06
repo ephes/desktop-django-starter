@@ -14,10 +14,13 @@ const { pruneBundledPythonRuntime } = require("./prune-bundled-python-runtime.cj
 
 const repoRoot = path.resolve(__dirname, "..");
 const stageRoot = path.join(repoRoot, ".stage");
-const backendRoot = path.join(stageRoot, "backend");
-const buildRoot = path.join(stageRoot, ".build");
-const pythonInstallRoot = path.join(stageRoot, ".python-downloads");
-const runtimeDataRoot = path.join(stageRoot, "runtime-data");
+const publishedBackendRoot = path.join(stageRoot, "backend");
+fs.mkdirSync(stageRoot, { recursive: true });
+const workRoot = fs.mkdtempSync(path.join(stageRoot, ".backend-build-"));
+const backendRoot = path.join(workRoot, "backend");
+const buildRoot = path.join(workRoot, ".build");
+const pythonInstallRoot = path.join(workRoot, ".python-downloads");
+const runtimeDataRoot = path.join(workRoot, "runtime-data");
 const uvCommand = process.platform === "win32" ? "uv.exe" : "uv";
 const bundledPythonRequest = process.env.DESKTOP_DJANGO_BUNDLED_PYTHON_VERSION
   || DEFAULT_BUNDLED_PYTHON_VERSION;
@@ -25,7 +28,6 @@ const PACKAGED_STAGE_SECRET_KEY = "desktop-django-starter-packaged-stage-secret"
 const PROCESS_GUARD_FILENAME = "desktop_process_guard.py";
 
 function copyRequiredFiles() {
-  fs.rmSync(stageRoot, { recursive: true, force: true });
   fs.mkdirSync(backendRoot, { recursive: true });
   fs.mkdirSync(buildRoot, { recursive: true });
   fs.mkdirSync(pythonInstallRoot, { recursive: true });
@@ -56,7 +58,9 @@ function run(command, args, options = {}) {
   }
 
   if (result.status !== 0) {
-    process.exit(result.status ?? 1);
+    const error = new Error(`${command} failed with exit status ${result.status ?? 1}.`);
+    error.exitCode = result.status ?? 1;
+    throw error;
   }
 }
 
@@ -72,7 +76,9 @@ function capture(command, args, options = {}) {
 
   if (result.status !== 0) {
     process.stderr.write(result.stderr || "");
-    process.exit(result.status ?? 1);
+    const error = new Error(`${command} failed with exit status ${result.status ?? 1}.`);
+    error.exitCode = result.status ?? 1;
+    throw error;
   }
 
   return result.stdout;
@@ -225,12 +231,62 @@ function runPackagedManageCommand(pythonExecutable, args) {
   });
 }
 
-copyRequiredFiles();
-const bundledPython = stageBundledPythonRuntime();
-writeRuntimeManifest(backendRoot, readRuntimeInfo(bundledPython));
-installBundledPackages(bundledPython, buildWheel());
-runPackagedManageCommand(bundledPython, ["collectstatic", "--noinput"]);
-fs.rmSync(buildRoot, { recursive: true, force: true });
-fs.rmSync(pythonInstallRoot, { recursive: true, force: true });
+// Only publication touches the previous backend. Runtime data is never replaced.
+let preserveWorkRoot = false;
+function publishBackend() {
+  const previousRoot = path.join(workRoot, "previous-backend");
+  const hadPrevious = fs.existsSync(publishedBackendRoot);
+  if (hadPrevious) {
+    fs.renameSync(publishedBackendRoot, previousRoot);
+  }
+  try {
+    fs.renameSync(backendRoot, publishedBackendRoot);
+  } catch (error) {
+    if (hadPrevious) {
+      try {
+        fs.renameSync(previousRoot, publishedBackendRoot);
+      } catch (restoreError) {
+        preserveWorkRoot = true;
+        throw new Error(
+          `Backend publication and rollback failed; previous backend kept at ${previousRoot}.`,
+          { cause: restoreError }
+        );
+      }
+    }
+    throw error;
+  }
+}
 
-process.stdout.write(`Staged backend bundle at ${backendRoot}\n`);
+function validateBackend() {
+  for (const name of ["manage.py", PROCESS_GUARD_FILENAME, "runtime-manifest.json"]) {
+    if (!fs.statSync(path.join(backendRoot, name)).isFile()) {
+      throw new Error(`Staged backend is missing required file ${name}.`);
+    }
+  }
+  for (const name of ["staticfiles"]) {
+    if (!fs.statSync(path.join(backendRoot, name)).isDirectory()) {
+      throw new Error(`Staged backend is missing required directory ${name}.`);
+    }
+  }
+  if (!fs.statSync(resolveBundledPythonExecutable(backendRoot)).isFile()) {
+    throw new Error("Staged Python executable is not a file.");
+  }
+}
+
+try {
+  copyRequiredFiles();
+  const bundledPython = stageBundledPythonRuntime();
+  writeRuntimeManifest(backendRoot, readRuntimeInfo(bundledPython));
+  installBundledPackages(bundledPython, buildWheel());
+  runPackagedManageCommand(bundledPython, ["collectstatic", "--noinput"]);
+  validateBackend();
+  publishBackend();
+  process.stdout.write(`Staged backend bundle at ${publishedBackendRoot}\n`);
+} catch (error) {
+  process.stderr.write(`${error.message}\n`);
+  process.exitCode = error.exitCode ?? 1;
+} finally {
+  if (!preserveWorkRoot) {
+    fs.rmSync(workRoot, { recursive: true, force: true });
+  }
+}

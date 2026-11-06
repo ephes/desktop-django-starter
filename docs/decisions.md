@@ -69,3 +69,12 @@ Electron and Tauri start every backend process through `desktop_process_guard.py
 ## D-016: Ask before quitting while background tasks run
 
 Quitting interrupts a running `db_worker` task. The shells therefore ask before closing or quitting while `/desktop/activity/` (Positron: the same counts in-process) reports running or queued tasks. Queued tasks are not lost; they run on the next start. The check never blocks quitting when it fails, and it is skipped for update installs and smoke tests.
+
+## D-019: Keep the last successful staged backend
+
+Build and validate the replacement in an owned private tree before replacing
+`.stage/backend`. Child-command failures throw through cleanup rather than
+exiting around it. Runtime data belongs to the launcher and is never reset by
+a build. Keep the previous backend for rollback during publication. Materialize
+symlinks into private sibling entries before swapping them, preserving target
+mode and leaving the original link intact on copy or chmod failure.

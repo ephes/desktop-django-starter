@@ -88,3 +88,14 @@ def test_prune_bundled_python_runtime_removes_tk_and_idle_artifacts(tmp_path: Pa
     assert not tcl_library.exists()
     assert not tcl_tree.exists()
     assert unrelated.exists()
+
+
+def test_staging_preserves_last_success_with_synthetic_commands() -> None:
+    completed = subprocess.run(
+        ["node", "--test", str(ROOT / "tests" / "node" / "stage-backend.test.cjs")],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert completed.returncode == 0, completed.stdout + completed.stderr

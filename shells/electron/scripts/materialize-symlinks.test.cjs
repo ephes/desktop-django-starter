@@ -85,3 +85,86 @@ test("materializeSymlinks leaves normal files untouched", () => {
     assert.equal(fs.readFileSync(filePath, "utf8"), "{\"schemaVersion\":1}\n");
   });
 });
+
+for (const operation of ['copyFileSync', 'cpSync', 'chmodSync']) {
+  test(`materialization preserves original link when ${operation} fails`, () => {
+    withTempRoot(root => {
+      const target = path.join(root, 'target');
+      const bundle = path.join(root, 'bundle');
+      const link = path.join(bundle, 'python');
+      fs.mkdirSync(bundle);
+      if (operation === 'cpSync') {
+        fs.mkdirSync(target);
+        fs.writeFileSync(path.join(target, 'marker'), 'target');
+      } else {
+        fs.writeFileSync(target, 'target');
+      }
+      fs.symlinkSync(target, link, operation === 'cpSync' ? 'junction' : 'file');
+      const original = fs[operation];
+      let injected = 0;
+      fs[operation] = (source, destination) => {
+        injected++;
+        if (operation === 'cpSync') {
+          fs.mkdirSync(destination, { recursive: true });
+          fs.writeFileSync(path.join(destination, 'partial'), 'partial');
+        } else if (operation === 'copyFileSync') {
+          fs.writeFileSync(destination, 'partial');
+        }
+        throw new Error(`injected ${operation}`);
+      };
+      try {
+        assert.throws(() => materializeSymlinks(bundle), /injected/);
+      } finally {
+        fs[operation] = original;
+      }
+      assert.equal(injected, 1);
+      assert.ok(fs.lstatSync(link).isSymbolicLink());
+      assert.equal(fs.realpathSync(link), fs.realpathSync(target));
+      assert.deepEqual(fs.readdirSync(bundle), ['python']);
+      assert.equal(fs.readFileSync(operation === 'cpSync' ? path.join(target, 'marker') : target, 'utf8'), 'target');
+    });
+  });
+}
+
+test('materialization keeps executable permissions', () => withTempRoot(root => {
+  const target = path.join(root, 'target');
+  const bundle = path.join(root, 'bundle');
+  fs.mkdirSync(bundle);
+  fs.writeFileSync(target, 'executable');
+  fs.chmodSync(target, 0o755);
+  const expected = fs.statSync(target).mode & 0o777;
+  fs.symlinkSync(target, path.join(bundle, 'python'), 'file');
+  materializeSymlinks(bundle);
+  assert.equal(fs.statSync(path.join(bundle, 'python')).mode & 0o777, expected);
+}));
+
+
+for (const kind of ['file', 'directory']) {
+  test(`materialization restores ${kind} link if publication fails`, () => withTempRoot(root => {
+    const target = path.join(root, 'target');
+    const bundle = path.join(root, 'bundle');
+    const link = path.join(bundle, 'python');
+    fs.mkdirSync(bundle);
+    if (kind === 'directory') fs.mkdirSync(target);
+    else fs.writeFileSync(target, 'target');
+    fs.symlinkSync(target, link, kind === 'directory' ? 'junction' : 'file');
+    const originalRename = fs.renameSync;
+    let injected = false;
+    fs.renameSync = (source, destination) => {
+      if (destination === link && !injected) {
+        injected = true;
+        throw new Error('injected publication failure');
+      }
+      return originalRename(source, destination);
+    };
+    try {
+      assert.throws(() => materializeSymlinks(bundle), /injected publication failure/);
+    } finally {
+      fs.renameSync = originalRename;
+    }
+    assert.equal(injected, true);
+    assert.ok(fs.lstatSync(link).isSymbolicLink());
+    assert.equal(fs.realpathSync(link), fs.realpathSync(target));
+    assert.deepEqual(fs.readdirSync(bundle), ['python']);
+  }));
+}

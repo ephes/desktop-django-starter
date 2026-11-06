@@ -23,16 +23,40 @@ function materializeSymlinks(rootPath) {
         throw error;
       }
 
-      fs.rmSync(entryPath, { recursive: true, force: true });
+      const temporaryRoot = fs.mkdtempSync(path.join(rootPath, ".materialize-"));
+      const replacement = path.join(temporaryRoot, "replacement");
+      const original = path.join(temporaryRoot, "original");
+      let preserveTemporary = false;
+      try {
+        if (targetStats.isDirectory()) {
+          fs.cpSync(resolvedTarget, replacement, { recursive: true, dereference: true });
+          materializeSymlinks(replacement);
+        } else {
+          fs.copyFileSync(resolvedTarget, replacement);
+        }
+        fs.chmodSync(replacement, targetStats.mode);
 
-      if (targetStats.isDirectory()) {
-        fs.cpSync(resolvedTarget, entryPath, { recursive: true, dereference: true });
-        materializeSymlinks(entryPath);
-        continue;
+        // Directory copies cannot portably rename over a directory symlink.
+        // Retain the original link until the completed copy has been published.
+        fs.renameSync(entryPath, original);
+        try {
+          fs.renameSync(replacement, entryPath);
+        } catch (error) {
+          try {
+            fs.renameSync(original, entryPath);
+          } catch (restoreError) {
+            preserveTemporary = true;
+            throw new Error(`Materialization rollback failed; original link kept at ${original}.`, {
+              cause: restoreError
+            });
+          }
+          throw error;
+        }
+      } finally {
+        if (!preserveTemporary) {
+          fs.rmSync(temporaryRoot, { recursive: true, force: true });
+        }
       }
-
-      fs.copyFileSync(resolvedTarget, entryPath);
-      fs.chmodSync(entryPath, targetStats.mode);
       continue;
     }
 

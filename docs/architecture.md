@@ -171,6 +171,9 @@ Current expected direction:
 Current staged backend contract:
 
 - the shared staged backend is materialized under `.stage/backend/` at the repo root during local packaged-like builds
+- builds use an owned private `.stage/.backend-build-*` tree and build-only app data; copying, downloads, installs, collectstatic and validation finish before publication
+- publication renames the previous backend aside and restores it if replacement fails; `.stage/runtime-data/` and unrelated staging entries are preserved
+- runtime symlinks are copied and chmodded in private sibling entries before replacement; copy/chmod failures retain the original link and target
 - `backend/manage.py` stays at the bundle root
 - `backend/src/` keeps the normal source layout
 - `backend/python/` contains the bundled interpreter and installed dependencies
