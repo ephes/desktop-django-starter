@@ -11,6 +11,7 @@ from __future__ import annotations
 import os
 import secrets
 import stat
+import sys
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -94,7 +95,7 @@ def _open_key_windows(key_path: Path) -> int:
 def _read_secret_key(key_path: Path) -> str | None:
     descriptor = None
     try:
-        if os.name == "nt":
+        if sys.platform == "win32":
             descriptor = _open_key_windows(key_path)
         else:
             descriptor = os.open(key_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
@@ -103,7 +104,7 @@ def _read_secret_key(key_path: Path) -> str | None:
             not stat.S_ISREG(info.st_mode)
             or getattr(info, "st_file_attributes", 0) & 0x400  # reparse point
             or info.st_size > SECRET_KEY_MAX_BYTES
-            or (os.name != "nt" and info.st_uid != os.getuid())
+            or (sys.platform != "win32" and info.st_uid != os.getuid())
         ):
             raise ValueError("expected a small, owner-held regular file")
         # Bounded even if the file grows after fstat. No pathname is reopened.
@@ -115,7 +116,7 @@ def _read_secret_key(key_path: Path) -> str | None:
             key = raw_key.decode("ascii").strip()
             if not key:
                 raise ValueError("key is empty")
-            if os.name != "nt" and stat.S_IMODE(info.st_mode) & 0o077:
+            if sys.platform != "win32" and stat.S_IMODE(info.st_mode) & 0o077:
                 os.fchmod(key_file.fileno(), SECRET_KEY_FILE_MODE)
         return key
     except FileNotFoundError:
