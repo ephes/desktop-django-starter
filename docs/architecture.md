@@ -37,6 +37,12 @@ Key expectations:
 - Tauri and Positron use the bootstrap cookie flow because their current web view paths do not have an Electron-equivalent external-localhost per-request header injection path
 - SQLite lives in a writable per-user app-data directory and stores both app data and task queue rows
 
+The credential-bearing bootstrap route sets `Cache-Control: private, no-store`
+and `Referrer-Policy: no-referrer` on success and failure, including when no
+launch token is configured. Safe relative redirects and the HttpOnly,
+`SameSite=Strict` cookie still apply. These headers govern response storage and
+referrer forwarding; they do not promise to erase web view navigation history.
+
 Current shell split note:
 
 - Electron remains the baseline shell and the most complete release-oriented packaging lane

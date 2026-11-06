@@ -2,6 +2,13 @@
 
 This starter now includes the packaging scaffolding needed to make signing, notarization, a minimal Electron connected updater, an experimental Tauri connected updater, and manual updates explicit without turning the repository into a full production release system.
 
+## Unreleased
+
+- Credential-bearing desktop auth bootstrap responses now send
+  `Cache-Control: private, no-store` and `Referrer-Policy: no-referrer` on
+  success and failure. Adoption requires an updated desktop distribution;
+  no host deployment is needed.
+
 ## Packaging Workflow
 
 Three packaging paths are intentionally supported:

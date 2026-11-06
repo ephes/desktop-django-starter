@@ -9,6 +9,7 @@ from urllib.parse import urlsplit
 
 from django.conf import settings
 from django.http import HttpRequest, HttpResponse, HttpResponseForbidden, HttpResponseRedirect
+from django.utils.cache import patch_cache_control
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +25,13 @@ class DesktopAuthTokenMiddleware:
         self.get_response = get_response
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
+        response = self._authenticate(request)
+        if request.path == DESKTOP_AUTH_BOOTSTRAP_PATH:
+            patch_cache_control(response, private=True, no_store=True)
+            response["Referrer-Policy"] = "no-referrer"
+        return response
+
+    def _authenticate(self, request: HttpRequest) -> HttpResponse:
         expected_token = getattr(settings, "DESKTOP_DJANGO_AUTH_TOKEN", "")
         if not expected_token:
             if getattr(settings, "DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN", False):
@@ -54,9 +62,7 @@ class DesktopAuthTokenMiddleware:
     def _bootstrap(self, request: HttpRequest, expected_token: str) -> HttpResponse:
         request_token = request.GET.get("token", "")
         if not _tokens_match(request_token, expected_token):
-            logger.warning(
-                "Rejected desktop Django auth bootstrap with missing or invalid token."
-            )
+            logger.warning("Rejected desktop Django auth bootstrap with missing or invalid token.")
             return HttpResponseForbidden("Forbidden")
 
         next_path = request.GET.get("next", "/")
