@@ -69,3 +69,17 @@ Electron and Tauri start every backend process through `desktop_process_guard.py
 ## D-016: Ask before quitting while background tasks run
 
 Quitting interrupts a running `db_worker` task. The shells therefore ask before closing or quitting while `/desktop/activity/` (Positron: the same counts in-process) reports running or queued tasks. Queued tasks are not lost; they run on the next start. The check never blocks quitting when it fails, and it is skipped for update installs and smoke tests.
+
+## D-017: Ordered and bounded state initialization
+
+Use the public `semver.Version` parser for the shells' release versions, separately
+from directory naming. Unsupported versions stop initialization with recovery
+guidance; `unversioned` is retained without a release ordering for build/local use.
+Use one total monotonic startup budget through SQLite's backup progress callback,
+including both copying and lock retries. This deliberately bounds startup even on
+slow storage; oversized copies require a build with a larger budget. Older state
+is retained for retry and rollback.
+
+
+Positron’s canonical Python a/b/rc prereleases use equivalent SemVer precedence;
+see [the supported version forms](release.md#upgrades-and-rollbacks).

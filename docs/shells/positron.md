@@ -66,3 +66,10 @@ Scope boundaries:
 
 - supported
 - Positron intentionally differs from Electron and Tauri here: the shell starts the `django_tasks_db` worker in-process on a thread instead of spawning a `db_worker` subprocess
+
+Positron's canonical Python prereleases (`X.Y.ZaN`, `X.Y.ZbN`, `X.Y.ZrcN`)
+are accepted for state selection and mapped to SemVer `alpha.N`, `beta.N`,
+`rc.N` precedence. Directory names keep their original spelling. Python dev,
+post, epoch and other version forms without a direct supported SemVer peer are
+refused with a configuration error; use stable or a/b/rc release versions for
+Positron builds. Equivalent spellings compare equally and are not predecessors.
