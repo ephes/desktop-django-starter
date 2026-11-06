@@ -2,6 +2,12 @@
 
 This starter now includes the packaging scaffolding needed to make signing, notarization, a minimal Electron connected updater, an experimental Tauri connected updater, and manual updates explicit without turning the repository into a full production release system.
 
+## Unreleased
+
+- CSRF-enforcing integration tests cover CRUD and task mutations with both
+  shell credential modes. Shell authentication and Django CSRF checks remain
+  separate requirements; this adds regression coverage, not a new auth flow.
+
 ## Packaging Workflow
 
 Three packaging paths are intentionally supported:
