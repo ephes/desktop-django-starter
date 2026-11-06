@@ -158,6 +158,7 @@ Expected persistence rules:
 - the first start of a new version creates its state directory from a copy of the newest older version's state, or from the pre-versioning `<app-data>/app.sqlite3`, then runs its migrations on the copy; the SQLite copy uses the backup API, so data still in the `-wal` file after an unclean shutdown is included, and the directory appears atomically (staged, then renamed)
 - older state directories are kept for rollback: going back to an older version reopens that version's own directory with its data as that version left it; changes made in the newer version do not travel back. State from a newer version is never imported into an older one, so a rollback to a version that never ran on this machine starts empty and logs a warning
 - predecessor selection uses public SemVer parsing plus the narrow Positron a/b/rc mapping described in [the release guide](release.md#upgrades-and-rollbacks): `0.2.0-rc.2 < 0.2.0-rc.10 < 0.2.0`; unsupported current or candidate versions stop startup with recovery guidance
+- SQLite sources open through an escaped read-only URI; a disappeared or invalid source fails initialization without recreating it or publishing state
 - SQLite backup has a total monotonic 30-second startup budget, including busy retries and page copying; failure closes connections and removes only unpublished staging
 - the `unversioned` build/local fallback has no release ordering and only imports legacy root state
 
@@ -189,6 +190,7 @@ Current launcher contract:
 - Electron and Tauri packaged mode resolve the interpreter from `backend/runtime-manifest.json`
 - Electron and Tauri then run `manage.py` from `backend/` for both `runserver` and `db_worker`
 - packaged settings still rely on runtime environment variables for writable app data, bundle dir, localhost host/port, an optional secret-key override, and unbuffered Python output
+- existing secret keys are read once through a descriptor, with final symlinks/reparse points refused, regular-file and size checks (4096 bytes maximum), and POSIX ownership and descriptor permission checks; Windows uses `CreateFileW` with `FILE_FLAG_OPEN_REPARSE_POINT` and relies on app-data ACLs
 - no shell injects a `DJANGO_SECRET_KEY`; when the environment does not provide one, packaged settings generate a per-install `DJANGO_SECRET_KEY` in the app-data directory (`secret_key`, created once with `secrets.token_urlsafe(50)` and owner-only `0600` permissions on POSIX) and reuse it on later starts, so every install signs sessions, CSRF tokens, and password-reset links with its own key; an explicit `DJANGO_SECRET_KEY` environment variable still wins
 - packaged Django settings keep SQLite in per-user app data and now add desktop-oriented SQLite tuning with `transaction_mode=IMMEDIATE`, a 20-second timeout, `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, and modest cache/mmap settings
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables

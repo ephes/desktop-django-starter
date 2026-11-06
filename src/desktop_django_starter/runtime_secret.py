@@ -11,12 +11,14 @@ from __future__ import annotations
 import os
 import secrets
 import stat
+import sys
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 
 SECRET_KEY_FILENAME = "secret_key"
 SECRET_KEY_FILE_MODE = 0o600
+SECRET_KEY_MAX_BYTES = 4096
 
 
 def load_or_create_secret_key(app_data_dir: Path) -> str:
@@ -57,25 +59,74 @@ def load_or_create_secret_key(app_data_dir: Path) -> str:
     return created_key
 
 
-def _read_secret_key(key_path: Path) -> str | None:
+def _open_key_windows(key_path: Path) -> int:
+    """Open the entry itself, including reparse points, using the Windows API."""
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+    # GENERIC_READ, shared read/write/delete, OPEN_EXISTING,
+    # FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS.
+    handle = create_file(str(key_path), 0x80000000, 0x7, None, 3, 0x02200000, None)
+    if handle == ctypes.c_void_p(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())  # type: ignore[attr-defined]
     try:
-        raw_key = key_path.read_bytes()
+        return msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)  # type: ignore[attr-defined]
+    except BaseException:
+        close_handle(handle)
+        raise
+
+
+def _read_secret_key(key_path: Path) -> str | None:
+    descriptor = None
+    try:
+        if sys.platform == "win32":
+            descriptor = _open_key_windows(key_path)
+        else:
+            descriptor = os.open(key_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        info = os.fstat(descriptor)
+        if (
+            not stat.S_ISREG(info.st_mode)
+            or getattr(info, "st_file_attributes", 0) & 0x400  # reparse point
+            or info.st_size > SECRET_KEY_MAX_BYTES
+            or (sys.platform != "win32" and info.st_uid != os.getuid())
+        ):
+            raise ValueError("expected a small, owner-held regular file")
+        # Bounded even if the file grows after fstat. No pathname is reopened.
+        with os.fdopen(descriptor, "rb") as key_file:
+            descriptor = None
+            raw_key = key_file.read(SECRET_KEY_MAX_BYTES + 1)
+            if len(raw_key) > SECRET_KEY_MAX_BYTES:
+                raise ValueError("key file is too large")
+            key = raw_key.decode("ascii").strip()
+            if not key:
+                raise ValueError("key is empty")
+            if sys.platform != "win32" and stat.S_IMODE(info.st_mode) & 0o077:
+                os.fchmod(key_file.fileno(), SECRET_KEY_FILE_MODE)
+        return key
     except FileNotFoundError:
         return None
-
-    _restrict_permissions(key_path)
-    key = raw_key.decode("ascii").strip() if raw_key.isascii() else ""
-    if not key:
+    except (OSError, ValueError) as error:
         raise ImproperlyConfigured(
-            f"The packaged secret key file {key_path} is empty or invalid. "
-            "Delete it to generate a new key (this signs out existing sessions)."
-        )
-    return key
-
-
-def _restrict_permissions(key_path: Path) -> None:
-    if os.name == "nt":
-        return
-    current_mode = stat.S_IMODE(key_path.stat().st_mode)
-    if current_mode & 0o077:
-        os.chmod(key_path, SECRET_KEY_FILE_MODE)
+            f"The packaged secret key file {key_path} is unsafe or invalid. "
+            "Use a regular file owned by this user with at most 4096 ASCII bytes, "
+            "or remove the key entry to generate a new key (this signs out existing sessions)."
+        ) from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)

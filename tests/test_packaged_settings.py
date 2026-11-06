@@ -27,9 +27,7 @@ def load_packaged_settings(monkeypatch, app_data_dir: Path):
         unload_packaged_settings()
 
 
-def test_packaged_settings_create_owner_only_secret_key_once(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_packaged_settings_create_owner_only_secret_key_once(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.delenv("DJANGO_SECRET_KEY", raising=False)
 
     first = load_packaged_settings(monkeypatch, tmp_path)
@@ -61,9 +59,7 @@ def test_packaged_settings_generate_distinct_keys_per_app_data_dir(
     assert first.SECRET_KEY != second.SECRET_KEY
 
 
-def test_packaged_settings_env_secret_key_overrides_key_file(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_packaged_settings_env_secret_key_overrides_key_file(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("DJANGO_SECRET_KEY", "explicit-env-secret")
 
     settings = load_packaged_settings(monkeypatch, tmp_path)
@@ -135,9 +131,7 @@ def test_packaged_settings_use_app_data_dir(monkeypatch, tmp_path: Path) -> None
     unload_packaged_settings()
 
 
-def test_packaged_sqlite_pragmas_apply_on_connection(
-    monkeypatch, tmp_path: Path
-) -> None:
+def test_packaged_sqlite_pragmas_apply_on_connection(monkeypatch, tmp_path: Path) -> None:
     bundle_dir = tmp_path / "bundle"
     monkeypatch.setenv("DJANGO_SECRET_KEY", "packaged-test-secret")
     monkeypatch.setenv("DESKTOP_DJANGO_APP_DATA_DIR", str(tmp_path))
@@ -173,3 +167,128 @@ def test_packaged_settings_require_token_and_keep_app_data_private(
     assert settings_module.DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN is True
     if os.name != "nt":
         assert stat.S_IMODE(app_data_dir.stat().st_mode) == 0o700
+
+
+@pytest.mark.parametrize("kind", ["fifo", "reparse", "oversized"])
+def test_secret_key_descriptor_rejects_unsafe_files(monkeypatch, tmp_path: Path, kind) -> None:
+    from types import SimpleNamespace
+
+    key_path = tmp_path / SECRET_KEY_FILENAME
+    key_path.write_text("synthetic-key")
+    original_fstat = os.fstat
+    calls = []
+
+    def unsafe_info(descriptor):
+        calls.append(descriptor)
+        info = original_fstat(descriptor)
+        return SimpleNamespace(
+            st_mode=stat.S_IFIFO if kind == "fifo" else info.st_mode,
+            st_size=4097 if kind == "oversized" else info.st_size,
+            st_uid=getattr(info, "st_uid", 0),
+            st_file_attributes=0x400 if kind == "reparse" else 0,
+        )
+
+    monkeypatch.setattr(runtime_secret.os, "fstat", unsafe_info)
+    with pytest.raises(ImproperlyConfigured, match="unsafe or invalid"):
+        load_or_create_secret_key(tmp_path)
+    assert len(calls) == 1
+    assert key_path.read_text() == "synthetic-key"
+
+
+def test_secret_key_symlink_is_rejected_without_touching_target(tmp_path: Path) -> None:
+    target = tmp_path / "unrelated"
+    target.write_text("unrelated-secret")
+    target.chmod(0o644)
+    original_mode = target.stat().st_mode
+    (tmp_path / SECRET_KEY_FILENAME).symlink_to(target)
+    with pytest.raises(ImproperlyConfigured):
+        load_or_create_secret_key(tmp_path)
+    assert target.read_text() == "unrelated-secret"
+    assert target.stat().st_mode == original_mode
+
+
+def test_secret_key_directory_has_controlled_error(tmp_path: Path) -> None:
+    (tmp_path / SECRET_KEY_FILENAME).mkdir()
+    with pytest.raises(ImproperlyConfigured):
+        load_or_create_secret_key(tmp_path)
+
+
+def test_secret_key_read_is_bounded_if_file_grows(monkeypatch, tmp_path: Path) -> None:
+    key_path = tmp_path / SECRET_KEY_FILENAME
+    key_path.write_bytes(b"a" * 4097)
+    original_fstat = os.fstat
+
+    def stale_info(descriptor):
+        from types import SimpleNamespace
+
+        info = original_fstat(descriptor)
+        return SimpleNamespace(
+            st_mode=info.st_mode,
+            st_size=1,
+            st_uid=getattr(info, "st_uid", 0),
+            st_file_attributes=0,
+        )
+
+    monkeypatch.setattr(runtime_secret.os, "fstat", stale_info)
+    with pytest.raises(ImproperlyConfigured):
+        load_or_create_secret_key(tmp_path)
+
+
+def test_windows_secret_open_preserves_reparse_points(monkeypatch, tmp_path: Path) -> None:
+    import ctypes
+    from types import SimpleNamespace
+
+    calls = []
+
+    class CreateFile:
+        def __call__(self, *args):
+            calls.append(args)
+            return 123
+
+    class CloseHandle:
+        def __call__(self, handle):
+            raise AssertionError("descriptor owns handle after successful conversion")
+
+    kernel32 = SimpleNamespace(CreateFileW=CreateFile(), CloseHandle=CloseHandle())
+    monkeypatch.setattr(ctypes, "WinDLL", lambda *a, **kw: kernel32, raising=False)
+    monkeypatch.setattr(os, "O_BINARY", 0x8000, raising=False)
+    monkeypatch.setitem(sys.modules, "msvcrt", SimpleNamespace(open_osfhandle=lambda h, f: 456))
+    assert runtime_secret._open_key_windows(tmp_path / SECRET_KEY_FILENAME) == 456
+    assert calls[0][4] == 3  # OPEN_EXISTING, never create a missing source
+    assert calls[0][5] & 0x00200000  # FILE_FLAG_OPEN_REPARSE_POINT
+
+
+def test_secret_key_permissions_follow_descriptor_after_path_replacement(
+    monkeypatch, tmp_path: Path
+) -> None:
+    key_path = tmp_path / SECRET_KEY_FILENAME
+    key_path.write_text("original-key")
+    key_path.chmod(0o644)
+    unrelated = tmp_path / "unrelated"
+    unrelated.write_text("unrelated")
+    unrelated.chmod(0o644)
+    unrelated_mode = unrelated.stat().st_mode
+    original_fdopen = os.fdopen
+    changed = []
+
+    def replace_path(descriptor, mode):
+        key_path.rename(tmp_path / "saved-key")
+        key_path.symlink_to(unrelated)
+        changed.append(True)
+        return original_fdopen(descriptor, mode)
+
+    monkeypatch.setattr(runtime_secret.os, "fdopen", replace_path)
+    assert load_or_create_secret_key(tmp_path) == "original-key"
+    assert changed == [True]
+    assert unrelated.stat().st_mode == unrelated_mode
+    assert unrelated.read_text() == "unrelated"
+
+
+def test_concurrent_secret_creators_read_one_complete_key(tmp_path: Path) -> None:
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        keys = list(pool.map(lambda _: load_or_create_secret_key(tmp_path), range(16)))
+    assert len(set(keys)) == 1
+    assert len(keys[0]) >= 50
+    assert [p.name for p in tmp_path.iterdir()] == [SECRET_KEY_FILENAME]

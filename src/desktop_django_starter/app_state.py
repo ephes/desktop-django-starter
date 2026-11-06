@@ -26,7 +26,8 @@ import sqlite3
 import tempfile
 import time
 from datetime import UTC, datetime
-from pathlib import Path
+from pathlib import Path, PurePath
+from urllib.parse import quote
 
 from django.core.exceptions import ImproperlyConfigured
 from packaging.version import Version as PythonVersion
@@ -162,6 +163,18 @@ def _find_previous_state(
     return None, None
 
 
+def _readonly_database_uri(database: PurePath) -> str:
+    """Encode local/UNC paths without a SQLite URI hostname authority."""
+    pathname = database.as_posix()
+    if pathname[:8].upper() == "//?/UNC/":
+        pathname = "//" + pathname[8:]
+    elif pathname.startswith("//?/"):
+        pathname = pathname[4:]
+    prefix = "file://" if pathname.startswith("//") else "file:///"
+    encoded = quote(pathname if pathname.startswith("//") else pathname.lstrip("/"), safe="/:")
+    return prefix + encoded + "?mode=ro"
+
+
 def _copy_state(source: Path, destination: Path) -> None:
     # The backup API copies a consistent snapshot, including pages that are
     # still only in the -wal file after an unclean shutdown.
@@ -176,7 +189,8 @@ def _copy_state(source: Path, destination: Path) -> None:
                 "backup budget before retrying."
             )
 
-    source_database = sqlite3.connect(source / DATABASE_FILENAME, timeout=0.1)
+    source_uri = _readonly_database_uri((source / DATABASE_FILENAME).absolute())
+    source_database = sqlite3.connect(source_uri, uri=True, timeout=0.1)
     try:
         target_database = sqlite3.connect(destination / DATABASE_FILENAME)
         try:
