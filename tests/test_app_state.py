@@ -251,7 +251,8 @@ def test_invalid_source_publishes_nothing(tmp_path: Path) -> None:
 
 
 def test_source_uri_escapes_path_and_keeps_wal(tmp_path: Path) -> None:
-    app_data = tmp_path / "space ? # % unicode-é"
+    # Use names legal on every OS; '?' escaping is covered by PureWindowsPath fixtures.
+    app_data = tmp_path / "space # % unicode-é"
     source = app_data / "state" / "0.1.0" / "app.sqlite3"
     connection = make_database(source, "wal", keep_open=True)
     try:
