@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import pytest
 from django.conf import settings
 from django.core.management import call_command
 from django.test import override_settings
@@ -9,6 +10,41 @@ from desktop_django_starter.middleware import DESKTOP_AUTH_COOKIE
 TOKEN = "test-desktop-auth-token"
 HEADER = {"HTTP_X_DESKTOP_DJANGO_TOKEN": TOKEN}
 BOOTSTRAP_PATH = "/desktop-auth/bootstrap/"
+
+
+@pytest.mark.parametrize(
+    ("configured_token", "required", "query", "status"),
+    [
+        (TOKEN, False, {"token": TOKEN, "next": "/tasks/?status=queued"}, 302),
+        (TOKEN, False, {"token": TOKEN}, 302),
+        (TOKEN, False, {}, 403),
+        (TOKEN, False, {"token": "wrong"}, 403),
+        (TOKEN, False, {"token": "\u00e4"}, 403),
+        (TOKEN, False, {"token": TOKEN, "next": "//foreign.example/"}, 403),
+        ("", True, {"token": TOKEN}, 403),
+        ("", False, {"token": TOKEN}, 404),
+    ],
+)
+def test_bootstrap_outcomes_have_private_response_headers(
+    client, configured_token, required, query, status
+) -> None:
+    with override_settings(
+        DESKTOP_DJANGO_AUTH_TOKEN=configured_token,
+        DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN=required,
+    ):
+        response = client.get(BOOTSTRAP_PATH, query)
+
+    assert response.status_code == status
+    assert {"private", "no-store"} <= set(response["Cache-Control"].split(", "))
+    assert response["Referrer-Policy"] == "no-referrer"
+    if status == 302:
+        assert response["Location"] == query.get("next", "/")
+        cookie = response.cookies[DESKTOP_AUTH_COOKIE]
+        assert cookie.value == TOKEN
+        assert cookie["httponly"] is True
+        assert cookie["samesite"] == "Strict"
+    else:
+        assert DESKTOP_AUTH_COOKIE not in response.cookies
 
 
 def test_without_configured_token_health_remains_available(client) -> None:
