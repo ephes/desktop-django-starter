@@ -4,6 +4,11 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 
 ## Unreleased
 
+- Prompt-only CLI tests cover relocated paths and read-only operation without
+  tools/config. Similar starter names are preserved; missing, unreadable or
+  invalid UTF-8 prompt templates now produce a CLI error. Discovery regressions
+  protect excluded trees, sorted multiple roots and launch blocking on failure.
+
 - CSRF-enforcing integration tests cover CRUD and task mutations with both
   shell credential modes. Shell authentication and Django CSRF checks remain
   separate requirements; this adds regression coverage, not a new auth flow.

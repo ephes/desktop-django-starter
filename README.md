@@ -84,6 +84,12 @@ default (Pi uses `openai-codex/gpt-5.4`). Changing harness during `dds init`
 starts the optional model prompt with no saved model; keeping the harness keeps
 its model.
 
+`dds wrap --emit-prompt` works offline without setup and substitutes only full
+starter-path prefixes, preserving literal relocated paths and similar text.
+Unreadable UTF-8 templates fail with a CLI diagnostic. Project discovery lists
+nested/multiple roots while excluding hidden, environment and dependency trees
+and directory symlinks; failed discovery prevents harness launch.
+
 Preflight requires a successful `git status`. A failed inspection blocks wrapping
 even with `--force`; that flag permits known uncommitted changes and an existing
 `electron/` directory. Command failure diagnostics are truncated to 800 UTF-8 bytes.

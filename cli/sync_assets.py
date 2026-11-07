@@ -15,7 +15,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = Path(__file__).resolve().parent / "src" / "dds" / "_assets"
 
 # Repo-relative paths to bundle.  The _assets layout mirrors the repo structure
-# so prompt.md path substitution (replacing "../desktop-django-starter" with the
+# so prompt.md path substitution (replacing "../desktop-django-starter/" with the
 # assets root) works unchanged.
 CANONICAL_ASSETS: list[str] = [
     # Electron shell

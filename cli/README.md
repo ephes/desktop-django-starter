@@ -71,6 +71,20 @@ Options:
 - `--force` — permit known dirty worktrees and existing electron/ directories; failed Git inspection still blocks
 - `--emit-prompt` — print the resolved wrapping prompt to stdout
 
+Prompt emission is offline and read-only, even when combined with `--run`.
+It bypasses tool checks, project discovery, saved config and harness setup.
+The UTF-8 template replaces only `../desktop-django-starter/` path prefixes
+with the installed asset root; spaces, Unicode and shell punctuation remain
+literal. Similar ordinary text and bare repo-root names without a trailing
+slash are preserved. Missing, unreadable or invalid
+UTF-8 templates produce a CLI error and exit 1.
+
+Discovery accepts a root or nested `manage.py`, excluding hidden directories,
+`venv`, `env`, `node_modules` and `__pycache__`, and does not follow directory
+symlinks. Multiple paths are listed in sorted order for the harness to inspect;
+no discovery blocks every harness, including with `--force`. Missing tools
+remain warnings in preflight-only mode and errors with `--run`.
+
 ### `dds doctor`
 
 Check that prerequisites are installed, bundled assets are intact, and the

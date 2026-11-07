@@ -85,6 +85,16 @@ default (Pi uses `openai-codex/gpt-5.4`). Changing harness during `dds init`
 starts the optional model prompt with no saved model; keeping the harness keeps
 its model.
 
+`dds wrap --emit-prompt` is an offline, read-only path that bypasses setup,
+saved config, discovery and tool checks, including when combined with `--run`.
+Only `../desktop-django-starter/` path prefixes are replaced; similar text is
+preserved. Templates are UTF-8; missing/unreadable templates exit 1 with a
+CLI diagnostic. Project discovery excludes hidden directories, environments
+(`venv`, `env`), `node_modules`, `__pycache__` and directory symlinks. Nested
+projects are accepted; multiple roots are sorted for harness inspection.
+No discovered `manage.py` blocks launch even with `--force`. Tool absence is
+advisory only in preflight-only mode.
+
 Preflight requires a successful `git status`. A failed inspection blocks wrapping
 even with `--force`; that flag permits known uncommitted changes and an existing
 `electron/` directory. Command failure diagnostics are truncated to 800 UTF-8 bytes.
