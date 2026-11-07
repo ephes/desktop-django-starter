@@ -253,8 +253,8 @@ def test_resolve_run_config_prefers_cli_harness_over_saved_config(
 
     assert resolved.harness == "codex"
     assert resolved.harness_source == "cli"
-    assert resolved.model == "saved-model"
-    assert resolved.model_source == "config"
+    assert resolved.model is None
+    assert resolved.model_source is None
 
 
 def test_resolve_run_config_prefers_cli_model_over_saved_config(

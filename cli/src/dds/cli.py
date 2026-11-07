@@ -44,14 +44,18 @@ def main(argv: list[str] | None = None) -> None:
         help=(
             "Model to pass to the selected agent. "
             "Overrides any saved default model. "
-            "When omitted, saved config or the harness CLI default is used; "
+            "When omitted, a saved model is used only for its matching harness; "
+            "otherwise the harness CLI default is used; "
             "pi defaults to openai-codex/gpt-5.4."
         ),
     )
     wrap_parser.add_argument(
         "--force",
         action="store_true",
-        help="Bypass dirty-worktree and existing-electron/ checks",
+        help=(
+            "Permit known dirty worktrees and existing electron/ directories; "
+            "failed Git inspection still blocks"
+        ),
     )
     wrap_parser.add_argument(
         "--emit-prompt",

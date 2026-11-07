@@ -82,7 +82,12 @@ def test_normal_completion_preserves_exit_code(monkeypatch, returncode):
     monkeypatch.setattr(
         wrap,
         "_claude_command",
-        lambda *args: [sys.executable, "-c", f"print('done'); raise SystemExit({returncode})"],
+        lambda *args: [
+            sys.executable,
+            "-c",
+            f"print('{json.dumps(dict(type='result', is_error=False))}'); "
+            f"raise SystemExit({returncode})",
+        ],
     )
     if returncode:
         with pytest.raises(SystemExit) as error:
@@ -151,7 +156,7 @@ def test_normal_completion_cleans_redirected_descendant(tmp_path, monkeypatch):
         f"    open({str(pid_file)!r}, 'w').write(str(os.getpid()))\n"
         "    while True: time.sleep(1)\n"
         f"while not os.path.exists({str(pid_file)!r}): time.sleep(.01)\n"
-        "print('done', flush=True)\n"
+        'print(\'{"type":"result","is_error":false}\', flush=True)\n'
     )
     monkeypatch.setattr(wrap, "_claude_command", lambda *args: [sys.executable, "-c", script])
     try:
