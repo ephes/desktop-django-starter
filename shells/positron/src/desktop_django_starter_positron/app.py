@@ -74,7 +74,16 @@ class DesktopDjangoStarterPositron(toga.App):
             )
             return
 
-        port = await self.server_ready
+        try:
+            port = await self.server_ready
+        except Exception as error:
+            self.cleanup()
+            self.main_window.show()
+            self.main_window.error_dialog(
+                "Startup failed", str(error), on_result=lambda *_args: self.exit()
+            )
+            return
+
         self.start_task_worker()
         self.web_view.url = self.bootstrap_url(port)
         self.main_window.show()
@@ -204,7 +213,12 @@ class DesktopDjangoStarterPositron(toga.App):
             _host, port = self._httpd.socket.getsockname()
             self.loop.call_soon_threadsafe(self.server_ready.set_result, port)
             self._httpd.serve_forever()
-        except Exception as error:  # pragma: no cover - surfaced during manual shell startup
+        except Exception as error:
+            # shutdown() waits for serve_forever(): before readiness, close the
+            # bound socket here instead, so startup cleanup cannot deadlock.
+            if self._httpd is not None:
+                self._httpd.server_close()
+                self._httpd = None
             if not self.server_ready.done():
                 self.loop.call_soon_threadsafe(self.server_ready.set_exception, error)
 

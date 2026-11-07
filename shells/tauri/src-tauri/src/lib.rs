@@ -280,14 +280,23 @@ fn get_open_port() -> Result<u16, String> {
         .map_err(|error| error.to_string())
 }
 
+const LOCAL_HTTP_HEADER_LIMIT: usize = 16 * 1024;
+const LOCAL_HTTP_BODY_LIMIT: usize = 16 * 1024;
+
 fn local_get(port: u16, path: &str, auth_token: &str) -> Option<String> {
-    // Bounded timeouts keep a listener that accepts but never answers from
-    // blocking past the startup deadline (or a quit).
+    local_get_until(
+        port,
+        path,
+        auth_token,
+        Instant::now() + Duration::from_millis(HEALTH_REQUEST_TIMEOUT_MS),
+    )
+}
+
+fn local_get_until(port: u16, path: &str, auth_token: &str, deadline: Instant) -> Option<String> {
     let address = std::net::SocketAddr::from(([127, 0, 0, 1], port));
-    let timeout = Duration::from_millis(HEALTH_REQUEST_TIMEOUT_MS);
-    let mut stream = TcpStream::connect_timeout(&address, timeout).ok()?;
-    stream.set_read_timeout(Some(timeout)).ok()?;
-    stream.set_write_timeout(Some(timeout)).ok()?;
+    let mut stream =
+        TcpStream::connect_timeout(&address, deadline.checked_duration_since(Instant::now())?)
+            .ok()?;
     let auth_header = if auth_token.is_empty() {
         String::new()
     } else {
@@ -296,11 +305,81 @@ fn local_get(port: u16, path: &str, auth_token: &str) -> Option<String> {
     let request = format!(
         "GET {path} HTTP/1.1\r\nHost: {HOST}:{port}\r\n{auth_header}Connection: close\r\n\r\n"
     );
-    stream.write_all(request.as_bytes()).ok()?;
+    let mut remaining = request.as_bytes();
+    while !remaining.is_empty() {
+        stream
+            .set_write_timeout(Some(deadline.checked_duration_since(Instant::now())?))
+            .ok()?;
+        let written = stream.write(remaining).ok()?;
+        if written == 0 {
+            return None;
+        }
+        remaining = &remaining[written..];
+    }
 
-    let mut response = String::new();
-    stream.read_to_string(&mut response).ok()?;
-    Some(response)
+    let mut response = Vec::new();
+    let mut body_start = None;
+    let mut content_length = None;
+    loop {
+        stream
+            .set_read_timeout(Some(deadline.checked_duration_since(Instant::now())?))
+            .ok()?;
+        let mut chunk = [0; 1024];
+        let count = stream.read(&mut chunk).ok()?;
+        if Instant::now() >= deadline {
+            return None;
+        }
+        response.extend_from_slice(&chunk[..count]);
+        if response.len() > LOCAL_HTTP_HEADER_LIMIT + LOCAL_HTTP_BODY_LIMIT {
+            return None;
+        }
+        if body_start.is_none() {
+            if let Some(index) = response.windows(4).position(|part| part == b"\r\n\r\n") {
+                let start = index + 4;
+                if start > LOCAL_HTTP_HEADER_LIMIT {
+                    return None;
+                }
+                let headers = std::str::from_utf8(&response[..index]).ok()?;
+                for line in headers.lines().skip(1) {
+                    let (name, value) = line.split_once(':')?;
+                    // This tiny local protocol supports a length or EOF, not chunking.
+                    if name.eq_ignore_ascii_case("transfer-encoding") {
+                        return None;
+                    }
+                    if name.eq_ignore_ascii_case("content-length") {
+                        if content_length.is_some() {
+                            return None;
+                        }
+                        let length = value.trim().parse::<usize>().ok()?;
+                        if length > LOCAL_HTTP_BODY_LIMIT {
+                            return None;
+                        }
+                        content_length = Some(length);
+                    }
+                }
+                body_start = Some(start);
+            } else if response.len() >= LOCAL_HTTP_HEADER_LIMIT || count == 0 {
+                return None;
+            }
+        }
+        if let Some(start) = body_start {
+            let bytes = response.len() - start;
+            if bytes > LOCAL_HTTP_BODY_LIMIT {
+                return None;
+            }
+            if let Some(length) = content_length {
+                if bytes > length || (count == 0 && bytes != length) {
+                    return None;
+                }
+                if bytes == length {
+                    return String::from_utf8(response).ok();
+                }
+            }
+            if count == 0 {
+                return String::from_utf8(response).ok();
+            }
+        }
+    }
 }
 
 fn response_status(response: &str) -> Option<u16> {
@@ -310,8 +389,9 @@ fn response_status(response: &str) -> Option<u16> {
     parts.next()?.parse::<u16>().ok()
 }
 
-fn health_status(port: u16, auth_token: &str) -> Option<u16> {
-    response_status(&local_get(port, "/health/", auth_token)?)
+fn health_status(port: u16, auth_token: &str, deadline: Instant) -> Option<u16> {
+    let deadline = deadline.min(Instant::now() + Duration::from_millis(HEALTH_REQUEST_TIMEOUT_MS));
+    response_status(&local_get_until(port, "/health/", auth_token, deadline)?)
 }
 
 fn parse_activity_response(response: &str) -> Option<ActivityCounts> {
@@ -332,9 +412,8 @@ fn exit_confirmation_message(counts: ActivityCounts) -> Option<String> {
     }
     // Running tasks are interrupted by quitting; queued tasks stay in the
     // database and start when the app runs again.
-    let plural = |count: u64, noun: &str| {
-        format!("{count} {noun}{}", if count == 1 { "" } else { "s" })
-    };
+    let plural =
+        |count: u64, noun: &str| format!("{count} {noun}{}", if count == 1 { "" } else { "s" });
     let mut parts = Vec::new();
     if counts.running_tasks > 0 {
         parts.push(format!(
@@ -352,14 +431,23 @@ fn exit_confirmation_message(counts: ActivityCounts) -> Option<String> {
 }
 
 fn wait_for_django(port: u16, auth_token: &str) -> Result<(), String> {
-    let deadline = Instant::now() + Duration::from_millis(STARTUP_TIMEOUT_MS);
+    wait_for_django_until(
+        port,
+        auth_token,
+        Instant::now() + Duration::from_millis(STARTUP_TIMEOUT_MS),
+    )
+}
 
+fn wait_for_django_until(port: u16, auth_token: &str, deadline: Instant) -> Result<(), String> {
     while Instant::now() < deadline {
-        if health_status(port, auth_token) == Some(200) {
+        if health_status(port, auth_token, deadline) == Some(200) && Instant::now() < deadline {
             return Ok(());
         }
 
-        thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
+        thread::sleep(
+            Duration::from_millis(POLL_INTERVAL_MS)
+                .min(deadline.saturating_duration_since(Instant::now())),
+        );
     }
 
     Err(format!(
@@ -1481,6 +1569,13 @@ pub fn run() {
 
 #[cfg(test)]
 mod tests {
+    use super::{fetch_activity, health_status, local_get, local_get_until, wait_for_django_until,
+        HOST, LOCAL_HTTP_BODY_LIMIT, LOCAL_HTTP_HEADER_LIMIT};
+    use std::io::{Read, Write};
+    use std::net::{TcpListener, TcpStream};
+    use std::thread;
+    use std::time::{Duration, Instant};
+
     use super::{
         command_line_has_app_key, exit_confirmation_message, find_orphan_processes,
         is_trusted_bridge_caller, manage_command_args, parse_activity_response,
@@ -1581,6 +1676,154 @@ mod tests {
             None
         );
         assert_eq!(parse_shell_session("not json"), None);
+    }
+
+    // Every synthetic peer owns a port-zero listener and is joined by its caller.
+    fn local_http_peer<F>(reply: F) -> (u16, thread::JoinHandle<()>)
+    where
+        F: FnOnce(TcpStream) + Send + 'static,
+    {
+        let listener = TcpListener::bind((HOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        listener.set_nonblocking(true).unwrap();
+        let peer = thread::spawn(move || {
+            let deadline = Instant::now() + Duration::from_secs(3);
+            let mut stream = loop {
+                match listener.accept() {
+                    Ok((stream, _)) => break stream,
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                        assert!(Instant::now() < deadline, "client did not connect");
+                        thread::sleep(Duration::from_millis(1));
+                    }
+                    Err(error) => panic!("accept: {error}"),
+                }
+            };
+            stream.set_nonblocking(false).unwrap();
+            stream
+                .set_read_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            stream
+                .set_write_timeout(Some(Duration::from_secs(2)))
+                .unwrap();
+            let mut request = Vec::new();
+            while !request.ends_with(b"\r\n\r\n") {
+                let mut byte = [0];
+                stream.read_exact(&mut byte).unwrap();
+                request.push(byte[0]);
+                assert!(request.len() < 4096);
+            }
+            assert!(String::from_utf8(request)
+                .unwrap()
+                .contains("X-Desktop-Django-Token: synthetic"));
+            reply(stream);
+        });
+        (port, peer)
+    }
+
+    #[test]
+    fn local_http_complete_activity_and_health() {
+        let body = r#"{"running_tasks":1,"queued_tasks":2}"#;
+        let (port, peer) = local_http_peer(move |mut stream| {
+            write!(
+                stream,
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n{body}",
+                body.len()
+            )
+            .unwrap();
+            // Content-Length completion must not wait for EOF.
+            let mut byte = [0];
+            assert_eq!(stream.read(&mut byte).unwrap(), 0);
+        });
+        assert_eq!(
+            fetch_activity(port, "synthetic"),
+            Some(ActivityCounts {
+                running_tasks: 1,
+                queued_tasks: 2
+            })
+        );
+        peer.join().unwrap();
+        let (port, peer) = local_http_peer(|mut stream| {
+            stream
+                .write_all(b"HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n")
+                .unwrap();
+        });
+        assert_eq!(
+            health_status(port, "synthetic", Instant::now() + Duration::from_secs(1)),
+            Some(200)
+        );
+        peer.join().unwrap();
+    }
+
+    #[test]
+    fn local_http_rejects_oversized_headers_bodies_and_truncation() {
+        for reply in [
+            format!(
+                "HTTP/1.1 200 OK\r\nX-Padding: {}\r\n\r\n",
+                "x".repeat(LOCAL_HTTP_HEADER_LIMIT)
+            ),
+            format!(
+                "HTTP/1.1 200 OK\r\n\r\n{}",
+                "x".repeat(LOCAL_HTTP_BODY_LIMIT + 1)
+            ),
+            "HTTP/1.1 200 OK\r\nContent-Length: 10\r\n\r\n{}".to_string(),
+            format!(
+                "HTTP/1.1 200 OK\r\nContent-Length: {}\r\n\r\n",
+                LOCAL_HTTP_BODY_LIMIT + 1
+            ),
+        ] {
+            let (port, peer) = local_http_peer(move |mut stream| {
+                let _ = stream.write_all(reply.as_bytes());
+            });
+            assert!(local_get(port, "/health/", "synthetic").is_none());
+            peer.join().unwrap();
+        }
+    }
+
+    #[test]
+    fn local_http_total_deadline_stops_drips_and_missing_eof() {
+        for drip in [false, true] {
+            let (port, peer) = local_http_peer(move |mut stream| {
+                stream.write_all(b"HTTP/1.1 200 OK\r\n\r\n").unwrap();
+                if drip {
+                    let deadline = Instant::now() + Duration::from_secs(2);
+                    while Instant::now() < deadline {
+                        if stream.write_all(b" ").is_err() {
+                            break;
+                        }
+                        thread::sleep(Duration::from_millis(10));
+                    }
+                } else {
+                    let mut byte = [0];
+                    assert_eq!(stream.read(&mut byte).unwrap(), 0);
+                }
+            });
+            let start = Instant::now();
+            let result = local_get_until(
+                port,
+                "/desktop/activity/",
+                "synthetic",
+                start + Duration::from_millis(100),
+            );
+            let elapsed = start.elapsed();
+            peer.join().unwrap();
+            assert!(result.is_none());
+            assert!(elapsed < Duration::from_secs(1));
+        }
+    }
+
+    #[test]
+    fn startup_budget_bounds_an_unfinished_health_exchange() {
+        let (port, peer) = local_http_peer(|mut stream| {
+            stream.write_all(b"HTTP/1.1 200 OK\r\n").unwrap();
+            let mut byte = [0];
+            assert_eq!(stream.read(&mut byte).unwrap(), 0);
+        });
+        let start = Instant::now();
+        let result = wait_for_django_until(port, "synthetic", start + Duration::from_millis(100));
+        let elapsed = start.elapsed();
+        peer.join().unwrap();
+        assert!(result.is_err());
+        assert!(elapsed < Duration::from_secs(1));
     }
 
     #[test]

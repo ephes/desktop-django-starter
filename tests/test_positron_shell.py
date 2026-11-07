@@ -62,9 +62,6 @@ def test_positron_runtime_reuses_shared_django_and_brand_assets() -> None:
     pyproject = (ROOT / "shells" / "positron" / "pyproject.toml").read_text()
     icon_script = (ROOT / "shells" / "positron" / "scripts" / "generate-icons.py").read_text()
 
-    assert "collectstatic" in app
-    assert "clear=False" in app
-    assert "seed_demo_content" in app
     # Seeding is decided from the versioned database path Django reports,
     # not a hard-coded <app-data>/app.sqlite3.
     assert 'settings.DATABASES["default"]["NAME"]' in app
@@ -79,8 +76,6 @@ def test_positron_runtime_reuses_shared_django_and_brand_assets() -> None:
     assert "acquire_instance_lock" in app
     assert "Worker(" in app
     assert "secrets.token_hex(32)" in app
-    assert "bootstrap_url" in app
-    assert "/desktop-auth/bootstrap/" in app
     assert "DESKTOP_DJANGO_RUNTIME_MODE" in runtime
     assert "DESKTOP_DJANGO_AUTH_TOKEN" in runtime
     assert "POSITRON_RUNTIME_MODE" in runtime

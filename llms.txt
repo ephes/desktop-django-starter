@@ -26,6 +26,7 @@ Important constraints:
 - [docs/backlog.md](docs/backlog.md): Explicit follow-on work structured for implementation handoff.
 - [docs/done.md](docs/done.md): Completed backlog entries after they are implemented.
 - [docs/agent-use.md](docs/agent-use.md): Guidance for coding agents consuming this repo.
+- Shell lifecycle and validation: [Tauri](docs/shells/tauri.md) and [Positron](docs/shells/positron.md).
 
 ## Wrapping
 

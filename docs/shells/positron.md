@@ -73,3 +73,12 @@ are accepted for state selection and mapped to SemVer `alpha.N`, `beta.N`,
 post, epoch and other version forms without a direct supported SemVer peer are
 refused with a configuration error; use stable or a/b/rc release versions for
 Positron builds. Equivalent spellings compare equally and are not predecessors.
+
+## Startup failures
+
+Migration, bind and readiness failures are caught at `on_running`, shown once
+as a startup error, and cleaned up before the app exits. No task worker or
+bootstrap navigation starts on those failures. A socket bound before readiness
+is closed by the server thread, avoiding a shutdown wait on a server that never
+entered its serving loop. Headless lifecycle tests run in `just check` without
+loading a native Toga backend.

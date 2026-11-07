@@ -48,6 +48,7 @@ The example app uses a branded presentation layer called "Flying Stable" (a Pega
 - [`docs/backlog.md`](docs/backlog.md): explicit follow-on work ready for implementation handoff
 - [`docs/done.md`](docs/done.md): completed backlog entries after they are implemented
 - [`docs/agent-use.md`](docs/agent-use.md): how coding agents should consume this repo and reuse its skill
+- Shell lifecycle and validation: [Tauri](docs/shells/tauri.md) and [Positron](docs/shells/positron.md).
 
 The docs are built with Sphinx over the Markdown sources in `docs/` and are intended to be publishable on Read the Docs.
 

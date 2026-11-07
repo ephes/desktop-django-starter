@@ -69,3 +69,13 @@ Current minimal CSP posture:
 
 - supported
 - Tauri follows the same staged-backend subprocess model as Electron and starts `db_worker` after Django passes the `/health/` readiness check
+
+## Local HTTP transfer bounds
+
+Health and activity exchanges allow at most 16 KiB of headers and 16 KiB of
+body. Each exchange has a one-second total elapsed deadline; startup health
+probes also use the remaining startup budget and reject late success. The tiny
+local protocol accepts Content-Length or connection-close framing and rejects
+truncated declared bodies and transfer encodings. Failed activity reads keep
+the existing quit fallback. `just tauri-test` includes port-zero TCP peers for
+complete, oversized, truncated, dripping and unfinished responses.
