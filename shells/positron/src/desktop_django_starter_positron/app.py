@@ -105,35 +105,36 @@ class DesktopDjangoStarterPositron(toga.App):
         self.request_exit()
 
     async def confirm_exit(self, _app, **_kwargs) -> bool:
-        """on_exit handler: ask before quitting while background tasks run.
-
-        Toga runs an async on_exit as a task and exits only if it returns True.
-        Idle, smoke mode, or a failed count all quit normally.
-        """
+        """Claim the complete async exit decision, including the activity read."""
         if self._exit_prompt_open:
             return False
 
-        message = None
-        if os.environ.get("DESKTOP_DJANGO_SMOKE_TEST") != "1" and self._django_ready():
-            try:
-                counts = await asyncio.to_thread(self._background_task_counts)
-            except Exception as error:  # never trap the user in the app
-                print(f"Could not read background task activity: {error}")
-            else:
-                message = exit_confirmation_message(counts)
+        self._exit_prompt_open = True
+        try:
+            message = None
+            if os.environ.get("DESKTOP_DJANGO_SMOKE_TEST") != "1" and self._django_ready():
+                try:
+                    counts = await asyncio.to_thread(self._background_task_counts)
+                except Exception as error:  # never trap the user in the app
+                    print(f"Could not read background task activity: {error}")
+                else:
+                    message = exit_confirmation_message(counts)
 
-        if message is not None:
-            self._exit_prompt_open = True
-            try:
+            if message is not None:
                 should_quit = await self.main_window.dialog(
                     toga.QuestionDialog("A background task is still running", message)
                 )
-            finally:
-                self._exit_prompt_open = False
-            if not should_quit:
-                return False
+                if not should_quit:
+                    return False
 
-        return self.cleanup()
+            # A confirmed exit stays pending until the owned worker finishes.
+            # Keep the UI responsive while the bounded join runs.
+            while not await asyncio.to_thread(self.stop_task_worker):
+                self.main_window.title = f"{self.formal_name} — Finishing background work"
+                await asyncio.sleep(0.1)
+            return self.cleanup()
+        finally:
+            self._exit_prompt_open = False
 
     def _django_ready(self) -> bool:
         return (
@@ -154,14 +155,18 @@ class DesktopDjangoStarterPositron(toga.App):
             connections.close_all()
 
     def cleanup(self, *_args, **_kwargs) -> bool:
-        self.stop_task_worker()
+        if not self.stop_task_worker():
+            return False
 
         if self._httpd is not None:
             self._httpd.shutdown()
             self._httpd.server_close()
+            self._httpd = None
 
         if hasattr(self, "server_thread") and self.server_thread.is_alive():
             self.server_thread.join(timeout=5)
+            if self.server_thread.is_alive():
+                return False
 
         release_instance_lock(self._instance_lock)
         self._instance_lock = None
@@ -242,15 +247,19 @@ class DesktopDjangoStarterPositron(toga.App):
         self._task_worker_thread = Thread(target=self._task_worker.run, daemon=True)
         self._task_worker_thread.start()
 
-    def stop_task_worker(self) -> None:
-        if self._task_worker is None:
-            return
-
-        self._task_worker.running = False
-        if self._task_worker_thread is not None:
-            self._task_worker_thread.join(timeout=5)
-        self._task_worker = None
-        self._task_worker_thread = None
+    def stop_task_worker(self) -> bool:
+        worker = self._task_worker
+        worker_thread = self._task_worker_thread
+        if worker is not None:
+            worker.running = False
+        if worker_thread is not None and worker_thread.is_alive():
+            worker_thread.join(timeout=5)
+            if worker_thread.is_alive():
+                return False
+        if self._task_worker_thread is worker_thread:
+            self._task_worker = None
+            self._task_worker_thread = None
+        return True
 
 
 def main() -> DesktopDjangoStarterPositron:

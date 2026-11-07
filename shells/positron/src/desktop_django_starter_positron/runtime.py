@@ -142,14 +142,14 @@ def exit_confirmation_message(counts: dict[str, int]) -> str | None:
     queued = counts.get("queued_tasks", 0)
     if running + queued == 0:
         return None
-    # Running tasks are interrupted by quitting; queued tasks stay in the
+    # Finish the owned running task before exit; queued tasks stay in the
     # database and start when the app runs again.
     def plural(count: int, noun: str) -> str:
         return f"{count} {noun}{'' if count == 1 else 's'}"
 
     parts = []
     if running:
-        parts.append(f"Quitting now stops {plural(running, 'running background task')}.")
+        parts.append(f"Quitting waits for {plural(running, 'running background task')} to finish.")
     if queued:
         parts.append(f"{plural(queued, 'queued task')} will start the next time the app runs.")
     return " ".join(parts) + "\n\nQuit anyway?"

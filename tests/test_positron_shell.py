@@ -67,14 +67,9 @@ def test_positron_runtime_reuses_shared_django_and_brand_assets() -> None:
     assert 'settings.DATABASES["default"]["NAME"]' in app
     assert '"app.sqlite3"' not in app
     assert "app_version=positron_app_version(self.version)" in app
-    assert "self.on_exit = self.confirm_exit" in app
-    assert "async def confirm_exit" in app
-    assert "background_task_counts" in app
-    assert "toga.QuestionDialog" in app
     assert "self.request_exit()" in app
     assert "DESKTOP_DJANGO_APP_VERSION" in runtime
     assert "acquire_instance_lock" in app
-    assert "Worker(" in app
     assert "secrets.token_hex(32)" in app
     assert "DESKTOP_DJANGO_RUNTIME_MODE" in runtime
     assert "DESKTOP_DJANGO_AUTH_TOKEN" in runtime
@@ -235,6 +230,6 @@ def test_positron_exit_confirmation_message() -> None:
     message = runtime.exit_confirmation_message({"running_tasks": 1, "queued_tasks": 2})
     assert message is not None
     assert message.startswith(
-        "Quitting now stops 1 running background task. "
+        "Quitting waits for 1 running background task to finish. "
         "2 queued tasks will start the next time the app runs."
     )

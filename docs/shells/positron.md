@@ -14,7 +14,7 @@ Current responsibilities:
 - run the optional `tasks_demo` worker in-process on a background thread
 - always boot Django with `desktop_django_starter.settings.packaged` so local Positron runs validate the packaged-style app-data and staticfiles contract
 - pass `DESKTOP_DJANGO_APP_VERSION` (Toga's `App.version`, falling back to the installed `desktop-django-starter-positron` distribution's version, because Toga derives its metadata lookup from the app ID and usually finds none) so packaged settings keep the database, media and cache in `<app-data>/state/<version>/`; demo content is seeded when the database path Django reports does not exist yet
-- ask before quitting while background tasks are running or queued: the async `on_exit` handler reads `background_task_counts()` in a worker thread and, if tasks are active, shows a Toga `QuestionDialog`; answering No returns `False`, which cancels the exit. Idle, a failed count, or smoke mode exit normally, and a second quit request while the dialog is open is ignored
+- ask before quitting while background tasks are running or queued: the async `on_exit` handler reads `background_task_counts()` in a worker thread and, if tasks are active, shows a Toga `QuestionDialog`; answering No returns `False`, which cancels the exit. Idle exits, failed counts and smoke mode skip the prompt and proceed to cleanup, and a second quit request during the activity read or dialog is ignored
 - refresh collected static files on startup without clearing the cache-backed staticfiles tree on every launch
 - reuse the shared brand source under `assets/brand/` and generate shell-local icon outputs into `shells/positron/resources/`
 - keep Positron-specific runtime behavior under `shells/positron/src/desktop_django_starter_positron/`
@@ -82,3 +82,20 @@ bootstrap navigation starts on those failures. A socket bound before readiness
 is closed by the server thread, avoiding a shutdown wait on a server that never
 entered its serving loop. Headless lifecycle tests run in `just check` without
 loading a native Toga backend.
+
+## Exit and worker ownership
+
+The whole asynchronous exit decision is single-flight, including the threaded
+activity read. Cancel, cancellation and errors release the claim so a later
+attempt can proceed. Smoke mode still skips activity and confirmation.
+
+Cleanup asks the worker to stop and joins it for up to five seconds. If an
+in-flight task outlasts that join, cleanup reports that it is still pending:
+the worker/thread remain tracked, another worker cannot start, and the server
+and instance lock remain owned. A confirmed exit waits asynchronously and shows
+"Finishing background work" in the window title, then automatically completes
+when the worker finishes. Smoke mode follows the same wait without a dialog.
+Successful cleanup closes the server and releases the instance lock once; it
+can safely be called again.
+The shell never tries to terminate a Python thread forcibly. Headless tests
+use event-gated real worker threads and run as part of `just check`.
