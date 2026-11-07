@@ -23,6 +23,7 @@ shells/positron/macOS/
 shells/positron/windows/
 shells/positron/resources/app-icon.icns
 shells/positron/resources/app-icon.png
+shells/positron/resources/.app-icons-*/
 *.p8
 *.p12
 *.pfx

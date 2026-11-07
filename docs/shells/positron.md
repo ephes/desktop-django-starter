@@ -73,3 +73,17 @@ are accepted for state selection and mapped to SemVer `alpha.N`, `beta.N`,
 post, epoch and other version forms without a direct supported SemVer peer are
 refused with a configuration error; use stable or a/b/rc release versions for
 Positron builds. Equivalent spellings compare equally and are not predecessors.
+
+Icon regeneration preflights `rsvg-convert` and, on macOS, `iconutil` before
+rendering. It stages a nonempty PNG and, on macOS, a complete nonempty ICNS
+before replacing either installed output. Other platforms publish only the
+PNG and leave an existing ICNS alone. Private temporary iconsets are cleaned
+on success and failure; an existing `app-icon.iconset` is never removed.
+Ordinary publication errors restore the previous set (or remove newly
+published files on a first run). If rollback fails, the error names retained
+a recovery directory at `resources/.app-icons-*/previous`; restore its backups while
+no generator is running. A first-run rollback failure may have no backups;
+remove the partially published outputs before retrying. Cleanup errors preserve
+the original failure diagnostic; cleanup failure after publication leaves the
+new icons installed. Rendering workspaces may overlap, but run final
+publication serially. This is exception rollback, not crash-safe publication.

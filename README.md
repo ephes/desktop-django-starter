@@ -164,7 +164,7 @@ database. It still assumes conventional Django settings and a recognizable
 - `just positron-check`: run Django's system checks from the Positron shell environment
 - `just positron-start`: start the Positron shell, which runs Django plus one background task worker in-process
 - `just positron-smoke`: start the Positron shell and auto-exit after the first page load
-- `just positron-icons`: regenerate `shells/positron/resources/app-icon.png` and, on macOS, `app-icon.icns` from `assets/brand/flying-stable-app-icon.svg`
+- `just positron-icons`: preflight tools, stage and publish icons with rollback on ordinary failures; regenerate `shells/positron/resources/app-icon.png` and, on macOS, `app-icon.icns` from `assets/brand/flying-stable-app-icon.svg`
 - `just positron-create`: create the local macOS Briefcase app scaffold for Positron
 - `just positron-build`: build the local macOS Positron app bundle
 - `just positron-package-dmg`: package a local macOS Positron DMG with Briefcase ad-hoc signing
