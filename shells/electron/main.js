@@ -251,71 +251,104 @@ function getOpenPort() {
   });
 }
 
-function getHealthStatus(url, authToken = "") {
+function getHealthStatus(url, authToken = "", timeoutMs = 1000) {
   return new Promise((resolve, reject) => {
-    const healthUrl = new URL("/health/", url);
+    const deadline = performance.now() + timeoutMs;
+    let response;
+    let settled = false;
+    const finish = (error, statusCode) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      response?.destroy();
+      request.destroy();
+      if (error) reject(error);
+      else resolve(statusCode);
+    };
     const request = http.get(
-      healthUrl,
+      new URL("/health/", url),
       { headers: buildDesktopAuthHeaders(authToken) },
-      (response) => {
-        response.resume();
-        resolve(response.statusCode);
+      (incoming) => {
+        response = incoming;
+        finish(performance.now() >= deadline ? new Error("Health check timed out.") : null,
+          response.statusCode);
       }
     );
-
-    request.on("error", reject);
-    request.setTimeout(1000, () => {
-      request.destroy(new Error("Health check timed out."));
-    });
+    const timer = setTimeout(() => finish(new Error("Health check timed out.")), timeoutMs);
+    request.on("error", (error) => finish(error));
   });
 }
 
 function getActivity(url, authToken = "") {
   return new Promise((resolve, reject) => {
+    const deadline = performance.now() + 1000;
+    const maxBytes = 16 * 1024;
+    let response;
+    let settled = false;
+    const finish = (error, value) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      response?.destroy();
+      request.destroy();
+      if (error) reject(error);
+      else resolve(value);
+    };
     const request = http.get(
       new URL("/desktop/activity/", url),
       { headers: buildDesktopAuthHeaders(authToken) },
-      (response) => {
-        let body = "";
-        response.setEncoding("utf8");
+      (incoming) => {
+        response = incoming;
+        const chunks = [];
+        let bytes = 0;
+        response.on("error", (error) => finish(error));
+        response.on("aborted", () => finish(new Error("Activity response was truncated.")));
+        if (response.statusCode !== 200) {
+          finish(new Error(`Activity check returned ${response.statusCode}.`));
+          return;
+        }
         response.on("data", (chunk) => {
-          body += chunk;
+          bytes += chunk.length;
+          if (bytes > maxBytes) {
+            finish(new Error("Activity response is too large."));
+            return;
+          }
+          chunks.push(chunk);
         });
         response.on("end", () => {
-          if (response.statusCode !== 200) {
-            reject(new Error(`Activity check returned ${response.statusCode}.`));
+          if (performance.now() >= deadline || !response.complete) {
+            finish(new Error("Activity response timed out or was truncated."));
             return;
           }
           try {
-            resolve(JSON.parse(body));
+            finish(null, JSON.parse(Buffer.concat(chunks).toString("utf8")));
           } catch (error) {
-            reject(error);
+            finish(error);
           }
         });
       }
     );
-
-    request.on("error", reject);
-    request.setTimeout(1000, () => {
-      request.destroy(new Error("Activity check timed out."));
-    });
+    const timer = setTimeout(() => finish(new Error("Activity check timed out.")), 1000);
+    request.on("error", (error) => finish(error));
   });
 }
 
 async function waitForDjango(url, authToken = "", timeoutMs = STARTUP_TIMEOUT_MS) {
-  const deadline = Date.now() + timeoutMs;
+  const deadline = performance.now() + timeoutMs;
 
-  while (Date.now() < deadline) {
+  while (performance.now() < deadline) {
     try {
-      const statusCode = await getHealthStatus(url, authToken);
-      if (statusCode === 200) {
+      const remaining = deadline - performance.now();
+      const statusCode = await getHealthStatus(url, authToken, Math.min(1000, remaining));
+      if (statusCode === 200 && performance.now() < deadline) {
         return;
       }
     } catch (_error) {
       // Poll until Django is ready or the timeout expires.
     }
 
-    await sleep(POLL_INTERVAL_MS);
+    const remaining = deadline - performance.now();
+    if (remaining > 0) await sleep(Math.min(POLL_INTERVAL_MS, remaining));
   }
 
   throw new Error(`Django did not become ready within ${timeoutMs}ms.`);

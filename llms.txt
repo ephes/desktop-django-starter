@@ -16,6 +16,11 @@ Important constraints:
 - The update story must include air-gapped/manual installs, not only connected environments. Electron has an implemented minimal connected updater path through `electron-updater`, and the repo now records a real signed/notarized macOS packaged update dry run from installed `0.1.2` to published `v0.1.4` that proved detection, download, restart/install, and `app.sqlite3` persistence. It is still not a release-validated updater lane because a real Windows NSIS packaged update dry run is still missing. Tauri now has an experimental connected updater path through `tauri-plugin-updater`, and Positron is manual-only for updates in this repo, with no connected updater or hosted artifact lane.
 - Electron lives under `shells/electron/`, the experimental Tauri port lives under `shells/tauri/`, and the experimental Positron port lives under `shells/positron/`, while shared icon source art lives under `assets/brand/`; regenerate the Electron PNG and macOS ICNS with `npm --prefix shells/electron run icons`, the Tauri icon set with `npm --prefix shells/tauri run icons`, and the Positron icons with `just positron-icons`.
 
+Electron local HTTP checks use elapsed deadlines: each health probe is bounded by
+the remaining startup budget, and activity responses have a one-second deadline
+and a 16 KiB raw-byte limit. Failed activity reads keep the existing quit fallback.
+Loopback transfer regressions run with `npm --prefix shells/electron test`.
+
 ## Docs
 
 - [README.md](README.md): Top-level repo intent and available docs.

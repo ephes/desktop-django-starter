@@ -147,6 +147,11 @@ database. It still assumes conventional Django settings and a recognizable
 
 ## Development
 
+Electron local HTTP checks use elapsed deadlines: each health probe is bounded by
+the remaining startup budget, and activity responses have a one-second deadline
+and a 16 KiB raw-byte limit. Failed activity reads keep the existing quit fallback.
+Loopback transfer regressions run with `npm --prefix shells/electron test`.
+
 - `just install`: install the local environment with `uv`
 - `just migrate`: apply the local SQLite migrations
 - `just backend-dev`: run the Django app directly on `127.0.0.1:8000`
