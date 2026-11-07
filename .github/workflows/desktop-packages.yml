@@ -62,11 +62,9 @@ jobs:
             artifact_paths: |
               shells/electron/dist/*.AppImage
               shells/electron/dist/latest-linux.yml
-              shells/electron/dist/*.blockmap
             checksum_args: >-
               --glob "shells/electron/dist/*.AppImage"
               --glob "shells/electron/dist/latest-linux.yml"
-              --glob "shells/electron/dist/*.blockmap"
             checksum_artifact_name: desktop-django-starter-linux-checksums
             checksum_path: shells/electron/dist/desktop-django-starter-linux-sha256.txt
 
