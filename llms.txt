@@ -59,3 +59,8 @@ Important constraints:
 - Positron icon generation uses owned temporary iconsets and stages all platform
   outputs before publication. See `docs/shells/positron.md` for rollback recovery
   and the serial-publication requirement.
+
+- `dds wrap --emit-prompt` bypasses setup/preflight and reads UTF-8 templates
+  without side effects. Only full starter-path prefixes are substituted.
+  Discovery excludes hidden/environment/dependency directories and directory
+  symlinks; multiple sorted projects remain available for harness inspection.
