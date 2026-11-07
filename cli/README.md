@@ -104,6 +104,13 @@ package is the `cli/` subproject. Use `just cli-build` or `just cli-publish`
 instead of the root `just build` recipe for `uvx desktop-django-starter ...`
 releases.
 
+Wheel and sdist builds reject an incomplete staged bundle before producing an
+archive, using the same `asset_inventory.py` allowlist as synchronization.
+Directories do not satisfy required files; the diagnostic lists up to eight
+missing paths and points to `just cli-sync-assets`. `just cli-test` provisions
+pytest and Hatchling; synthetic build/install probes run offline and require
+no agents, Node runtime or package downloads during the tests.
+
 Asset staging validates every canonical input before touching the existing bundle,
 then copies into a unique sibling staging directory. A complete tree replaces the
 old bundle, removing stale files while preserving an existing `.gitkeep` and its

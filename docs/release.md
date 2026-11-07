@@ -4,6 +4,10 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 
 ## Unreleased
 
+- CLI wheel and sdist builds now reject every missing canonical staged file,
+  including required paths replaced by directories. Offline synthetic wheel
+  installation tests cover asset inclusion, relocated prompts and doctor.
+
 - CSRF-enforcing integration tests cover CRUD and task mutations with both
   shell credential modes. Shell authentication and Django CSRF checks remain
   separate requirements; this adds regression coverage, not a new auth flow.
