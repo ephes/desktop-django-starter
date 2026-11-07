@@ -151,16 +151,62 @@ test("IPC sender check accepts only frames on the Django origin", () => {
   );
 });
 
-test("main.js wires the redirect guard and the IPC sender check", () => {
-  const fs = require("node:fs");
-  const path = require("node:path");
-  const mainSource = fs.readFileSync(path.join(__dirname, "..", "main.js"), "utf8");
+const { EventEmitter } = require("node:events");
+const { loadMain } = require("./main-test-harness.cjs");
 
-  for (const snippet of [
-    'webContents.on("will-redirect"',
-    "getRedirectGuardAction(",
-    "isTrustedIpcSender(event, currentAppUrl)"
+test("registered Electron navigation listeners enforce target and frame policy", async () => {
+  const opened = [];
+  const webContents = new EventEmitter();
+  let windowOpen;
+  webContents.setWindowOpenHandler = (handler) => { windowOpen = handler; };
+  const main = loadMain({ electron: {
+    app: Object.assign(new EventEmitter(), {
+      requestSingleInstanceLock: () => true, whenReady: () => new Promise(() => {})
+    }),
+    ipcMain: { handle() {} },
+    shell: { openExternal: async (url) => { opened.push(url); } }
+  } });
+  main.registerWindowNavigationGuards({ webContents }, DJANGO_ORIGIN);
+  for (const [name, url, frame, cancelled, external] of [
+    ["will-navigate", `${DJANGO_ORIGIN}/tasks/`, true, false, false],
+    ["will-navigate", "https://foreign.example/", true, true, true],
+    ["will-redirect", "https://redirect.example/", true, true, true],
+    ["will-redirect", "http://127.0.0.1:9999/", true, true, true],
+    ["will-redirect", "file:///synthetic.html", true, true, false],
+    ["will-redirect", `${DJANGO_ORIGIN}/tasks/`, true, false, false],
+    ["will-redirect", "https://frame.example/", false, false, false]
   ]) {
-    assert.ok(mainSource.includes(snippet), `main.js should contain ${snippet}`);
+    let prevented = 0;
+    const before = opened.length;
+    const event = { url, isMainFrame: frame, preventDefault: () => { prevented++; } };
+    // Redirects carry the target on the event; navigation uses the second arg.
+    webContents.emit(name, event, name === "will-navigate" ? url : "https://decoy.example/");
+    assert.equal(prevented, Number(cancelled), `${name}: ${url}`);
+    assert.deepEqual(opened.slice(before), external ? [url] : []);
+  }
+  for (const [url, external] of [[`${DJANGO_ORIGIN}/`, false], ["https://child.example/", true], ["javascript:bad()", false]]) {
+    const before = opened.length;
+    assert.equal(windowOpen({ url }).action, "deny");
+    assert.deepEqual(opened.slice(before), external ? [url] : []);
+  }
+});
+
+test("registered session header hook injects shell auth only for the exact origin", () => {
+  let filter;
+  let hook;
+  const win = { webContents: { session: { webRequest: {
+    onBeforeSendHeaders: (selected, handler) => { filter = selected; hook = handler; }
+  } } } };
+  loadMain().registerDesktopAuthHeaderInjection(win, DJANGO_ORIGIN, "synthetic-shell-key");
+  assert.deepEqual(Array.from(filter.urls), [`${DJANGO_ORIGIN}/*`]);
+  for (const url of [`${DJANGO_ORIGIN}/tasks/`, "http://127.0.0.1:9999/", "https://foreign.example/", "http://localhost:4567/"]) {
+    let calls = 0;
+    hook({ url, requestHeaders: { Accept: "text/html" } }, ({ requestHeaders }) => {
+      calls++;
+      assert.equal(requestHeaders.Accept, "text/html");
+      assert.equal(requestHeaders["X-Desktop-Django-Token"], url.startsWith(DJANGO_ORIGIN)
+        ? "synthetic-shell-key" : undefined);
+    });
+    assert.equal(calls, 1);
   }
 });

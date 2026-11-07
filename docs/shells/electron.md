@@ -31,6 +31,12 @@ The shell tracks a supported Electron major (currently Electron 45). Since Elect
 
 `shells/electron/package.json` overrides `global-agent` to 4.x. electron-builder 26 still pulls `@electron/get` 3, whose optional proxy helper `global-agent` 3 depends on `roarr` and a `sprintf-js` version with a denial-of-service advisory; `global-agent` 4 keeps the same `bootstrap()` API without that chain. Drop the override once a stable electron-builder release depends on `@electron/get` 5 or newer.
 
+Headless integration tests execute the real `main.js` entry point with public
+Electron, filesystem and child-process collaborators substituted. They gate
+migration and health completion, cover first-run seeding and startup failures,
+and dispatch navigation/redirect events through the registered listeners and
+session header hook. Run them with `npm --prefix shells/electron test`.
+
 Current update scope:
 
 - default feed: GitHub Releases for this repo, configurable through the Electron builder config environment variables documented in the release guide
