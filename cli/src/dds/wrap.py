@@ -10,9 +10,11 @@ import signal
 import subprocess
 import sys
 import time
+from collections.abc import Iterator
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
+from typing import BinaryIO
 
 from dds import __version__
 from dds.config import (
@@ -34,6 +36,8 @@ SKILL_PATH = ASSETS_PATH / "skills" / "wrap-existing-django-in-electron" / "SKIL
 _STARTER_TOKEN = "../desktop-django-starter"
 DEFAULT_PI_MODEL = "openai-codex/gpt-5.4"
 _CLAUDE_TERMINATION_GRACE = 5.0
+_CLAUDE_MAX_EVENT_BYTES = 1024 * 1024
+_CLAUDE_DISPLAY_BYTES = 4096
 
 
 def _summarize_claude_tool_use(content: dict[str, object]) -> str | None:
@@ -55,7 +59,7 @@ def _summarize_claude_tool_use(content: dict[str, object]) -> str | None:
     return f"claude tool: {name}"
 
 
-def _terminate_claude_leader(process: subprocess.Popen[str]) -> None:
+def _terminate_claude_leader(process: subprocess.Popen[bytes]) -> None:
     """Bounded direct-child fallback, also used on Windows."""
     if process.poll() is None:
         try:
@@ -69,7 +73,7 @@ def _terminate_claude_leader(process: subprocess.Popen[str]) -> None:
     process.wait(timeout=_CLAUDE_TERMINATION_GRACE)
 
 
-def _terminate_claude_process(process: subprocess.Popen[str]) -> None:
+def _terminate_claude_process(process: subprocess.Popen[bytes]) -> None:
     """Stop the owned session's group, even after its leader has exited."""
     if os.name == "nt":
         _terminate_claude_leader(process)
@@ -231,24 +235,57 @@ def _codex_command(resolved_prompt: str, assets_str: str, model: str | None) -> 
     return command
 
 
+def _claude_records(stream: BinaryIO) -> Iterator[str]:
+    """Frame bounded binary records before decoding, including the final EOF record."""
+    while record := stream.readline(_CLAUDE_MAX_EVENT_BYTES + 1):
+        if len(record) > _CLAUDE_MAX_EVENT_BYTES:
+            print(
+                f"error: Claude stream event exceeds {_CLAUDE_MAX_EVENT_BYTES} bytes.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        yield record.decode("utf-8", errors="replace")
+
+
+def _bounded_text(text: str, limit: int) -> str:
+    encoded = text.encode("utf-8")
+    if len(encoded) <= limit:
+        return text
+    marker = b" [truncated]"
+    return encoded[: limit - len(marker)].decode("utf-8", errors="ignore") + marker.decode()
+
+
 def _run_claude(resolved_prompt: str, assets_str: str, model: str | None) -> None:
-    """Run Claude with streaming progress and exit with Claude's return code."""
+    """Require both a successful terminal result and a successful child exit."""
     command = _claude_command(resolved_prompt, assets_str, model)
 
+    terminal_count = 0
+    terminal_success = False
     print("Starting Claude. Progress will stream below.")
     with subprocess.Popen(  # noqa: S603
         command,
         stdin=subprocess.DEVNULL,
         stdout=subprocess.PIPE,
         start_new_session=os.name != "nt",
-        text=True,
     ) as process:
         try:
             if process.stdout is None:
                 raise RuntimeError("Claude stdout pipe was not created.")
-            for line in process.stdout:
-                for formatted in _format_claude_stream_event(line):
-                    print(formatted, flush=True)
+            for line in _claude_records(process.stdout):
+                # Completion admission is independent of human-facing progress text.
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    event = None
+                if isinstance(event, dict) and event.get("type") == "result":
+                    terminal_count += 1
+                    terminal_success = (
+                        event.get("is_error") is False
+                        and event.get("subtype", "success") == "success"
+                    )
+                formatted = _format_claude_stream_event(line)
+                if formatted:
+                    print(_bounded_text("\n".join(formatted), _CLAUDE_DISPLAY_BYTES), flush=True)
             returncode = process.wait()
         finally:
             handling_error = sys.exc_info()[0] is not None
@@ -263,6 +300,9 @@ def _run_claude(resolved_prompt: str, assets_str: str, model: str | None) -> Non
 
     if returncode != 0:
         sys.exit(returncode)
+    if terminal_count != 1 or not terminal_success:
+        print("error: Claude terminal result missing, invalid, or unsuccessful.", file=sys.stderr)
+        sys.exit(1)
 
 
 def _generate_prompt() -> str:
@@ -388,7 +428,10 @@ def _run_setup_flow(*, existing_config: WrapperConfig | None, config_path: Path)
         print(f"  {index}. {harness}{marker}")
 
     harness = _prompt_for_harness(options, default)
-    model = _prompt_for_model(existing_config.model if existing_config else None, harness)
+    current_model = (
+        existing_config.model if existing_config and existing_config.harness == harness else None
+    )
+    model = _prompt_for_model(current_model, harness)
     config = WrapperConfig(harness=harness, model=model)
     saved_path = save_wrapper_config(config, config_path)
 
@@ -431,10 +474,13 @@ def _resolve_run_config(agent: str | None, model: str | None) -> _ResolvedRunCon
             f"Wrapper config is invalid: {exc}. Run `dds init` to rewrite it."
         ) from exc
 
-    resolved_model = model if model is not None else saved_config.model if saved_config else None
-    model_source = (
-        "cli" if model is not None else "config" if saved_config and saved_config.model else None
+    saved_model = (
+        saved_config.model
+        if saved_config and (agent is None or agent == saved_config.harness)
+        else None
     )
+    resolved_model = model if model is not None else saved_model
+    model_source = "cli" if model is not None else "config" if saved_model else None
 
     if agent is not None:
         return _ResolvedRunConfig(
@@ -564,13 +610,16 @@ def run_wrap(
     else:
         pf.ok(f"Assets: {ASSETS_PATH}")
 
-    # 3. Clean worktree (--force downgrades to warning)
+    # 3. Status must succeed; --force only permits a known dirty worktree.
     result = subprocess.run(
         ["git", "status", "--porcelain"],
         capture_output=True,
         text=True,
     )
-    if result.stdout.strip():
+    if result.returncode != 0:
+        detail = _bounded_text((result.stderr or "no diagnostic output").strip(), 800)
+        pf.error(f"git status failed (exit {result.returncode}): {detail}")
+    elif result.stdout.strip():
         if force:
             pf.warn("Working tree has uncommitted changes (--force, continuing)")
         else:

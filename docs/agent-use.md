@@ -73,11 +73,29 @@ When using the `claude` harness, current `dds` builds stream concise progress
 while the agent works. Successfully decoded JSON records that are not objects
 are skipped; empty or
 whitespace-only tool errors display `claude tool error: unknown error`. These
-formatted records do not interrupt progress or change the child process exit code.
+formatted records do not interrupt progress; terminal-result validation is separate.
 Older builds delegated to Claude's default `-p` text
 output, which could make a long wrapping run look idle until Claude exited.
 Use `--harness` and `--model` to choose the agent harness and model. `--agent`
 remains available as a backward-compatible alias.
+
+Saved models apply only to the harness they were saved with. An explicit
+`--model` always wins; overriding the harness without a model uses that harness's
+default (Pi uses `openai-codex/gpt-5.4`). Changing harness during `dds init`
+starts the optional model prompt with no saved model; keeping the harness keeps
+its model.
+
+Preflight requires a successful `git status`. A failed inspection blocks wrapping
+even with `--force`; that flag permits known uncommitted changes and an existing
+`electron/` directory. Command failure diagnostics are truncated to 800 UTF-8 bytes.
+
+Claude completion requires exactly one terminal `result` with `is_error: false`
+(and `subtype: success` if present), plus exit code zero. Missing, malformed,
+duplicate or error results fail even when the process exits zero; nonzero child
+exit codes are preserved. Stream records are limited to 1 MiB each, including
+the newline, before UTF-8 decoding or JSON parsing. Oversized records fail and
+trigger owned-process cleanup. Progress output is truncated to 4096 UTF-8 bytes
+per event; records are processed without retaining a transcript.
 
 On POSIX, the Claude streaming runner owns a separate process group. When the
 stream finishes, on Ctrl-C (`KeyboardInterrupt`), or on an in-process stream/read

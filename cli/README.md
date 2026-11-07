@@ -46,11 +46,29 @@ When using the `claude` harness, `--run` streams concise progress lines while
 Claude works. Older `dds` builds delegated to Claude's default text output,
 which could look idle until the agent finished.
 
+Saved models apply only to the harness they were saved with. An explicit
+`--model` always wins; overriding the harness without a model uses that harness's
+default (Pi uses `openai-codex/gpt-5.4`). Changing harness during `dds init`
+starts the optional model prompt with no saved model; keeping the harness keeps
+its model.
+
+Preflight requires a successful `git status`. A failed inspection blocks wrapping
+even with `--force`; that flag permits known uncommitted changes and an existing
+`electron/` directory. Command failure diagnostics are truncated to 800 UTF-8 bytes.
+
+Claude completion requires exactly one terminal `result` with `is_error: false`
+(and `subtype: success` if present), plus exit code zero. Missing, malformed,
+duplicate or error results fail even when the process exits zero; nonzero child
+exit codes are preserved. Stream records are limited to 1 MiB each, including
+the newline, before UTF-8 decoding or JSON parsing. Oversized records fail and
+trigger owned-process cleanup. Progress output is truncated to 4096 UTF-8 bytes
+per event; records are processed without retaining a transcript.
+
 Options:
 - `--run` — invoke the agent after preflight passes
 - `--agent NAME`, `--harness NAME` — agent harness to use: `claude`, `pi`, `codex`; overrides saved config or auto-detect
 - `--model NAME` — model to pass to the selected agent; overrides the saved default model
-- `--force` — bypass dirty-worktree and existing-electron/ checks
+- `--force` — permit known dirty worktrees and existing electron/ directories; failed Git inspection still blocks
 - `--emit-prompt` — print the resolved wrapping prompt to stdout
 
 ### `dds doctor`

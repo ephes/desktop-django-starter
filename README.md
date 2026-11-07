@@ -78,6 +78,24 @@ prompting. Current `dds` builds stream concise Claude progress when you choose
 the `claude` harness; older builds could look idle until Claude finished. See
 [`docs/agent-use.md`](docs/agent-use.md) for details.
 
+Saved models apply only to the harness they were saved with. An explicit
+`--model` always wins; overriding the harness without a model uses that harness's
+default (Pi uses `openai-codex/gpt-5.4`). Changing harness during `dds init`
+starts the optional model prompt with no saved model; keeping the harness keeps
+its model.
+
+Preflight requires a successful `git status`. A failed inspection blocks wrapping
+even with `--force`; that flag permits known uncommitted changes and an existing
+`electron/` directory. Command failure diagnostics are truncated to 800 UTF-8 bytes.
+
+Claude completion requires exactly one terminal `result` with `is_error: false`
+(and `subtype: success` if present), plus exit code zero. Missing, malformed,
+duplicate or error results fail even when the process exits zero; nonzero child
+exit codes are preserved. Stream records are limited to 1 MiB each, including
+the newline, before UTF-8 decoding or JSON parsing. Oversized records fail and
+trigger owned-process cleanup. Progress output is truncated to 4096 UTF-8 bytes
+per event; records are processed without retaining a transcript.
+
 For local-model experiments with Ollama, benchmark the real wrap prompt against a
 clean target repo before you run the agent:
 
