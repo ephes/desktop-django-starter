@@ -75,6 +75,10 @@ Options:
 
 Check that prerequisites are installed, bundled assets are intact, and the
 current wrapper config plus available harnesses are sufficient for `wrap --run`.
+Doctor is read-only: it never invokes a harness, saves preferences or stages assets.
+Missing required assets or tools exit with status 1; missing optional `uv`,
+invalid wrapper config and harness setup advice remain advisory (status 0
+when core checks pass).
 
 ## What happens after wrapping
 
