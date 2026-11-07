@@ -7,6 +7,10 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 - CSRF-enforcing integration tests cover CRUD and task mutations with both
   shell credential modes. Shell authentication and Django CSRF checks remain
   separate requirements; this adds regression coverage, not a new auth flow.
+- Credential-bearing desktop auth bootstrap responses now send
+  `Cache-Control: private, no-store` and `Referrer-Policy: no-referrer` on
+  success and failure. Adoption requires an updated desktop distribution;
+  no host deployment is needed.
 
 ## Packaging Workflow
 
