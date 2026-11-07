@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 # Environment variables that decide where per-user config, data, and cache
 # files live on Linux, macOS, and Windows. Tests must never touch the real

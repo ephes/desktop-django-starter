@@ -20,6 +20,9 @@ classifiers = [
     "Topic :: Software Development :: Build Tools",
 ]
 
+[dependency-groups]
+dev = ["hatchling"]
+
 [project.scripts]
 dds = "dds.cli:main"
 desktop-django-starter = "dds.cli:main"

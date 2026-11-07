@@ -9,20 +9,16 @@ from __future__ import annotations
 import os
 import re
 import shutil
-import subprocess
-import sys
 import tarfile
 import zipfile
 from pathlib import Path
 
 import pytest
+import sync_assets
+from hatchling.build import build_sdist, build_wheel
+from sync_assets import CANONICAL_ASSETS
 
-# Add cli/ to path so we can import the sync script's asset list
 CLI_DIR = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(CLI_DIR))
-
-import sync_assets  # noqa: E402
-from sync_assets import CANONICAL_ASSETS  # noqa: E402
 
 REPO_ROOT = CLI_DIR.parent
 
@@ -188,14 +184,13 @@ def test_old_tree_cleanup_failure_keeps_new_assets(
     assert "Old asset cleanup incomplete" in capsys.readouterr().out
 
 
-def test_recovery_directories_are_excluded_from_built_packages(tmp_path: Path) -> None:
-    uv = shutil.which("uv")
-    if uv is None:
-        pytest.skip("uv is required to build the package")
+def test_recovery_directories_are_excluded_from_built_packages(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     cli_root = CLI_DIR
     project = tmp_path / "cli"
     project.mkdir()
-    for name in ("pyproject.toml", "hatch_build.py", "README.md"):
+    for name in ("pyproject.toml", "hatch_build.py", "asset_inventory.py", "README.md"):
         shutil.copy2(cli_root / name, project / name)
     shutil.copytree(
         cli_root / "src",
@@ -203,22 +198,28 @@ def test_recovery_directories_are_excluded_from_built_packages(tmp_path: Path) -
         ignore=shutil.ignore_patterns("_assets", ".assets-sync-*", "__pycache__"),
     )
     package = project / "src" / "dds"
-    skill = package / "_assets" / "skills" / "wrap-existing-django-in-electron" / "SKILL.md"
-    skill.parent.mkdir(parents=True)
-    skill.write_text("skill")
+    for rel in CANONICAL_ASSETS:
+        asset = package / "_assets" / rel
+        asset.parent.mkdir(parents=True, exist_ok=True)
+        asset.write_text("synthetic asset")
     stale = package / ".assets-sync-recovery" / "previous" / "stale.txt"
     stale.parent.mkdir(parents=True)
     stale.write_text("stale")
 
     dist = tmp_path / "dist"
-    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
-    subprocess.run(
-        [uv, "build", "--out-dir", str(dist)],
-        cwd=project,
-        env=env,
-        check=True,
-        capture_output=True,
-    )
+    monkeypatch.chdir(project)
+    sdist_name = build_sdist(str(dist))
+    unpack = tmp_path / "unpacked"
+    with tarfile.open(dist / sdist_name) as archive:
+        assert any(name.endswith("/asset_inventory.py") for name in archive.getnames())
+        if hasattr(tarfile, "data_filter"):
+            archive.extractall(unpack, filter="data")
+        else:
+            # This synthetic archive was just built in this test.
+            archive.extractall(unpack)
+    (source,) = unpack.iterdir()
+    monkeypatch.chdir(source)
+    build_wheel(str(dist))
 
     (wheel,) = dist.glob("*.whl")
     (sdist,) = dist.glob("*.tar.gz")

@@ -51,3 +51,7 @@ Important constraints:
 - [tests/test_tasks_demo.py](tests/test_tasks_demo.py): Backend tests for the real async task demo ("Stable Routines"), including enqueueing, reconciliation, and status transitions.
 - [tests/test_health.py](tests/test_health.py): Readiness endpoint coverage.
 - [src/tasks_demo/](src/tasks_demo/): Background task visualization demo ("Stable Routines") with animated pulse-ring indicators, polling-based live updates, and a SQLite-backed `django.tasks` plus `django_tasks_db` worker flow (optional post-v1 extension).
+
+- CLI wheel/sdist admission shares `cli/asset_inventory.py` with asset sync.
+  Run `just cli-sync-assets` before building; `just cli-test` exercises offline
+  build and relocated-install contracts with local Hatchling dependencies.
