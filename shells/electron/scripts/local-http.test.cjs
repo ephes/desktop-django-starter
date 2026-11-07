@@ -40,8 +40,9 @@ for (const drip of [false, true]) {
       if (drip) socket.write("HTTP/1.1 200 OK\r\n");
       socket.on("close", () => { clearTimeout(timer); clearInterval(timer); });
     }, true);
+    const main = loadMain();
     const start = performance.now();
-    await assert.rejects(loadMain().waitForDjango(url, "", 100), /did not become ready/);
+    await assert.rejects(main.waitForDjango(url, "", 100), /did not become ready/);
     assert.ok(performance.now() - start < 300);
   });
 }

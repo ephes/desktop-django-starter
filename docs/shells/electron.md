@@ -4,6 +4,11 @@ Status: implemented as the baseline release-oriented shell in this repo.
 
 The current production-grade shell path in this repository is [`shells/electron/`](../../shells/electron/).
 
+Electron local HTTP checks use elapsed deadlines: each health probe is bounded by
+the remaining startup budget, and activity responses have a one-second deadline
+and a 16 KiB raw-byte limit. Failed activity reads keep the existing quit fallback.
+Loopback transfer regressions run with `npm --prefix shells/electron test`.
+
 Current responsibilities:
 
 - supervise Django and the task worker as child processes
@@ -37,8 +42,3 @@ Current update scope:
 - workflow support: `.github/workflows/desktop-packages.yml` uploads `latest*.yml` metadata and can publish to a draft GitHub Release when manually triggered with `publish_release=true`
 - local behavior: development runs show a harmless "updates unavailable" dialog instead of attempting a feed check
 - release-readiness boundary: a signed/notarized macOS update from installed `0.1.2` to published `v0.1.4` now proves detection, download, restart/install, and `app.sqlite3` persistence, but a Windows NSIS update still needs live validation before claiming production updater readiness
-
-Electron local HTTP checks use elapsed deadlines: each health probe is bounded by
-the remaining startup budget, and activity responses have a one-second deadline
-and a 16 KiB raw-byte limit. Failed activity reads keep the existing quit fallback.
-Loopback transfer regressions run with `npm --prefix shells/electron test`.
