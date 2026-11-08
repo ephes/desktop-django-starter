@@ -28,7 +28,7 @@ Local verification:
   one failure in `leftover guarded processes are stopped` because sandboxed
   process inspection cannot find the spawned process (actual `[]`). Full command
   stops before CLI/docs.
-- Separately, `just cli-test`: 447 pass. `just docs-build`: succeeds with three
+- Separately, `just cli-test`: 447 pass. `just docs-build`: succeeds with two
   pre-existing missing-reference warnings. `git diff --check`: passes.
 - `npm --prefix shells/electron ci`: succeeds.
 - `just packaged-smoke`: backend staging succeeds, then Electron aborts with
