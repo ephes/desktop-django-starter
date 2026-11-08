@@ -3,11 +3,14 @@ from __future__ import annotations
 import math
 import random
 import time
+from collections.abc import Callable
 from datetime import datetime
+from uuid import UUID
 
-from django.tasks import TaskResultStatus, task
+from django.tasks import TaskResult, TaskResultStatus, task
 from django.tasks.exceptions import TaskResultDoesNotExist, TaskResultMismatch
 from django.utils import timezone
+from django_tasks_db.models import DBTaskResult
 
 from .models import SimulatedTask
 
@@ -16,6 +19,7 @@ FAILURE_RATE: float = 0.2
 MISSING_BACKEND_RESULT = "Task result could not be found."
 INVALID_BACKEND_PAYLOAD = "Task returned an invalid completion payload."
 UNEXPECTED_BACKEND_RESULT = "Task exited before the demo row was finalized."
+TERMINAL_HISTORY_LIMIT = 100
 
 TASK_LABELS: list[str] = [
     "Restocking hay loft",
@@ -86,7 +90,52 @@ def run_simulated_task(task_id: int) -> dict[str, object]:
     return _serialized_terminal_payload(task_row)
 
 
-def reconcile_task_with_backend(task_row: SimulatedTask) -> SimulatedTask:
+def visible_tasks() -> list[SimulatedTask]:
+    active = list(
+        SimulatedTask.objects.filter(
+            status__in=[SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING]
+        )
+    )
+    result_ids = set()
+    for row in active:
+        try:
+            result_ids.add(UUID(row.backend_task_id))
+        except ValueError:
+            pass  # Malformed IDs follow the same missing-result policy as get_result().
+    # in_bulk() uses parameter-safe batches on each supported database.
+    backend_rows = DBTaskResult.objects.in_bulk(result_ids)
+
+    def load_result(result_id: str):
+        try:
+            backend_row = backend_rows[UUID(result_id)]
+        except (KeyError, ValueError) as exc:
+            raise TaskResultDoesNotExist(result_id) from exc
+        result = backend_row.task_result
+        if result.task.func != run_simulated_task.func:
+            raise TaskResultMismatch("Task does not match")
+        return result
+
+    active = [reconcile_task_with_backend(row, result_loader=load_result) for row in active]
+    # Query history after reconciliation so fresh completions are visible in
+    # this response, even when the task was queued long ago.
+    history = list(
+        SimulatedTask.objects.filter(
+            status__in=[SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED]
+        ).order_by("-completed_at", "-created_at", "-pk")[:TERMINAL_HISTORY_LIMIT]
+    )
+    history_ids = {row.pk for row in history}
+    active = [
+        row
+        for row in active
+        if row.status in {SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING}
+        and row.pk not in history_ids
+    ]
+    return sorted(active + history, key=lambda row: (row.created_at, row.pk), reverse=True)
+
+
+def reconcile_task_with_backend(
+    task_row: SimulatedTask, *, result_loader: Callable[[str], TaskResult] | None = None
+) -> SimulatedTask:
     if task_row.status in {SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED}:
         return task_row
 
@@ -94,7 +143,7 @@ def reconcile_task_with_backend(task_row: SimulatedTask) -> SimulatedTask:
         return task_row
 
     try:
-        backend_result = run_simulated_task.get_result(task_row.backend_task_id)
+        backend_result = (result_loader or run_simulated_task.get_result)(task_row.backend_task_id)
     except (TaskResultDoesNotExist, TaskResultMismatch):
         # Missing queue metadata cannot prove that a claimed worker has stopped.
         # Startup reconciliation retires abandoned claims after a restart.

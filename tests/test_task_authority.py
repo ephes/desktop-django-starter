@@ -63,9 +63,12 @@ def test_status_rejects_invalid_success_payload(client, change):
     # Nonfinite numbers cannot be stored in SQLite JSON; inject the backend return
     # at its public lookup boundary while still exercising the real HTTP caller.
     with mock.patch.object(
-        type(run_simulated_task),
-        "get_result",
-        return_value=SimpleNamespace(status=TaskResultStatus.SUCCESSFUL, return_value=payload),
+        DBTaskResult,
+        "task_result",
+        new_callable=mock.PropertyMock,
+        return_value=SimpleNamespace(
+            task=run_simulated_task, status=TaskResultStatus.SUCCESSFUL, return_value=payload
+        ),
     ):
         response = client.get(reverse("tasks_demo:task-status"))
     assert response.status_code == 200

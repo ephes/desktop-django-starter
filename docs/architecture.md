@@ -208,6 +208,14 @@ Current launcher contract:
 - no shell injects a `DJANGO_SECRET_KEY`; when the environment does not provide one, packaged settings generate a per-install `DJANGO_SECRET_KEY` in the app-data directory (`secret_key`, created once with `secrets.token_urlsafe(50)` and owner-only `0600` permissions on POSIX) and reuse it on later starts, so every install signs sessions, CSRF tokens, and password-reset links with its own key; an explicit `DJANGO_SECRET_KEY` environment variable still wins
 - packaged Django settings keep SQLite in per-user app data and now add desktop-oriented SQLite tuning with `transaction_mode=IMMEDIATE`, a 20-second timeout, `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, and modest cache/mmap settings
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
+- both the task page and polling endpoint show all pending/running rows and at
+  most 100 terminal rows, selected by newest completion time (then creation time
+  and ID). Active queue results are loaded with the backend's public
+  `DBTaskResult` model and `task_result` property in parameter-safe bulk batches,
+  preserving task-function matching and the existing reconciliation guards.
+  Fresh completions enter history in the same response. This is a visibility
+  limit, not automatic deletion: older terminal rows remain until Clear Finished
+  Routines deletes them; history pagination is outside this teaching demo.
 - successful backend payloads must contain a `DONE`/`FAILED` status, string result,
   finite nonnegative numeric duration (no booleans), and timezone-aware ISO
   completion timestamp. Invalid payloads become a failed demo row through the
@@ -254,6 +262,16 @@ Shutdown handling must be treated as a cross-platform lifecycle concern, not as 
 - for the cases normal shutdown cannot cover, every backend process runs under `desktop_process_guard.py`: it exits when the shell's stdin pipe closes, and on Windows it holds a kill-on-close Job Object for its process tree; a later start also stops leftovers it finds by app key
 - the Job Object is created by the backend process for itself and its descendants, not by Electron for its children (Node.js has no Job Object API); the stdin pipe is what ties the backend to the shell
 - verified on macOS: `kill -9` of the Electron main process ends `runserver` and `db_worker` within three seconds, and a planted leftover is stopped on the next start. The Windows paths (Job Object, `taskkill`, PowerShell process listing) are implemented but not yet validated on a live Windows machine
+
+## First-run Demo Content
+
+First-run demo seeding uses a unique `DemoContentState` marker as its first
+transactional write, before checking for existing user content. This serializes
+concurrent SQLite command callers under both development's deferred transactions
+and packaged `IMMEDIATE` transactions. The marker and all three ponies commit
+together; failure rolls them all back. Existing user content skips the seed
+without recording a marker. Call the helper before doing reads in a caller-owned
+SQLite transaction; it cannot upgrade a caller's pre-existing read snapshot.
 
 ## Deferred Areas
 

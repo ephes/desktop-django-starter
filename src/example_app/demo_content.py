@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from .models import DemoContentState, Item
 
@@ -33,16 +33,21 @@ FIRST_RUN_PONIES = (
 )
 
 
-@transaction.atomic
 def seed_first_run_demo_content() -> int:
-    if DemoContentState.objects.filter(key=DemoContentState.Key.FIRST_RUN_PONY_SEED).exists():
-        return 0
-
-    if Item.objects.exists():
-        return 0
-
-    for pony in FIRST_RUN_PONIES:
-        Item.objects.create(title=pony.title, notes=pony.notes, status=pony.status)
-
-    DemoContentState.objects.create(key=DemoContentState.Key.FIRST_RUN_PONY_SEED)
+    seed_marker = DemoContentState.Key.FIRST_RUN_PONY_SEED
+    try:
+        with transaction.atomic():
+            # Write before reading: deferred SQLite transactions cannot safely
+            # upgrade concurrent read snapshots to write locks. The unique
+            # marker arbitrates seed ownership and rolls back with the ponies.
+            DemoContentState.objects.create(key=seed_marker)
+            if Item.objects.exists():
+                transaction.set_rollback(True)
+                return 0
+            for pony in FIRST_RUN_PONIES:
+                Item.objects.create(title=pony.title, notes=pony.notes, status=pony.status)
+    except IntegrityError:
+        if DemoContentState.objects.filter(key=seed_marker).exists():
+            return 0
+        raise
     return len(FIRST_RUN_PONIES)
