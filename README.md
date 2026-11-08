@@ -358,3 +358,7 @@ Shells do not inject a `DJANGO_SECRET_KEY`. Packaged settings generate one per i
 - Tauri now has an experimental GitHub-hosted artifact workflow, but it still does not publish Releases, does not claim signing/notarization parity with Electron, and still needs real Windows install/run validation.
 - Tauri and Positron use a bootstrap HttpOnly cookie for per-session shell-to-Django request authentication because their current public web view APIs do not expose Electron's exact external-localhost per-request header injection hook.
 - Positron remains an experimental local shell path with no GitHub Actions artifact lane, no splashscreen-parity claim on macOS, and no Windows packaged parity claim in this slice.
+
+CLI package maintainers: wheel and sdist builds require every file in
+`cli/asset_inventory.py` to be staged by `just cli-sync-assets`.
+`just cli-test` includes offline synthetic build and relocated-install probes.
