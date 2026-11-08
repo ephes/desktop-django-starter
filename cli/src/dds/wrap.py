@@ -33,7 +33,7 @@ SKILL_PATH = ASSETS_PATH / "skills" / "wrap-existing-django-in-electron" / "SKIL
 
 # The token in prompt.md that references the starter repo.  The CLI replaces
 # it with the absolute path to the installed assets so the agent can read files.
-_STARTER_TOKEN = "../desktop-django-starter"
+_STARTER_TOKEN = "../desktop-django-starter/"
 DEFAULT_PI_MODEL = "openai-codex/gpt-5.4"
 _CLAUDE_TERMINATION_GRACE = 5.0
 _CLAUDE_MAX_EVENT_BYTES = 1024 * 1024
@@ -307,10 +307,17 @@ def _run_claude(resolved_prompt: str, assets_str: str, model: str | None) -> Non
 
 def _generate_prompt() -> str:
     """Read prompt.md and resolve starter-repo paths to the installed assets."""
-    template = PROMPT_TEMPLATE.read_text()
-    # Escape sed-special characters in the replacement path
+    try:
+        template = PROMPT_TEMPLATE.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        detail = _bounded_text(str(exc), 800)
+        print(
+            f"error: could not read wrapping prompt at {PROMPT_TEMPLATE}: {detail}", file=sys.stderr
+        )
+        sys.exit(1)
+    # Replace only the starter path prefix, preserving similar ordinary text.
     assets_str = str(ASSETS_PATH)
-    resolved = template.replace(_STARTER_TOKEN, assets_str)
+    resolved = template.replace(_STARTER_TOKEN, assets_str + "/")
 
     # Defensive: fail if any expected starter-path references remain
     if _STARTER_TOKEN in resolved:
