@@ -55,3 +55,7 @@ Important constraints:
 - CLI wheel/sdist admission shares `cli/asset_inventory.py` with asset sync.
   Run `just cli-sync-assets` before building; `just cli-test` exercises offline
   build and relocated-install contracts with local Hatchling dependencies.
+
+- Positron icon generation uses owned temporary iconsets and stages all platform
+  outputs before publication. See `docs/shells/positron.md` for rollback recovery
+  and the serial-publication requirement.

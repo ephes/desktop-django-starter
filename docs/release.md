@@ -12,6 +12,11 @@ This starter now includes the packaging scaffolding needed to make signing, nota
   including required paths replaced by directories. Offline synthetic wheel
   installation tests cover asset inclusion, relocated prompts and doctor.
 
+- Positron icon generation preflights tools and renders all platform outputs
+  before publication, with rollback for ordinary filesystem failures. Unique
+  temporary iconsets protect caller-owned directories and overlapping renders;
+  final publication remains serial. Empty/missing renderer outputs fail.
+
 - CSRF-enforcing integration tests cover CRUD and task mutations with both
   shell credential modes. Shell authentication and Django CSRF checks remain
   separate requirements; this adds regression coverage, not a new auth flow.
