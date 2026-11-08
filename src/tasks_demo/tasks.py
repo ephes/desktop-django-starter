@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 import random
 import time
 from datetime import datetime
@@ -13,6 +14,7 @@ from .models import SimulatedTask
 DURATION_RANGE: tuple[int, int] = (3, 10)
 FAILURE_RATE: float = 0.2
 MISSING_BACKEND_RESULT = "Task result could not be found."
+INVALID_BACKEND_PAYLOAD = "Task returned an invalid completion payload."
 UNEXPECTED_BACKEND_RESULT = "Task exited before the demo row was finalized."
 
 TASK_LABELS: list[str] = [
@@ -48,7 +50,9 @@ def run_simulated_task(task_id: int) -> dict[str, object]:
     claimed = SimulatedTask.objects.filter(pk=task_id, status=SimulatedTask.Status.PENDING).update(
         status=SimulatedTask.Status.RUNNING
     )
-    task_row = SimulatedTask.objects.get(pk=task_id)
+    task_row = SimulatedTask.objects.filter(pk=task_id).first()
+    if task_row is None:
+        return {}
     if not claimed:
         # A duplicate reports the current state without executing or finalizing it.
         return _serialized_terminal_payload(task_row)
@@ -62,7 +66,19 @@ def run_simulated_task(task_id: int) -> dict[str, object]:
     task_row.completed_at = completed_at
     task_row.result = random.choice(FAILURE_RESULTS if failed else SUCCESS_RESULTS)
     task_row.status = SimulatedTask.Status.FAILED if failed else SimulatedTask.Status.DONE
-    task_row.save(update_fields=["status", "result", "duration", "completed_at"])
+    finalized = SimulatedTask.objects.filter(
+        pk=task_id,
+        status=SimulatedTask.Status.RUNNING,
+        backend_task_id=task_row.backend_task_id,
+    ).update(
+        status=task_row.status,
+        result=task_row.result,
+        duration=duration,
+        completed_at=completed_at,
+    )
+    if not finalized:
+        current = SimulatedTask.objects.filter(pk=task_id).first()
+        return _serialized_terminal_payload(current) if current else {}
 
     if failed:
         raise SimulatedTaskFailure(task_row.result)
@@ -80,7 +96,12 @@ def reconcile_task_with_backend(task_row: SimulatedTask) -> SimulatedTask:
     try:
         backend_result = run_simulated_task.get_result(task_row.backend_task_id)
     except (TaskResultDoesNotExist, TaskResultMismatch):
-        _mark_task_failed(task_row, MISSING_BACKEND_RESULT)
+        # Missing queue metadata cannot prove that a claimed worker has stopped.
+        # Startup reconciliation retires abandoned claims after a restart.
+        if task_row.status == SimulatedTask.Status.PENDING:
+            _mark_task_failed(task_row, MISSING_BACKEND_RESULT)
+        else:
+            task_row.refresh_from_db()
         return task_row
 
     if backend_result.status in {TaskResultStatus.READY, TaskResultStatus.RUNNING}:
@@ -96,19 +117,25 @@ def reconcile_task_with_backend(task_row: SimulatedTask) -> SimulatedTask:
         backend_result.status == TaskResultStatus.SUCCESSFUL
         and task_row.status != SimulatedTask.Status.DONE
     ):
-        payload = backend_result.return_value or {}
-        if payload.get("status") in {SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING}:
+        payload = backend_result.return_value
+        # A duplicate execution may report the current active claim without work.
+        if (
+            isinstance(payload, dict)
+            and isinstance(payload.get("status"), str)
+            and payload.get("status") == task_row.status
+            and payload.get("duration") is None
+            and payload.get("completed_at") is None
+        ):
             return task_row
-        task_row.status = payload.get("status", SimulatedTask.Status.DONE)  # type: ignore[assignment]
-        task_row.result = payload.get("result") or task_row.result  # type: ignore[assignment]
-        duration = payload.get("duration")
-        task_row.duration = duration if duration is not None else task_row.duration  # type: ignore[assignment]
-        completed_at = payload.get("completed_at")
-        task_row.completed_at = (
-            datetime.fromisoformat(completed_at)  # type: ignore[arg-type]
-            if completed_at
-            else (task_row.completed_at or backend_result.finished_at or timezone.now())
-        )
+        try:
+            status, result, duration, completed_at = _validated_completion(payload)
+        except (ValueError, TypeError, OverflowError):
+            _mark_task_failed(task_row, INVALID_BACKEND_PAYLOAD)
+            return task_row
+        task_row.status = status
+        task_row.result = result
+        task_row.duration = duration
+        task_row.completed_at = completed_at
         _save_reconciled_task(task_row, ["status", "result", "duration", "completed_at"])
         return task_row
 
@@ -116,6 +143,35 @@ def reconcile_task_with_backend(task_row: SimulatedTask) -> SimulatedTask:
         _mark_task_failed(task_row, UNEXPECTED_BACKEND_RESULT)
 
     return task_row
+
+
+def _validated_completion(payload: object) -> tuple[str, str, float, datetime]:
+    if not isinstance(payload, dict):
+        raise ValueError("Expected a completion object")
+    status = payload.get("status")
+    result = payload.get("result")
+    duration = payload.get("duration")
+    completed_at = payload.get("completed_at")
+    if not isinstance(status, str) or status not in {
+        SimulatedTask.Status.DONE,
+        SimulatedTask.Status.FAILED,
+    }:
+        raise ValueError("Expected a terminal status")
+    if not isinstance(result, str):
+        raise ValueError("Expected a result string")
+    if (
+        not isinstance(duration, (int, float))
+        or isinstance(duration, bool)
+        or not math.isfinite(duration)
+        or duration < 0
+    ):
+        raise ValueError("Expected a finite nonnegative duration")
+    if not isinstance(completed_at, str):
+        raise ValueError("Expected an ISO timestamp")
+    timestamp = datetime.fromisoformat(completed_at)
+    if timezone.is_naive(timestamp):
+        raise ValueError("Expected a timezone-aware timestamp")
+    return status, result, float(duration), timestamp
 
 
 def _serialized_terminal_payload(task_row: SimulatedTask) -> dict[str, object]:
