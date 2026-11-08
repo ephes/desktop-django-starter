@@ -208,6 +208,14 @@ Current launcher contract:
 - no shell injects a `DJANGO_SECRET_KEY`; when the environment does not provide one, packaged settings generate a per-install `DJANGO_SECRET_KEY` in the app-data directory (`secret_key`, created once with `secrets.token_urlsafe(50)` and owner-only `0600` permissions on POSIX) and reuse it on later starts, so every install signs sessions, CSRF tokens, and password-reset links with its own key; an explicit `DJANGO_SECRET_KEY` environment variable still wins
 - packaged Django settings keep SQLite in per-user app data and now add desktop-oriented SQLite tuning with `transaction_mode=IMMEDIATE`, a 20-second timeout, `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, and modest cache/mmap settings
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
+- successful backend payloads must contain a `DONE`/`FAILED` status, string result,
+  finite nonnegative numeric duration (no booleans), and timezone-aware ISO
+  completion timestamp. Invalid payloads become a failed demo row through the
+  same conditional update. A duplicate's active-state snapshot is a no-op.
+- workers finalize only a still-running row with the backend ID they claimed;
+  a retired or deleted row is never overwritten or recreated. Missing queue
+  metadata fails pending rows, but leaves running claims alone because a live
+  worker may still finish. Startup reconciliation retires abandoned claims.
 - task polling reconciles backend outcomes only while the current demo row is pending or running; if the worker has already finalized it, polling reloads that row and preserves its status, result, duration, and completion time, including when the backend result is missing
 - shell-local wrappers such as `shells/electron/scripts/bundled-python.cjs` are allowed to resolve shared helpers from two locations: a packaged-app copy first, then a repo-relative source path for local development
 - the Tauri shell keeps its subprocess supervision in Rust under `shells/tauri/src-tauri/src/lib.rs` instead of forcing a cross-shell launcher abstraction
