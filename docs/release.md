@@ -4,6 +4,10 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 
 ## Unreleased
 
+- Add isolated CLI doctor regression matrices for relocated resources, missing
+  required/optional tools and wrapper configuration advice. Setup attention
+  remains advisory when core checks pass; doctor performs no setup writes.
+
 - CSRF-enforcing integration tests cover CRUD and task mutations with both
   shell credential modes. Shell authentication and Django CSRF checks remain
   separate requirements; this adds regression coverage, not a new auth flow.
