@@ -10,14 +10,14 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from .models import SimulatedTask
-from .tasks import TASK_LABELS, reconcile_task_with_backend, run_simulated_task
+from .tasks import TASK_LABELS, run_simulated_task, visible_tasks
 
 logger = logging.getLogger(__name__)
 
 
 @ensure_csrf_cookie
 def task_list(request):
-    tasks = [reconcile_task_with_backend(task) for task in SimulatedTask.objects.all()]
+    tasks = visible_tasks()
     return render(request, "tasks_demo/task_list.html", {"tasks": tasks})
 
 
@@ -50,7 +50,7 @@ def task_clear(request):
 
 @require_GET
 def task_status(request):
-    tasks = [reconcile_task_with_backend(task) for task in SimulatedTask.objects.all()]
+    tasks = visible_tasks()
     data = {
         "tasks": [
             {
