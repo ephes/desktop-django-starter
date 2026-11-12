@@ -27,7 +27,14 @@ def parse_args() -> argparse.Namespace:
         action="append",
         dest="patterns",
         required=True,
-        help="Artifact glob to include in the checksum manifest.",
+        help="Required artifact glob; must match at least one regular file.",
+    )
+    parser.add_argument(
+        "--optional-glob",
+        action="append",
+        dest="optional_patterns",
+        default=[],
+        help="Include matching regular files when present, for example optional signatures.",
     )
     parser.add_argument(
         "--output",
@@ -38,22 +45,28 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def resolve_matches(patterns: list[str]) -> list[Path]:
+def resolve_matches(patterns: list[str], optional_patterns: list[str]) -> list[Path]:
     matches: list[Path] = []
     seen: set[Path] = set()
-    for pattern in patterns:
-        for match in sorted(Path(path) for path in glob.glob(pattern)):
+    missing_patterns: list[str] = []
+    for pattern in [*patterns, *optional_patterns]:
+        artifacts = sorted(path for name in glob.glob(pattern) if (path := Path(name)).is_file())
+        if not artifacts and pattern in patterns:
+            missing_patterns.append(pattern)
+        for match in artifacts:
             resolved = match.resolve()
             if resolved in seen:
                 continue
             seen.add(resolved)
             matches.append(match)
+    if missing_patterns:
+        raise SystemExit(f"No artifacts matched required pattern(s): {', '.join(missing_patterns)}")
     return matches
 
 
 def main() -> int:
     args = parse_args()
-    matches = resolve_matches(args.patterns)
+    matches = resolve_matches(args.patterns, args.optional_patterns)
     if not matches:
         raise SystemExit(f"No artifacts matched: {', '.join(args.patterns)}")
 

@@ -56,8 +56,7 @@ def test_normal_manifest_is_verifiable_and_deterministic(tmp_path):
     result = run_manifest(output, tmp_path / "app.*", tmp_path / "app.zip")
     assert result.returncode == 0, result.stderr
     assert output.read_text().splitlines() == [
-        f"{hashlib.sha256(name.encode()).hexdigest()}  {name}"
-        for name in ("app.dmg", "app.zip")
+        f"{hashlib.sha256(name.encode()).hexdigest()}  {name}" for name in ("app.dmg", "app.zip")
     ]
 
 
@@ -110,3 +109,84 @@ def test_new_manifest_obeys_umask(tmp_path):
     finally:
         os.umask(old_mask)
     assert stat.S_IMODE(output.stat().st_mode) == 0o640
+
+
+@pytest.mark.parametrize("unsuitable", ["missing", "directory"])
+def test_each_pattern_requires_a_regular_artifact(tmp_path, unsuitable):
+    source = tmp_path / "app.zip"
+    source.write_bytes(b"installer")
+    output = tmp_path / "checksums.txt"
+    output.write_text("previous manifest\n")
+    metadata = tmp_path / "latest.yml"
+    if unsuitable == "directory":
+        metadata.mkdir()
+    result = run_manifest(output, tmp_path / "*.zip", metadata)
+    assert result.returncode != 0
+    assert "No artifacts matched" in result.stderr
+    assert str(metadata) in result.stderr
+    assert output.read_text() == "previous manifest\n"
+
+
+def test_all_unmatched_patterns_are_reported(tmp_path):
+    output = tmp_path / "checksums.txt"
+    (tmp_path / "app.zip").write_bytes(b"installer")
+    missing = [tmp_path / "*.yml", tmp_path / "*.blockmap"]
+    result = run_manifest(output, tmp_path / "*.zip", *missing)
+    assert result.returncode != 0
+    assert all(str(pattern) in result.stderr for pattern in missing)
+    assert not output.exists()
+
+
+def test_optional_patterns_share_deduplication_and_allow_absence(tmp_path):
+    source = tmp_path / "app.zip"
+    source.write_bytes(b"installer")
+    output = tmp_path / "checksums.txt"
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--output",
+            str(output),
+            "--glob",
+            str(source),
+            "--optional-glob",
+            str(tmp_path / "*.sig"),
+            "--optional-glob",
+            str(source),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert len(output.read_text().splitlines()) == 1
+
+
+@pytest.mark.parametrize("optional_exists", [False, True])
+def test_optional_patterns_cannot_bypass_required_inputs_or_output_safety(
+    tmp_path, optional_exists
+):
+    source = tmp_path / "app.zip"
+    source.write_bytes(b"installer")
+    output = tmp_path / "checksums.txt"
+    output.write_text("previous")
+    required = source if optional_exists else tmp_path / "missing.yml"
+    optional = output if optional_exists else source
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(SCRIPT),
+            "--output",
+            str(output),
+            "--glob",
+            str(required),
+            "--optional-glob",
+            str(optional),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode != 0
+    assert ("Manifest output is also an input" if optional_exists else "No artifacts matched") in (
+        result.stderr
+    )
+    assert output.read_text() == "previous"
