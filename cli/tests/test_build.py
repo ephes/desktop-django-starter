@@ -97,7 +97,7 @@ def tree(root):
     }
 
 
-def test_wheel_installs_and_runs_after_relocation(project, tmp_path):
+def test_wheel_installs_and_runs_after_relocation(project, tmp_path, monkeypatch):
     root, assets = project
     expected = {rel: (assets / rel).read_bytes() for rel in CANONICAL_ASSETS}
     wheel = root / "dist" / build_wheel(str(root / "dist"))
@@ -129,7 +129,11 @@ def test_wheel_installs_and_runs_after_relocation(project, tmp_path):
     relocated = tmp_path / "relocated package with spaces"
     relocated.mkdir()
     shutil.move(site, relocated / "dds")
+    # The fixture runs the build from inside the source tree; leave it first,
+    # because Windows refuses to delete a process's current directory.
+    monkeypatch.chdir(tmp_path)
     shutil.rmtree(root)
+    assert not root.exists()
     cwd = tmp_path / "unrelated cwd with spaces"
     cwd.mkdir()
     home = tmp_path / "probe home"
