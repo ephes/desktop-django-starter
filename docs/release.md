@@ -30,6 +30,16 @@ This starter now includes the packaging scaffolding needed to make signing, nota
   invalid UTF-8 prompt templates now produce a CLI error. Discovery regressions
   protect excluded trees, sorted multiple roots and launch blocking on failure.
 
+- Release verification now has offline action-gate regression tests and a
+  30-second deadline per `gh` command, with concise failures and no edit retry.
+- Every expected hosted Electron asset must have a positive integer byte size
+  before verification or explicit draft publication can pass.
+- Checksum generation requires every supplied `--glob` to match a regular file;
+  missing patterns fail before hashing or replacing a previous manifest.
+  Tauri signature patterns are required when `TAURI_SIGNING_PRIVATE_KEY` is
+  set and use the explicit `--optional-glob` flag only for unsigned builds;
+  Electron Linux requires no separate blockmap file.
+
 - CSRF-enforcing integration tests cover CRUD and task mutations with both
   shell credential modes. Shell authentication and Django CSRF checks remain
   separate requirements; this adds regression coverage, not a new auth flow.
@@ -92,10 +102,10 @@ Current checksum artifacts:
 
 - macOS: `desktop-django-starter-macos-sha256.txt`, containing SHA-256 lines for the DMG, updater ZIP, updater metadata, and blockmap upload set
 - Windows: `desktop-django-starter-windows-sha256.txt`, containing SHA-256 lines for the NSIS `.exe`, updater metadata, and blockmap upload set
-- Linux: `desktop-django-starter-linux-sha256.txt`, containing SHA-256 lines for the AppImage, updater metadata, and blockmap upload set
-- Tauri macOS: `desktop-django-starter-tauri-macos-sha256.txt`, containing SHA-256 lines for the DMG plus `.app.tar.gz` updater payload and `.sig` upload set
-- Tauri Windows: `desktop-django-starter-tauri-windows-sha256.txt`, containing SHA-256 lines for the NSIS `.exe` plus `.sig` upload set
-- Tauri Linux: `desktop-django-starter-tauri-linux-sha256.txt`, containing SHA-256 lines for the AppImage plus `.sig` upload set
+- Linux: `desktop-django-starter-linux-sha256.txt`, containing SHA-256 lines for the AppImage and updater metadata (blockmap data is embedded in the AppImage)
+- Tauri macOS: `desktop-django-starter-tauri-macos-sha256.txt`, containing SHA-256 lines for the DMG plus `.app.tar.gz` updater payload and optional `.sig` files
+- Tauri Windows: `desktop-django-starter-tauri-windows-sha256.txt`, containing SHA-256 lines for the NSIS `.exe` plus optional `.sig` files
+- Tauri Linux: `desktop-django-starter-tauri-linux-sha256.txt`, containing SHA-256 lines for the AppImage plus optional `.sig` files
 
 Linux output remains available for parity, but Linux signing and Linux verification are not baseline requirements in this slice.
 
@@ -348,7 +358,16 @@ Do not publish the draft as soon as the first platform finishes. Wait for the wh
 just github-release-verify v<version>
 ```
 
-That helper checks for the current hosted set:
+Verification is read-only by default. Each `gh` view or edit command has a
+30-second timeout. Launch, timeout, invalid UTF-8/JSON/schema, and command failures
+return nonzero with concise diagnostics (command stderr detail is limited to 800
+characters). A failed edit is reported as an uncertain outcome and is never
+retried automatically; verify the release state before trying again. Offline
+regression tests inject synthetic subprocess responses for these paths and the
+publication gate; they never contact GitHub or edit a release.
+
+That helper requires each expected asset below to have a positive integer byte
+size, reporting missing names separately from empty or invalid sizes:
 
 - macOS DMG, updater ZIP, `latest-mac.yml`, and macOS blockmaps
 - Windows NSIS `.exe`, `latest.yml`, and the Windows blockmap
@@ -457,6 +476,16 @@ What does not count:
 
 ## Checksum Files and Minimal Release Promotion
 
+Every explicit `--glob` passed to `scripts/write-checksums.py` must match at least
+one regular file (a symlink to a regular file counts). Missing patterns or patterns
+matching only directories fail before hashing or writing; all missing patterns
+are named in the error. Use `--optional-glob` only for files that may be absent,
+such as Tauri signatures in unsigned builds. The Tauri workflow passes the
+signature pattern as a required `--glob` whenever `TAURI_SIGNING_PRIVATE_KEY` is
+configured, so a signed build without its `.sig` fails. At least one required `--glob`
+remains mandatory. Optional files share all input safety checks and deduplication
+with required files. Overlapping patterns still hash each artifact once.
+
 Checksum manifest input safety: `scripts/write-checksums.py` rejects inputs that
 resolve to the output manifest, including symlink and hard-link aliases. Exclude
 the manifest from rerun globs. Artifact basenames must be unique across all input
@@ -476,7 +505,7 @@ The Electron artifact upload includes the primary installer plus the updater met
 
 - macOS: the DMG, updater ZIP, `latest-mac.yml`, and blockmap files
 - Windows: the NSIS `.exe`, `latest.yml`, and blockmap files
-- Linux: the AppImage, `latest-linux.yml`, and blockmap files
+- Linux: the AppImage and `latest-linux.yml` (blockmap data is embedded in the AppImage)
 
 The Tauri workflow uses the same checksum pattern:
 

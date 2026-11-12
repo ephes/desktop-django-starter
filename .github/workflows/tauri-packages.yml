@@ -134,7 +134,7 @@ jobs:
           python scripts/write-checksums.py \
             --glob "${{ matrix.installer_glob }}" \
             --glob "${{ matrix.updater_glob }}" \
-            --glob "${{ matrix.signature_glob }}" \
+            ${{ env.TAURI_SIGNING_PRIVATE_KEY != '' && '--glob' || '--optional-glob' }} "${{ matrix.signature_glob }}" \
             --output "${{ matrix.checksum_path }}"
 
       - name: Upload packaged Tauri artifact
