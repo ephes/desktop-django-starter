@@ -36,7 +36,7 @@ test("materializeSymlinks replaces file symlinks with copied files", () => {
 
 test("materializeSymlinks replaces directory symlinks and nested links", () => {
   withTempRoot((rootPath) => {
-    const sourceDir = path.join(rootPath, "source");
+    const sourceDir = path.join(rootPath, "bundle", "source");
     const sourcePackageDir = path.join(sourceDir, "package");
     const sourceFile = path.join(sourcePackageDir, "python3.12");
     const nestedLink = path.join(sourcePackageDir, "python3");
@@ -44,7 +44,6 @@ test("materializeSymlinks replaces directory symlinks and nested links", () => {
     const linkPath = path.join(bundleDir, "python");
 
     fs.mkdirSync(sourcePackageDir, { recursive: true });
-    fs.mkdirSync(bundleDir, { recursive: true });
     fs.writeFileSync(sourceFile, "python-runtime");
     fs.symlinkSync(sourceFile, nestedLink);
     fs.symlinkSync(sourcePackageDir, linkPath);
@@ -89,7 +88,7 @@ test("materializeSymlinks leaves normal files untouched", () => {
 for (const operation of ['copyFileSync', 'cpSync', 'chmodSync']) {
   test(`materialization preserves original link when ${operation} fails`, () => {
     withTempRoot(root => {
-      const target = path.join(root, 'target');
+      const target = operation === 'cpSync' ? path.join(root, 'bundle', 'target') : path.join(root, 'target');
       const bundle = path.join(root, 'bundle');
       const link = path.join(bundle, 'python');
       fs.mkdirSync(bundle);
@@ -120,7 +119,7 @@ for (const operation of ['copyFileSync', 'cpSync', 'chmodSync']) {
       assert.equal(injected, 1);
       assert.ok(fs.lstatSync(link).isSymbolicLink());
       assert.equal(fs.realpathSync(link), fs.realpathSync(target));
-      assert.deepEqual(fs.readdirSync(bundle), ['python']);
+      assert.deepEqual(fs.readdirSync(bundle).sort(), operation === 'cpSync' ? ['python', 'target'] : ['python']);
       assert.equal(fs.readFileSync(operation === 'cpSync' ? path.join(target, 'marker') : target, 'utf8'), 'target');
     });
   });
@@ -141,7 +140,7 @@ test('materialization keeps executable permissions', () => withTempRoot(root => 
 
 for (const kind of ['file', 'directory']) {
   test(`materialization restores ${kind} link if publication fails`, () => withTempRoot(root => {
-    const target = path.join(root, 'target');
+    const target = kind === 'directory' ? path.join(root, 'bundle', 'target') : path.join(root, 'target');
     const bundle = path.join(root, 'bundle');
     const link = path.join(bundle, 'python');
     fs.mkdirSync(bundle);
@@ -165,6 +164,81 @@ for (const kind of ['file', 'directory']) {
     assert.equal(injected, true);
     assert.ok(fs.lstatSync(link).isSymbolicLink());
     assert.equal(fs.realpathSync(link), fs.realpathSync(target));
-    assert.deepEqual(fs.readdirSync(bundle), ['python']);
+    assert.deepEqual(fs.readdirSync(bundle).sort(), kind === 'directory' ? ['python', 'target'] : ['python']);
+  }));
+}
+
+for (const kind of ['self', 'parent', 'external', 'entries', 'bytes']) {
+  test(`materialization preflight rejects ${kind} before any copy`, () => withTempRoot(root => {
+    const bundle = path.join(root, 'bundle');
+    fs.mkdirSync(path.join(bundle, 'lib'), { recursive: true });
+    fs.writeFileSync(path.join(bundle, 'lib/library'), 'library', { mode: 0o755 });
+    const sentinel = path.join(bundle, 'a-library');
+    fs.symlinkSync('lib/library', sentinel);
+    if (kind === 'external') {
+      fs.mkdirSync(path.join(root, 'external'));
+      fs.symlinkSync(path.join(root, 'external'), path.join(bundle, 'z-bad'), 'junction');
+    } else if (kind === 'self' || kind === 'parent') {
+      fs.symlinkSync(kind === 'self' ? '.' : '..', path.join(bundle, 'lib/z-bad'), 'junction');
+    }
+    const copy = fs.copyFileSync;
+    const cp = fs.cpSync;
+    let copies = 0;
+    fs.copyFileSync = () => { copies++; throw new Error('copy must not start'); };
+    fs.cpSync = () => { copies++; throw new Error('copy must not start'); };
+    try {
+      assert.throws(() => materializeSymlinks(bundle, {
+        maxEntries: kind === 'entries' ? 2 : 100,
+        maxBytes: kind === 'bytes' ? 1 : 10000
+      }), /cycle|outside runtime|budget/i);
+    } finally { fs.copyFileSync = copy; fs.cpSync = cp; }
+    assert.equal(copies, 0);
+    assert.ok(fs.lstatSync(sentinel).isSymbolicLink());
+    assert.equal(fs.readFileSync(sentinel, 'utf8'), 'library');
+    assert.deepEqual(fs.readdirSync(bundle).sort(), kind === 'external' ? ['a-library', 'lib', 'z-bad'] : ['a-library', 'lib']);
+  }));
+}
+
+for (const failure of ['copy', 'publish', 'rollback', 'committed']) {
+  test(`materialization ${failure} with failed cleanup preserves outcome and paths`, () => withTempRoot(root => {
+    const target = path.join(root, 'target');
+    const bundle = path.join(root, 'bundle');
+    const link = path.join(bundle, 'python');
+    fs.mkdirSync(bundle);
+    fs.writeFileSync(target, 'target');
+    fs.symlinkSync(target, link);
+    const primary = new Error(`primary ${failure}`);
+    const cleanup = new Error('cleanup failure');
+    const rollback = new Error('rollback failure');
+    const copy = fs.copyFileSync;
+    const rename = fs.renameSync;
+    const rm = fs.rmSync;
+    fs.copyFileSync = (...args) => { if (failure === 'copy') throw primary; return copy(...args); };
+    fs.renameSync = (source, destination) => {
+      if (destination === link && failure !== 'copy' && failure !== 'committed') {
+        if (source.endsWith('original')) { if (failure === 'rollback') throw rollback; }
+        else throw primary;
+      }
+      return rename(source, destination);
+    };
+    fs.rmSync = () => { throw cleanup; };
+    let error;
+    try { materializeSymlinks(bundle); } catch (caught) { error = caught; }
+    finally { fs.copyFileSync = copy; fs.renameSync = rename; fs.rmSync = rm; }
+    assert.ok(error);
+    assert.equal(error.committed, failure === 'committed');
+    const temp = fs.readdirSync(bundle).find(name => name.startsWith('.materialize-'));
+    assert.ok(temp);
+    assert.equal(error.temporaryRoot, path.join(bundle, temp));
+    if (failure !== 'committed') assert.equal(error, primary);
+    if (failure === 'rollback') {
+      assert.equal(error.rollbackError, rollback);
+      assert.ok(fs.lstatSync(error.originalPath).isSymbolicLink());
+      assert.equal(fs.existsSync(link), false);
+    } else {
+      assert.equal(error.cleanupErrors[0].error, cleanup);
+      assert.equal(fs.lstatSync(link).isSymbolicLink(), failure !== 'committed');
+    }
+    assert.equal(fs.readFileSync(target, 'utf8'), 'target');
   }));
 }

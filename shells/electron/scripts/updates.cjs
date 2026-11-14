@@ -67,6 +67,10 @@ function createElectronUpdateController({
   let downloading = false;
   let downloaded = false;
   let lastErrorMessage = null;
+  let attempt = null;
+  let availablePrompt = null;
+  let installTask = null;
+  let installStarted = false;
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
@@ -97,35 +101,43 @@ function createElectronUpdateController({
     dialog.showErrorBox(title, message);
   }
 
-  async function promptToInstallDownloadedUpdate() {
-    const result = await dialog.showMessageBox({
-      type: "info",
-      buttons: ["Restart and Install", "Later"],
-      defaultId: 0,
-      cancelId: 1,
-      title: "Update Downloaded",
-      message: "An update is ready to install.",
-      detail: "Restart Desktop Django Starter to install the downloaded update."
+  function promptToInstallDownloadedUpdate() {
+    if (installStarted) return Promise.resolve();
+    if (installTask) return installTask;
+    // Acquire before running any dialog or user hook, including reentrant hooks.
+    installTask = Promise.resolve().then(async () => {
+      try {
+        const result = await dialog.showMessageBox({
+          type: "info",
+          buttons: ["Restart and Install", "Later"],
+          defaultId: 0,
+          cancelId: 1,
+          title: "Update Downloaded",
+          message: "An update is ready to install.",
+          detail: "Restart Desktop Django Starter to install the downloaded update."
+        });
+        if (result.response !== 0) return;
+        await beforeInstall();
+        autoUpdater.quitAndInstall();
+        installStarted = true;
+      } catch (error) {
+        dialog.showErrorBox("Update Install Failed", getErrorMessage(error));
+      } finally {
+        installTask = null;
+      }
     });
-
-    if (result.response !== 0) {
-      return;
-    }
-
-    try {
-      await beforeInstall();
-      autoUpdater.quitAndInstall();
-    } catch (error) {
-      dialog.showErrorBox("Update Install Failed", getErrorMessage(error));
-    }
+    return installTask;
   }
 
-  async function downloadUpdate() {
+  async function downloadUpdate(owner) {
+    if (attempt !== owner || downloading || downloaded) return;
     downloading = true;
     resetErrorState();
     try {
       await autoUpdater.downloadUpdate();
     } catch (error) {
+      if (attempt !== owner) return;
+      attempt = null;
       downloading = false;
       showUpdateError("Update Download Failed", error);
     }
@@ -155,15 +167,21 @@ function createElectronUpdateController({
       return null;
     }
 
+    const owner = {};
+    attempt = owner;
     checking = true;
     resetErrorState();
     try {
       const result = await autoUpdater.checkForUpdates();
-      if (!downloading) {
+      if (attempt === owner && !availablePrompt && !downloading) {
         checking = false;
+        attempt = null;
       }
       return result;
     } catch (error) {
+      if (attempt !== owner) return null;
+      attempt = null;
+      availablePrompt = null;
       checking = false;
       showUpdateError("Update Check Failed", error);
       return null;
@@ -175,6 +193,8 @@ function createElectronUpdateController({
   });
 
   autoUpdater.on("update-not-available", async () => {
+    if (availablePrompt || downloading || downloaded) return;
+    attempt = null;
     checking = false;
     await dialog.showMessageBox({
       type: "info",
@@ -187,23 +207,35 @@ function createElectronUpdateController({
   });
 
   autoUpdater.on("update-available", async (info) => {
-    checking = false;
-    const versionLabel = getVersionLabel(info);
-    const result = await dialog.showMessageBox({
-      type: "info",
-      buttons: ["Download", "Not Now"],
-      defaultId: 0,
-      cancelId: 1,
-      title: "Update Available",
-      message: `Desktop Django Starter ${versionLabel} is available.`,
-      detail: "Download the update now and install it after the download completes."
-    });
-
-    if (result.response !== 0) {
-      return;
+    if (availablePrompt || downloading || downloaded) return;
+    const owner = attempt || {};
+    attempt = owner;
+    availablePrompt = owner;
+    checking = true;
+    try {
+      const result = await dialog.showMessageBox({
+        type: "info",
+        buttons: ["Download", "Not Now"],
+        defaultId: 0,
+        cancelId: 1,
+        title: "Update Available",
+        message: `Desktop Django Starter ${getVersionLabel(info)} is available.`,
+        detail: "Download the update now and install it after the download completes."
+      });
+      if (attempt !== owner) return;
+      if (result.response === 0) await downloadUpdate(owner);
+      else attempt = null;
+    } catch (error) {
+      if (attempt === owner) {
+        attempt = null;
+        showUpdateError("Update Check Failed", error);
+      }
+    } finally {
+      if (availablePrompt === owner) {
+        availablePrompt = null;
+        checking = false;
+      }
     }
-
-    await downloadUpdate();
   });
 
   autoUpdater.on("download-progress", (progress) => {
@@ -214,6 +246,9 @@ function createElectronUpdateController({
   });
 
   autoUpdater.on("update-downloaded", async () => {
+    attempt = null;
+    availablePrompt = null;
+    checking = false;
     downloading = false;
     downloaded = true;
     await promptToInstallDownloadedUpdate();
@@ -221,6 +256,8 @@ function createElectronUpdateController({
 
   autoUpdater.on("error", (error) => {
     const title = downloading ? "Update Download Failed" : "Update Check Failed";
+    attempt = null;
+    availablePrompt = null;
     checking = false;
     downloading = false;
     showUpdateError(title, error);

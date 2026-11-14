@@ -50,11 +50,12 @@ require('node:child_process').spawnSync = (command, args, options = {}) => {
   if (operation === 'python install') {
     const installRoot = path.join(args[args.indexOf('--install-dir') + 1], 'runtime');
     fs.mkdirSync(path.join(installRoot, 'bin'), { recursive: true });
-    fs.writeFileSync(path.join(installRoot, 'bin/python3'), 'synthetic-interpreter');
+    fs.writeFileSync(path.join(installRoot, 'bin/python3'), 'synthetic-interpreter', { mode: 0o755 });
     fs.writeFileSync(path.join(installRoot, 'python.exe'), 'synthetic-interpreter');
+    if (fail === 'runtime-cycle') fs.symlinkSync('.', path.join(installRoot, 'cycle'), 'junction');
   } else if (args[0] === '-c') {
     const pythonRoot = process.platform === 'win32' ? path.dirname(command) : path.dirname(path.dirname(command));
-    return { status: 0, stdout: JSON.stringify({ version: '3.14.0', root: pythonRoot, executable: command, purelib: pythonRoot, scripts: pythonRoot }) };
+    return { status: 0, stdout: JSON.stringify({ version: '3.14.0', root: pythonRoot, executable: command, purelib: path.join(pythonRoot, "lib/site-packages"), scripts: path.join(pythonRoot, "bin") }) };
   } else if (args[0] === 'build') {
     fs.writeFileSync(path.join(args[args.indexOf('--out-dir') + 1], 'synthetic.whl'), 'wheel');
   } else if (operation === 'collectstatic') {
@@ -83,14 +84,18 @@ function preserved(root) {
   assert.deepEqual(fs.readdirSync(path.join(root, '.stage')).sort(), ['backend', 'runtime-data', 'unrelated']);
 }
 
-for (const failure of ['missing-input', 'download', 'runtime-info', 'install', 'collectstatic', 'publish']) {
+for (const failure of ['missing-input', 'download', 'runtime-cycle', 'runtime-info', 'install', 'collectstatic', 'publish']) {
   test(`staging preserves last success and runtime data on ${failure}`, () => fixture(root => {
     if (failure === 'missing-input') fs.unlinkSync(path.join(root, 'manage.py'));
     const result = run(root, failure);
     assert.notEqual(result.status, 0);
     if (failure !== 'missing-input') {
-      const operation = { download: 'python install', 'runtime-info': '-c ', install: 'pip install', collectstatic: 'collectstatic', publish: 'publish' }[failure];
+      const operation = { 'runtime-cycle': 'python install', download: 'python install', 'runtime-info': '-c ', install: 'pip install', collectstatic: 'collectstatic', publish: 'publish' }[failure];
       assert.match(fs.readFileSync(path.join(root, 'trace'), 'utf8'), new RegExp(operation));
+    }
+    if (failure === 'runtime-cycle') {
+      assert.match(result.stderr, /symlink cycle/);
+      assert.doesNotMatch(fs.readFileSync(path.join(root, 'trace'), 'utf8'), /-c /);
     }
     preserved(root);
   }));

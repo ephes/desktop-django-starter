@@ -198,6 +198,31 @@ Current staged backend contract:
 - `backend/python/` contains the bundled interpreter and installed dependencies
 - `backend/staticfiles/` contains collected assets for `DEBUG=False`
 - `backend/runtime-manifest.json` records the interpreter path and launcher metadata
+- Electron/shared Node helpers and Tauri accept only a regular, non-symlink
+  manifest of at most 64 KiB with `schemaVersion: 1`, string Python version,
+  `python.root: "python"`, executable/purelib/scripts paths inside that runtime,
+  and the generated launcher field types. Paths use portable relative components
+  (no absolute/drive paths, backslashes, empty components, `.` or `..`).
+  The interpreter must resolve to a regular usable file inside the real
+  `backend/python/`; that runtime root cannot redirect elsewhere. Internal
+  interpreter symlinks remain valid. Present invalid/future manifests refuse
+  launch with an `Invalid runtime manifest` diagnostic; only absence enables
+  legacy discovery, subject to the same interpreter checks.
+- Runtime materialization and the initial downloaded-runtime copy first walk
+  the expanded source graph by real directory identities. Cycles, directory
+  targets outside the runtime and special files refuse before copying. File
+  links (including external interpreter/library files) remain supported.
+  Default limits are 200,000 expanded entries, 2 GiB summed file bytes and 256
+  directory levels; repeated links count for each expansion. Builds use private
+  source trees; concurrent mutation of a runtime during staging is unsupported.
+- A materialization error preserves the original copy/publication exception and
+  appends cleanup diagnostics (`cleanupErrors`, `temporaryRoot`). After successful
+  replacement, cleanup failure reports `committed: true`; do not retry as though
+  publication failed. Failed rollback reports `rollbackError` and `originalPath`
+  and retains that temporary tree. Inspect the reported paths and restore the
+  saved original before manual cleanup. Successful rollback retains the original
+  link and never changes its source target. Whole-backend publication still
+  protects the last successful staged backend when preflight refuses.
 
 Current launcher contract:
 
@@ -242,6 +267,12 @@ The first implementation does not need a full auto-update system, but it does ne
 - the GitHub Actions packaging workflow should consume signing credentials only when they are present, rather than making secrets a baseline requirement for every build
 
 The current Electron connected updater path uses `electron-updater`, an `electron-builder` publish config, generated updater metadata, and a `Help > Check for Updates...` menu action in the Electron main process. It does not add a Django localhost update API or broaden the preload bridge. The release-readiness claim stays intentionally narrower than the implementation: the repo now records a real signed/notarized macOS packaged update dry run performed on April 12, 2026, from installed `0.1.2` to published `v0.1.4`, proving detection, download, restart/install, and `app.sqlite3` persistence, but Electron still needs a real Windows NSIS update dry run before it can be called a release-validated updater lane. Tauri now also has an experimental `tauri-plugin-updater` path that checks a configured HTTPS endpoint after the first packaged main-window load and relies on signed updater payloads rather than the Django localhost app. Positron currently stays manual-only: the repo documents local macOS DMG replacement rather than a connected updater, because there is no hosted artifact, checksum, or release-publication lane for that shell yet. For air-gapped environments, the baseline is still manual signed artifact replacement rather than background update services.
+
+Electron updater lifecycle: one check owns its available-update prompt and download
+transition. An updater error retires that ownership, so an older dialog response
+cannot start work. Downloaded events and menu checks share one install prompt and
+preparation task; Later or failed preparation releases it for retry. After
+`quitAndInstall` succeeds, later events cannot prepare or install again.
 
 ## Native Surface Area
 
