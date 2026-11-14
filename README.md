@@ -371,3 +371,17 @@ Shells do not inject a `DJANGO_SECRET_KEY`. Packaged settings generate one per i
 CLI package maintainers: wheel and sdist builds require every file in
 `cli/asset_inventory.py` to be staged by `just cli-sync-assets`.
 `just cli-test` includes offline synthetic build and relocated-install probes.
+
+Packaged state startup validates `state.json` and the direct database/media/cache
+layout before reuse. Incomplete restores stop with repair guidance and remain
+untouched; only a marker with `copied_from: null` permits an absent first-use DB.
+Symlink/reparse-point state roots and database leaves are refused. Media upgrades
+copy only regular files/directories, with defaults of 100,000 entries, 2 GiB and
+64 levels; see [state recovery and limits](docs/release.md#upgrades-and-rollbacks).
+
+State initialization holds a persistent OS lock across recovery and publication.
+Next startup reclaims bounded, provably owned abandoned stages, preserving
+ambiguous directories. Payload files and directories are flushed before the
+completion marker and final rename. POSIX adds parent-directory sync; Windows
+has file flushes and process-crash atomicity, with no portable power-loss
+namespace guarantee. See the release guide before manually cleaning stages.

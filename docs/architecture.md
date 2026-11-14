@@ -313,3 +313,64 @@ These are expected later if needed, but not part of the first implementation:
 - Tauri release publication and stronger updater hosting defaults
 - multiple windows
 - richer native integrations
+
+### State generation admission
+
+`state.json` is the completion marker for both newly created and reopened
+versions. Its version, timestamp and predecessor are validated along with direct
+`media/` and `cache/` directories. A copied generation must contain a regular
+single-link database. An empty first-use generation (`copied_from: null`) may
+lack the database until migrations run. This preserves the original marker
+format; it does not claim that migrations have completed or inspect DB schema.
+Malformed/missing markers and incomplete restored layouts stop startup without
+replacing the generation. Predecessors undergo the same validation.
+
+The per-user app-data root, state root, version directories and SQLite leaves
+(including existing sidecars) reject symlinks/reparse points; POSIX ownership is
+checked. POSIX directory descriptors pin identities and media children open
+relative to their admitted parent. Windows uses direct-entry/reparse checks and
+name/identity rechecks, with ACLs as the authority boundary. SQLite's public
+backup API still opens a filename, and settings ultimately return writable
+paths: concurrent hostile mutation by the same account is outside this contract.
+Directory identity changes detected during initialization refuse publication.
+System parent aliases such as macOS `/tmp` are allowed.
+
+Media copies stream a direct tree and refuse all links (including internal
+links), special files and hard-linked files. Limits count both directories and
+files, actual copied bytes and depth (root is zero). Cache is disposable and
+never copied. Refusal removes only the private unpublished stage and preserves
+the predecessor. See the release guide for configurable limits and recovery.
+
+### Interrupted and competing state initialization
+
+A persistent `state/.initialize.lock` uses POSIX `flock` or Windows byte-range
+locking with a 30-second admission deadline. It serializes all versions through
+recovery, backup, media copy and publication. This protects state initialization;
+it does not serialize later Django migrations or replace shell single-instance
+ownership. The lock inode is never removed. Process death releases the OS lock.
+
+Each private `.dds-stage-<32 hex digits>` has a bounded `.stage-owner.json`
+record bound to its exact name and initialization kind. The next lock holder
+scans at most 1024 root entries and 16 stage candidates, validating at most
+100,016 cleanup entries and 65 directory levels per stage. Only direct owned
+regular trees with the exact owner record and known top-level entries qualify
+for deletion. Live cooperating initializers cannot be collected because they
+hold the same lock. Ambiguous stages remain with bounded warnings. Old-style
+hidden stages without ownership evidence are never automatically removed.
+
+Owner metadata is flushed before copying. After SQLite closes its backup target,
+all payload files are flushed, child directories then parent directories are
+synced, the completion marker is written/flushed, and the stage directory is
+synced before rename. POSIX syncs the state root after rename; macOS additionally
+uses `F_FULLFSYNC` for files. A prepublication error retains the predecessor;
+post-rename sync failure retains the visible complete generation and explicitly
+reports uncertain durability. No cleanup restores old bytes over it.
+
+This establishes process-crash recovery and requests available filesystem/device
+barriers for initialization. Power-loss persistence still depends on local
+filesystem/hardware behavior. Windows flushes files but Python offers no portable
+directory-sync primitive here, so rename persistence across power loss is not
+guaranteed. These barriers do not change the running database's existing
+`synchronous=NORMAL` policy or make promises about later writes. Tests use real
+SQLite/WAL/media, deterministic process barriers, kill/restart and injected sync
+and rename failures; they do not simulate hardware power loss.

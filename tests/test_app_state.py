@@ -13,8 +13,25 @@ from desktop_django_starter.app_state import (
 )
 
 
+def mark_generation(directory: Path) -> None:
+    """Synthetic predecessor fixtures include the published layout and marker."""
+    for name in ("media", "cache"):
+        (directory / name).mkdir(exist_ok=True)
+    (directory / "state.json").write_text(
+        json.dumps(
+            {
+                "version": directory.name,
+                "created_at": "2026-11-14T00:00:00+00:00",
+                "copied_from": None,
+            }
+        )
+    )
+
+
 def make_database(path: Path, value: str, *, keep_open: bool = False):
     path.parent.mkdir(parents=True, exist_ok=True)
+    if path.parent.parent.name == "state" and not (path.parent / "state.json").exists():
+        mark_generation(path.parent)
     connection = sqlite3.connect(path)
     connection.execute("PRAGMA journal_mode=WAL")
     connection.execute("CREATE TABLE IF NOT EXISTS marker (value TEXT)")
@@ -65,7 +82,7 @@ def test_upgrade_from_pre_versioning_layout_copies_legacy_database(tmp_path: Pat
 def test_upgrade_copies_newest_older_version_and_leaves_it_untouched(tmp_path: Path) -> None:
     make_database(tmp_path / "state" / "0.1.9" / "app.sqlite3", "v0.1.9")
     make_database(tmp_path / "state" / "0.1.10" / "app.sqlite3", "v0.1.10")
-    (tmp_path / "state" / "0.1.10" / "media").mkdir()
+    (tmp_path / "state" / "0.1.10" / "media").mkdir(exist_ok=True)
     (tmp_path / "state" / "0.1.10" / "media" / "upload.txt").write_text("file")
     make_database(tmp_path / "app.sqlite3", "legacy")
 
@@ -164,7 +181,9 @@ else:
 """
     try:
         subprocess.run([sys.executable, "-c", script, str(tmp_path)], check=True, timeout=5)
-        assert sorted(p.name for p in (tmp_path / "state").iterdir()) == ["0.1.0"]
+        assert sorted(
+            p.name for p in (tmp_path / "state").iterdir() if p.name != ".initialize.lock"
+        ) == ["0.1.0"]
     finally:
         connection.rollback()
         connection.close()
@@ -194,7 +213,9 @@ def test_unsupported_candidate_has_recovery_diagnostic(tmp_path: Path) -> None:
     make_database(tmp_path / "state" / "unsupported" / "app.sqlite3", "untouched")
     with pytest.raises(ImproperlyConfigured, match="unsupported.*expected SemVer"):
         prepare_versioned_state(tmp_path, "1.0.0")
-    assert sorted(p.name for p in (tmp_path / "state").iterdir()) == ["unsupported"]
+    assert sorted(
+        p.name for p in (tmp_path / "state").iterdir() if p.name != ".initialize.lock"
+    ) == ["unsupported"]
 
 
 @pytest.mark.parametrize("version", ["0.2.0a1", "0.2.0b2", "0.2.0rc10"])
@@ -234,20 +255,25 @@ def test_disappeared_source_is_not_recreated(monkeypatch, tmp_path: Path) -> Non
         real_copy(source_dir, destination)
 
     monkeypatch.setattr(app_state, "_copy_state", remove_then_copy)
-    with pytest.raises(sqlite3.OperationalError):
+    with pytest.raises(ImproperlyConfigured):
         prepare_versioned_state(tmp_path, "0.2.0")
     assert not source.exists()
-    assert sorted(p.name for p in (tmp_path / "state").iterdir()) == ["0.1.0"]
+    assert sorted(
+        p.name for p in (tmp_path / "state").iterdir() if p.name != ".initialize.lock"
+    ) == ["0.1.0"]
 
 
 def test_invalid_source_publishes_nothing(tmp_path: Path) -> None:
     source = tmp_path / "state" / "0.1.0" / "app.sqlite3"
     source.parent.mkdir(parents=True)
+    mark_generation(source.parent)
     source.write_bytes(b"invalid database")
     with pytest.raises(sqlite3.DatabaseError):
         prepare_versioned_state(tmp_path, "0.2.0")
     assert source.read_bytes() == b"invalid database"
-    assert sorted(p.name for p in (tmp_path / "state").iterdir()) == ["0.1.0"]
+    assert sorted(
+        p.name for p in (tmp_path / "state").iterdir() if p.name != ".initialize.lock"
+    ) == ["0.1.0"]
 
 
 def test_source_uri_escapes_path_and_keeps_wal(tmp_path: Path) -> None:

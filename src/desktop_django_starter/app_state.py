@@ -23,8 +23,8 @@ import os
 import re
 import shutil
 import sqlite3
-import tempfile
 import time
+import uuid
 from datetime import UTC, datetime
 from pathlib import Path, PurePath
 from urllib.parse import quote
@@ -32,6 +32,25 @@ from urllib.parse import quote
 from django.core.exceptions import ImproperlyConfigured
 from packaging.version import Version as PythonVersion
 from semver import Version
+
+from .state_files import (
+    admit,
+    copy_media,
+    directory_guard,
+    identity,
+    optional_file,
+    regular_reader,
+    state_error,
+)
+from .state_staging import (
+    OWNER_FILENAME,
+    STAGE_PREFIX,
+    initialization_lock,
+    recover_stages,
+    sync_directory,
+    sync_file,
+    sync_tree,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -80,20 +99,88 @@ def version_sort_key(version: str) -> Version:
         ) from error
 
 
+def _validate_state(state_dir: Path, version: str) -> None:
+    """Admit the existing marker format, including deliberately empty first use."""
+    try:
+        with directory_guard(state_dir):
+            with regular_reader(state_dir / STATE_METADATA_FILENAME) as stream:
+                raw = stream.read(16_385)
+            if len(raw) > 16_384:
+                raise ValueError("marker exceeds 16 KiB")
+            metadata = json.loads(raw)
+            if not isinstance(metadata, dict) or metadata.get("version") != version:
+                raise ValueError("marker version mismatch")
+            created = datetime.fromisoformat(metadata["created_at"])
+            if created.tzinfo is None or "copied_from" not in metadata:
+                raise ValueError("incomplete marker")
+            copied = metadata["copied_from"]
+            if copied is not None and (
+                not isinstance(copied, str)
+                or (copied != "legacy" and version_sort_key(copied) >= version_sort_key(version))
+            ):
+                raise ValueError("invalid predecessor")
+            for name in (MEDIA_DIRNAME, CACHE_DIRNAME):
+                admit(state_dir / name, directory=True)
+            has_database = optional_file(state_dir / DATABASE_FILENAME)
+            if copied is not None and not has_database:
+                raise ValueError("copied database missing")
+            for suffix in ("-wal", "-shm", "-journal"):
+                optional_file(state_dir / (DATABASE_FILENAME + suffix))
+    except (OSError, ValueError, KeyError, TypeError, RecursionError) as error:
+        raise state_error("invalid state completion marker or layout") from error
+
+
 def prepare_versioned_state(app_data_dir: Path, version: str) -> Path:
-    """Return this version's state directory, creating it on first use."""
+    """Return only an admitted complete generation, preserving failed restores."""
     if version != UNVERSIONED:
         version_sort_key(version)
-    state_root = app_data_dir / STATE_DIRNAME
-    state_root.mkdir(mode=0o700, parents=True, exist_ok=True)
+    app_data_dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+    try:
+        with directory_guard(app_data_dir):
+            state_root = app_data_dir / STATE_DIRNAME
+            state_root.mkdir(mode=0o700, exist_ok=True)
+            with directory_guard(state_root), initialization_lock(state_root):
+                roots = [
+                    (path, identity(admit(path, directory=True)))
+                    for path in (app_data_dir, state_root)
+                ]
+                recover_stages(state_root)
+                return _prepare_state(app_data_dir, state_root, version, roots)
+    except OSError as error:
+        raise state_error("state path admission or initialization failed") from error
+
+
+def _prepare_state(
+    app_data_dir: Path,
+    state_root: Path,
+    version: str,
+    roots: list[tuple[Path, tuple[int, int]]],
+) -> Path:
     current_name = state_dir_name(version)
     state_dir = state_root / current_name
-    if state_dir.is_dir():
+    if os.path.lexists(state_dir):
+        _validate_state(state_dir, version)
         return state_dir
 
     source, source_label = _find_previous_state(app_data_dir, state_root, current_name)
-    staging = Path(tempfile.mkdtemp(prefix=f".{current_name}-", dir=state_root))
+    staging = state_root / (STAGE_PREFIX + uuid.uuid4().hex)
+    _check_roots(roots)
+    staging.mkdir(mode=0o700)
+    staging_identity = identity(admit(staging, directory=True))
+    published = False
     try:
+        (staging / OWNER_FILENAME).write_text(
+            json.dumps(
+                {
+                    "schema": 1,
+                    "stage": staging.name,
+                    "kind": "dds-state-initialization",
+                }
+            )
+        )
+        sync_file(staging / OWNER_FILENAME)
+        sync_directory(staging)
+        sync_directory(state_root)
         if source is not None:
             _copy_state(source, staging)
         (staging / MEDIA_DIRNAME).mkdir(exist_ok=True)
@@ -103,49 +190,68 @@ def prepare_versioned_state(app_data_dir: Path, version: str) -> Path:
             "created_at": datetime.now(UTC).isoformat(),
             "copied_from": source_label,
         }
+        _check_roots(roots)
+        sync_tree(staging)
         (staging / STATE_METADATA_FILENAME).write_text(json.dumps(metadata, indent=2) + "\n")
+        sync_file(staging / STATE_METADATA_FILENAME)
+        sync_directory(staging)
+        _check_roots(roots)
+        # Cooperating callers hold the same persistent lock; no winner can be replaced.
+        if os.path.lexists(state_dir):
+            raise state_error("unexpected concurrent version directory; retained for repair")
+        staging.rename(state_dir)
+        published = True
         try:
-            staging.rename(state_dir)
-        except OSError:
-            # Another process created it first; use theirs.
-            if not state_dir.is_dir():
-                raise
-            shutil.rmtree(staging, ignore_errors=True)
-            return state_dir
+            sync_directory(state_root)
+        except OSError as error:
+            raise state_error(
+                "publication is visible but durability is uncertain; retain both generations"
+            ) from error
+        _validate_state(state_dir, version)
     except BaseException:
-        shutil.rmtree(staging, ignore_errors=True)
+        if not published:
+            try:
+                _check_roots(roots)
+                if identity(admit(staging, directory=True)) != staging_identity:
+                    raise state_error("staging directory changed before cleanup")
+                shutil.rmtree(staging)
+            except (OSError, ImproperlyConfigured):
+                logger.warning("Unpublished state stage retained for safe recovery")
         raise
-
-    if source_label is None:
-        logger.info("Created empty app state for version %s at %s", version, state_dir)
-    else:
-        logger.info(
-            "Created app state for version %s from %s at %s", version, source_label, state_dir
-        )
+    logger.info("Created app state for version %s from %s", version, source_label)
     return state_dir
+
+
+def _check_roots(roots: list[tuple[Path, tuple[int, int]]]) -> None:
+    for path, expected in roots:
+        if identity(admit(path, directory=True)) != expected:
+            raise state_error("state root changed before publication")
 
 
 def _find_previous_state(
     app_data_dir: Path, state_root: Path, current_name: str
 ) -> tuple[Path | None, str | None]:
     current_key = None if current_name == UNVERSIONED else version_sort_key(current_name)
-    older = [
-        entry
-        for entry in state_root.iterdir()
-        if entry.is_dir()
-        and not entry.name.startswith(".")
-        and entry.name != current_name
-        and entry.name != UNVERSIONED
-        and current_key is not None
-        and (entry / DATABASE_FILENAME).is_file()
-        and version_sort_key(entry.name) < current_key
-    ]
+    older = []
+    for entry in state_root.iterdir():
+        if entry.name.startswith(".") or entry.name in {current_name, UNVERSIONED}:
+            continue
+        # Do not let a link disguise itself as either a release or its database.
+        admit(entry, directory=True)
+        if current_key is None:
+            continue
+        key = version_sort_key(entry.name)
+        if key < current_key:
+            _validate_state(entry, entry.name)
+            if optional_file(entry / DATABASE_FILENAME):
+                older.append(entry)
+
     if older:
         newest = max(older, key=lambda entry: (version_sort_key(entry.name), entry.name))
         return newest, newest.name
 
     legacy_database = app_data_dir / LEGACY_DATABASE_FILENAME
-    if legacy_database.is_file():
+    if optional_file(legacy_database):
         return app_data_dir, "legacy"
 
     newer = [
@@ -176,6 +282,17 @@ def _readonly_database_uri(database: PurePath) -> str:
 
 
 def _copy_state(source: Path, destination: Path) -> None:
+    with directory_guard(source), directory_guard(destination):
+        with regular_reader(source / DATABASE_FILENAME):
+            for suffix in ("-wal", "-shm", "-journal"):
+                optional_file(source / (DATABASE_FILENAME + suffix))
+            _copy_database(source, destination)
+        source_media = source / MEDIA_DIRNAME
+        if os.path.lexists(source_media):
+            copy_media(source_media, destination / MEDIA_DIRNAME)
+
+
+def _copy_database(source: Path, destination: Path) -> None:
     # The backup API copies a consistent snapshot, including pages that are
     # still only in the -wal file after an unclean shutdown.
     deadline = time.monotonic() + BACKUP_TIMEOUT_SECONDS
@@ -199,10 +316,3 @@ def _copy_state(source: Path, destination: Path) -> None:
             target_database.close()
     finally:
         source_database.close()
-
-    source_media = source / MEDIA_DIRNAME
-    if source_media.is_dir():
-        shutil.copytree(source_media, destination / MEDIA_DIRNAME)
-    # The cache is not copied: it is disposable and may hold version-specific data.
-    if os.name != "nt":
-        destination.chmod(0o700)

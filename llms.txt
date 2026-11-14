@@ -64,3 +64,12 @@ Important constraints:
   without side effects. Only full starter-path prefixes are substituted.
   Discovery excludes hidden/environment/dependency directories and directory
   symlinks; multiple sorted projects remain available for harness inspection.
+
+- Version state admission checks the existing completion marker and required
+  layout; incomplete restores are retained for repair. State roots and database
+  leaves must be direct owned entries. Media copying refuses links/special files
+  and has configurable finite entry, byte and depth budgets; see release.md.
+- State initialization is serialized by `state/.initialize.lock`; do not delete
+  that persistent lock inode. Owned `.dds-stage-<uuid>` generations are recovered
+  under the same lock. Payload sync precedes marker sync, rename and POSIX parent
+  sync; Windows directory durability is explicitly limited in the release guide.

@@ -668,6 +668,7 @@ That means a normal reinstall or manual update should replace the installed appl
 - the per-install Django secret key at `secret_key`
 - the shell session file `desktop-shell-session.json` (an app key and a running flag used to clean up after crashes)
 
+(upgrades-and-rollbacks)=
 ### Upgrades and rollbacks
 
 - **Upgrade:** the first start of a new version finds no `state/<new version>/`, copies the newest older version's state (SQLite backup API, plus `media/`; the cache is not copied), renames the copy into place, and only then runs `migrate` on it. User data carries forward; the older directory stays exactly as that version left it.
@@ -725,3 +726,71 @@ This slice is intentionally incomplete in a few areas:
 - no Linux signing baseline and no Linux verification expectation for this slice
 - no opinionated Windows EV-token or self-hosted-runner guidance
 - no release promotion workflow beyond uploading GitHub Actions artifacts and their checksum manifests
+
+## Unreleased: state initialization
+
+### Restored state admission and media limits
+
+A reopened version must have a valid `state.json` for that exact version and
+regular direct `media/` and `cache/` directories. Copies require `app.sqlite3`;
+only an originally empty marker (`copied_from: null`) allows it to be absent
+before migrations. Do not delete a DB from an empty-origin generation expecting
+startup to detect that loss: retain whole-generation backups. Markers from the
+existing format remain supported; no silent marker synthesis is performed.
+
+On a state repair error, close all app processes, back up the entire affected
+generation, then restore a complete generation from a trusted backup. Do not
+invent a completion marker for a partial restore. Check root/version paths,
+DB/sidecars and media for symlinks, reparse points, special files and hard links;
+replace them with owned direct entries. No automatic replacement discards the
+failed restore. The Windows fallback relies on per-user ACLs and checks names
+and identities; hostile concurrent changes by the same account are unsupported.
+
+Media upgrade limits default to 100,000 entries (files plus directories),
+2 GiB of actual copied bytes and 64 directory levels below the media root.
+Operators can increase positive integer environment values before launching:
+`DESKTOP_DJANGO_MEDIA_MAX_ENTRIES`, `DESKTOP_DJANGO_MEDIA_MAX_BYTES`, and
+`DESKTOP_DJANGO_MEDIA_MAX_DEPTH`. Limits apply per attempt. All media symlinks,
+including internal links, are refused. A refusal retains the predecessor and
+removes unpublished staging; repair the synthetic/imported tree or adjust the
+budget with enough free disk space, then retry. Cache is never imported.
+
+### Interrupted upgrade recovery and durability
+
+Startup holds `state/.initialize.lock` for at most 30 seconds while waiting for
+another initializer; on timeout, close other app processes and retry. Never
+remove this persistent lock file to break a live lock. This lock covers state
+preparation, not concurrent migrations: keep shell single-instance protection.
+
+Killed initializers leave private `.dds-stage-<uuid>` directories. The next
+startup, under the same OS lock, reclaims only stages with an exact valid
+`.stage-owner.json`, a direct owned tree and known top-level contents. Discovery
+is limited to 1024 root entries and 16 candidate stages; each cleanup is limited
+to 100,016 entries and 65 levels. Larger trees (including stages produced using
+raised media budgets), unknown contents, links or missing/invalid owner records
+remain for inspection. Warnings report bounded categories/counts. Old hidden
+stage names are preserved because their ownership cannot be proven. A kill
+before the owner record is complete can likewise leave an ambiguous stage.
+
+For manual recovery, close **all** app processes, back up the affected state root,
+and inspect hidden directories. Remove only confirmed abandoned staging copies;
+keep every published `state/<version>/`, unrelated hidden directories and the
+persistent lock. A missing/partial final version needs the complete-restore
+procedure above. A scan-budget error requires reducing confirmed abandoned
+entries offline before retrying. No PID age or filename alone authorizes cleanup.
+
+Before publication the initializer flushes the backup database, media files and
+owner record, syncs directories, then writes/flushes `state.json` and renames the
+stage. POSIX syncs the parent after rename; macOS also requests full file flushes.
+A reported post-rename sync failure means the new complete generation is already
+visible but power-loss durability is uncertain: retain both generations, inspect
+and retry startup; do not overwrite the new version with its predecessor merely
+because retirement/sync failed. Normal next startup validates the visible state.
+
+The tests establish process-kill/restart outcomes with real temporary SQLite/WAL
+and media, plus injected filesystem failures. They cannot prove power-loss
+behavior on every device. Windows has file flushes and complete-directory rename
+for process-crash recovery, but no portable parent-directory sync in this code;
+power-loss persistence of the rename is not promised. Filesystems/devices may
+also weaken POSIX guarantees. Runtime SQLite `synchronous=NORMAL` remains
+unchanged: these barriers cover initialization, not subsequent application writes.

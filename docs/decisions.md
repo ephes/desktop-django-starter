@@ -99,3 +99,21 @@ exiting around it. Runtime data belongs to the launcher and is never reset by
 a build. Keep the previous backend for rollback during publication. Materialize
 symlinks into private sibling entries before swapping them, preserving target
 mode and leaving the original link intact on copy or chmod failure.
+
+## D-020: Admit complete direct state generations
+
+Keep the existing completion marker format, validate it before reuse/copy, and
+refuse incomplete restores rather than silently create replacement data. Bound
+media copying and refuse links/special files. Use POSIX parent descriptors where
+available and conservative Windows identity/reparse checks within the per-user
+ACL boundary. The public SQLite filename API and later writable settings paths
+require that the same account does not maliciously mutate the tree concurrently.
+
+## D-021: Serialize state initialization and recover only proven stages
+
+Use a persistent cross-platform OS lock for the short initialization path instead
+of competing publication/cleanup protocols. A name-bound owner record plus the
+lock proves abandonment; bounded discovery and tree admission protect unrelated
+bytes. Ambiguous stages require offline inspection. Flush payload before marker
+and rename; retain visible publication on a final sync failure. Document Windows
+and hardware power-loss limitations instead of claiming universal crash durability.
