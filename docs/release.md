@@ -738,6 +738,11 @@ before migrations. Do not delete a DB from an empty-origin generation expecting
 startup to detect that loss: retain whole-generation backups. Markers from the
 existing format remain supported; no silent marker synthesis is performed.
 
+Only the selected predecessor (the newest older version directory with a
+database) is validated before copying. Unselected older generations, directories
+without a database and stray plain files in the state root do not block upgrades;
+symlinks and reparse points there are still refused.
+
 On a state repair error, close all app processes, back up the entire affected
 generation, then restore a complete generation from a trusted backup. Do not
 invent a completion marker for a partial restore. Check root/version paths,

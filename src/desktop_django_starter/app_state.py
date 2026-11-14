@@ -23,6 +23,7 @@ import os
 import re
 import shutil
 import sqlite3
+import stat
 import time
 import uuid
 from datetime import UTC, datetime
@@ -236,18 +237,28 @@ def _find_previous_state(
     for entry in state_root.iterdir():
         if entry.name.startswith(".") or entry.name in {current_name, UNVERSIONED}:
             continue
+        info = entry.lstat()
+        # Stray plain files (notes, desktop.ini, Thumbs.db) are not generations.
+        if not (
+            stat.S_ISDIR(info.st_mode)
+            or stat.S_ISLNK(info.st_mode)
+            or getattr(info, "st_file_attributes", 0) & 0x400
+        ):
+            continue
         # Do not let a link disguise itself as either a release or its database.
         admit(entry, directory=True)
         if current_key is None:
             continue
-        key = version_sort_key(entry.name)
-        if key < current_key:
-            _validate_state(entry, entry.name)
-            if optional_file(entry / DATABASE_FILENAME):
-                older.append(entry)
+        if version_sort_key(entry.name) < current_key and optional_file(
+            entry / DATABASE_FILENAME
+        ):
+            older.append(entry)
 
     if older:
         newest = max(older, key=lambda entry: (version_sort_key(entry.name), entry.name))
+        # Only the selected predecessor must be a complete generation; older
+        # damaged or empty leftovers are retained and ignored as before.
+        _validate_state(newest, newest.name)
         return newest, newest.name
 
     legacy_database = app_data_dir / LEGACY_DATABASE_FILENAME

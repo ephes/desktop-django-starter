@@ -320,3 +320,29 @@ def test_readonly_uri_handles_lowercase_extended_unc() -> None:
     assert _readonly_database_uri(PureWindowsPath(r"\\?\unc\server\share\app.sqlite3")) == (
         "file:////server/share/app.sqlite3?mode=ro"
     )
+
+
+def test_stray_files_and_damaged_unselected_generations_do_not_block_upgrade(
+    tmp_path: Path,
+) -> None:
+    make_database(tmp_path / "state" / "0.1.0" / "app.sqlite3", "v0.1.0")
+    (tmp_path / "state" / "0.1.0" / "state.json").write_text("damaged")
+    (tmp_path / "state" / "0.1.5").mkdir()
+    make_database(tmp_path / "state" / "1.0.0" / "app.sqlite3", "v1.0.0")
+    (tmp_path / "state" / "desktop.ini").write_text("synthetic")
+
+    state_dir = prepare_versioned_state(tmp_path, "2.0.0")
+
+    assert read_markers(state_dir / "app.sqlite3") == ["v1.0.0"]
+    assert (tmp_path / "state" / "0.1.0" / "state.json").read_text() == "damaged"
+    assert (tmp_path / "state" / "desktop.ini").read_text() == "synthetic"
+
+
+def test_damaged_selected_predecessor_still_refuses(tmp_path: Path) -> None:
+    make_database(tmp_path / "state" / "0.1.0" / "app.sqlite3", "v0.1.0")
+    make_database(tmp_path / "state" / "1.0.0" / "app.sqlite3", "v1.0.0")
+    (tmp_path / "state" / "1.0.0" / "state.json").write_text("damaged")
+
+    with pytest.raises(ImproperlyConfigured, match="marker"):
+        prepare_versioned_state(tmp_path, "2.0.0")
+    assert not (tmp_path / "state" / "2.0.0").exists()

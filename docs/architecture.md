@@ -171,7 +171,7 @@ Expected persistence rules:
 - packaged state is version-isolated: the database, media and file cache live in `<app-data>/state/<app version>/` (`app.sqlite3`, `media/`, `cache/`), so an upgrade or a rollback never runs one version's code against another version's migrations or files
 - the first start of a new version creates its state directory from a copy of the newest older version's state, or from the pre-versioning `<app-data>/app.sqlite3`, then runs its migrations on the copy; the SQLite copy uses the backup API, so data still in the `-wal` file after an unclean shutdown is included, and the directory appears atomically (staged, then renamed)
 - older state directories are kept for rollback: going back to an older version reopens that version's own directory with its data as that version left it; changes made in the newer version do not travel back. State from a newer version is never imported into an older one, so a rollback to a version that never ran on this machine starts empty and logs a warning
-- predecessor selection uses public SemVer parsing plus the narrow Positron a/b/rc mapping described in [the release guide](release.md#upgrades-and-rollbacks): `0.2.0-rc.2 < 0.2.0-rc.10 < 0.2.0`; unsupported current or candidate versions stop startup with recovery guidance
+- predecessor selection uses public SemVer parsing plus the narrow Positron a/b/rc mapping described in {ref}`the release guide <upgrades-and-rollbacks>`: `0.2.0-rc.2 < 0.2.0-rc.10 < 0.2.0`; unsupported current or candidate versions stop startup with recovery guidance
 - SQLite sources open through an escaped read-only URI; a disappeared or invalid source fails initialization without recreating it or publishing state
 - SQLite backup has a total monotonic 30-second startup budget, including busy retries and page copying; failure closes connections and removes only unpublished staging
 - the `unversioned` build/local fallback has no release ordering and only imports legacy root state
@@ -323,7 +323,10 @@ single-link database. An empty first-use generation (`copied_from: null`) may
 lack the database until migrations run. This preserves the original marker
 format; it does not claim that migrations have completed or inspect DB schema.
 Malformed/missing markers and incomplete restored layouts stop startup without
-replacing the generation. Predecessors undergo the same validation.
+replacing the generation. The selected predecessor (the newest older version
+directory with a database) undergoes the same validation. Older generations that
+are not selected, directories without a database and stray plain files in the
+state root are left untouched and do not block an upgrade; links there are refused.
 
 The per-user app-data root, state root, version directories and SQLite leaves
 (including existing sidecars) reject symlinks/reparse points; POSIX ownership is

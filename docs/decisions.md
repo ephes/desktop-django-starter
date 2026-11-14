@@ -81,7 +81,7 @@ slow storage; oversized copies require a build with a larger budget. Older state
 is retained for retry and rollback.
 
 Positron’s canonical Python a/b/rc prereleases use equivalent SemVer precedence;
-see [the supported version forms](release.md#upgrades-and-rollbacks).
+see {ref}`the supported version forms <upgrades-and-rollbacks>`.
 
 ## D-018: Existing runtime inputs are descriptor-validated
 
