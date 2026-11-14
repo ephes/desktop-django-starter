@@ -4,6 +4,19 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 
 ## Unreleased
 
+- Bundled interpreter admission now validates schema-v1 manifests, portable
+  runtime-relative paths, regular executable files and resolved containment in
+  Electron/shared helpers and Tauri. Corrupt or future manifests fail closed;
+  only an absent manifest permits legacy discovery.
+- Runtime materialization preflights cycles, external directory links and
+  expanded work before copying, including the initial runtime staging copy.
+  Copy/publication errors retain priority over cleanup failures; diagnostics
+  distinguish a committed replacement and preserve a failed rollback original.
+
+- Electron update prompts retain one attempt through download approval. Retired
+  responses cannot start downloads; install prompting, backend shutdown and
+  restart share one owner. Later or preparation failure permits retry.
+
 - First-run demo seeding claims its unique marker before reading content, so
   concurrent SQLite development command callers serialize without read-lock
   upgrades. Failed seeds roll back both marker and ponies; existing user rows

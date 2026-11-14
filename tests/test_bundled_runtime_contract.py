@@ -8,6 +8,7 @@ def test_bundled_runtime_manifest_contract(tmp_path: Path) -> None:
     python_executable = backend_root / "python" / "bin" / "python3"
     python_executable.parent.mkdir(parents=True)
     python_executable.write_text("", encoding="utf-8")
+    python_executable.chmod(0o755)
 
     script = """
 const fs = require("node:fs");

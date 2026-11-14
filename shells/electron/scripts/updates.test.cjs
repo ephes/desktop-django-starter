@@ -325,3 +325,114 @@ test("update controller reports check errors and resets busy state", async () =>
     downloaded: false
   });
 });
+
+function deferred() {
+  let resolve;
+  let reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+function ownedController(updater, dialog, beforeInstall) {
+  return createElectronUpdateController({
+    app: createApp(), autoUpdater: updater, dialog, beforeInstall,
+    logger: null, platform: "darwin", env: {}
+  });
+}
+
+test("available prompt owns check through response and admits one download", async () => {
+  const updater = new FakeAutoUpdater();
+  const prompt = deferred();
+  const dialog = createDialog([prompt.promise]);
+  const controller = ownedController(updater, dialog);
+  updater.checkForUpdates = async () => {
+    updater.checks++;
+    updater.emit("update-available", { version: "2" });
+    return {};
+  };
+  await controller.checkForUpdates();
+  await controller.checkForUpdates();
+  updater.emit("update-available", { version: "2" });
+  assert.equal(updater.checks, 1);
+  assert.equal(dialog.boxes.filter(box => box.title === "Update Available").length, 1);
+  prompt.resolve({ response: 0 });
+  await waitForAsyncEventHandlers();
+  assert.equal(updater.downloads, 1);
+});
+
+test("retired prompt cannot download after error and replacement attempt", async () => {
+  const updater = new FakeAutoUpdater();
+  const oldPrompt = deferred();
+  const newPrompt = deferred();
+  const dialog = createDialog([oldPrompt.promise, newPrompt.promise]);
+  const controller = ownedController(updater, dialog);
+  updater.emit("update-available", { version: "2" });
+  updater.emit("error", new Error("retire"));
+  updater.emit("update-available", { version: "3" });
+  newPrompt.resolve({ response: 0 });
+  await waitForAsyncEventHandlers();
+  oldPrompt.resolve({ response: 0 });
+  await waitForAsyncEventHandlers();
+  assert.equal(updater.downloads, 1);
+  assert.equal(controller.getState().downloading, true);
+});
+
+test("cancelled available prompt permits a later check", async () => {
+  const updater = new FakeAutoUpdater();
+  const controller = ownedController(updater, createDialog([{ response: 1 }]));
+  updater.emit("update-available", {});
+  await waitForAsyncEventHandlers();
+  await controller.checkForUpdates();
+  assert.equal(updater.checks, 1);
+});
+
+test("install prompt and deferred preparation have one owner including after quit", async () => {
+  const updater = new FakeAutoUpdater();
+  const prompt = deferred();
+  const preparation = deferred();
+  const dialog = createDialog([prompt.promise]);
+  let preparations = 0;
+  const controller = ownedController(updater, dialog, () => {
+    preparations++;
+    return preparation.promise;
+  });
+  updater.emit("update-downloaded");
+  updater.emit("update-downloaded");
+  const repeated = controller.checkForUpdates();
+  await waitForAsyncEventHandlers();
+  assert.equal(dialog.boxes.length, 1);
+  prompt.resolve({ response: 0 });
+  await waitForAsyncEventHandlers();
+  updater.emit("update-downloaded");
+  const duringPreparation = controller.checkForUpdates();
+  assert.equal(preparations, 1);
+  preparation.resolve();
+  await Promise.all([repeated, duringPreparation]);
+  await controller.checkForUpdates();
+  updater.emit("update-downloaded");
+  await waitForAsyncEventHandlers();
+  assert.equal(preparations, 1);
+  assert.equal(updater.installs, 1);
+});
+
+test("failed install preparation releases ownership for retry", async () => {
+  const updater = new FakeAutoUpdater();
+  const preparation = deferred();
+  const dialog = createDialog();
+  let preparations = 0;
+  const controller = ownedController(updater, dialog, () => {
+    preparations++;
+    return preparations === 1 ? preparation.promise : Promise.resolve();
+  });
+  updater.emit("update-downloaded");
+  await waitForAsyncEventHandlers();
+  updater.emit("update-downloaded");
+  preparation.reject(new Error("shutdown failed"));
+  await waitForAsyncEventHandlers();
+  assert.equal(preparations, 1);
+  assert.equal(updater.installs, 0);
+  assert.equal(dialog.errors[0].message, "shutdown failed");
+  await controller.checkForUpdates();
+  assert.equal(preparations, 2);
+  assert.equal(updater.installs, 1);
+});

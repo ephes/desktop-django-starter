@@ -9,7 +9,7 @@ const {
   resolveBundledPythonExecutable,
   writeRuntimeManifest
 } = require("./bundled-python.cjs");
-const { materializeSymlinks } = require("./materialize-symlinks.cjs");
+const { materializeSymlinks, preflightRuntime } = require("./materialize-symlinks.cjs");
 const { pruneBundledPythonRuntime } = require("./prune-bundled-python-runtime.cjs");
 
 const repoRoot = path.resolve(__dirname, "..");
@@ -113,7 +113,9 @@ function stageBundledPythonRuntime() {
     { cwd: repoRoot }
   );
 
-  fs.cpSync(findDownloadedRuntimeRoot(), path.join(backendRoot, "python"), {
+  const downloadedRuntime = findDownloadedRuntimeRoot();
+  preflightRuntime(downloadedRuntime);
+  fs.cpSync(downloadedRuntime, path.join(backendRoot, "python"), {
     recursive: true,
     dereference: true
   });

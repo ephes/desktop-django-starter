@@ -1,3 +1,5 @@
+mod bundled_python;
+use bundled_python::resolve_bundled_python_executable;
 use serde::{Deserialize, Serialize};
 use std::env;
 use std::ffi::OsString;
@@ -96,15 +98,6 @@ struct OpenPathResponse {
     path: String,
 }
 
-#[derive(Deserialize)]
-struct RuntimeManifest {
-    python: RuntimeManifestPython,
-}
-
-#[derive(Deserialize)]
-struct RuntimeManifestPython {
-    executable: String,
-}
 
 struct UpdaterConfig {
     endpoints: Vec<Url>,
@@ -420,49 +413,6 @@ fn state_dir_name(version: &str) -> String {
     }
 }
 
-fn resolve_bundled_python_executable(backend_root: &Path) -> Result<PathBuf, String> {
-    let manifest_path = backend_root.join(RUNTIME_MANIFEST_FILENAME);
-    if manifest_path.exists() {
-        let manifest = serde_json::from_str::<RuntimeManifest>(
-            &fs::read_to_string(&manifest_path).map_err(|error| error.to_string())?,
-        )
-        .map_err(|error| error.to_string())?;
-        let executable = backend_root.join(manifest.python.executable);
-        if executable.exists() {
-            return Ok(executable);
-        }
-
-        return Err(format!(
-            "Bundled Python manifest points to a missing interpreter: {}",
-            executable.display()
-        ));
-    }
-
-    let candidates = if cfg!(target_os = "windows") {
-        vec![
-            backend_root.join("python").join("python.exe"),
-            backend_root
-                .join("python")
-                .join("Scripts")
-                .join("python.exe"),
-        ]
-    } else {
-        vec![
-            backend_root.join("python").join("bin").join("python3"),
-            backend_root.join("python").join("bin").join("python"),
-        ]
-    };
-
-    candidates
-        .into_iter()
-        .find(|candidate| candidate.exists())
-        .ok_or_else(|| {
-            format!(
-                "No bundled Python runtime found under {}.",
-                backend_root.join("python").display()
-            )
-        })
-}
 
 fn validate_packaged_backend_root(backend_root: &Path) -> Result<(), String> {
     let required_paths = [
