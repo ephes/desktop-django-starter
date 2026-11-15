@@ -183,12 +183,38 @@ test("permission failure preserves marker and never rotates ownership", () => {
   const dir = tempDir();
   const marker = getSessionPath(dir);
   fs.writeFileSync(marker, "retained");
-  const read = fs.readFileSync;
-  fs.readFileSync = (name, ...args) => {
+  const read = fs.openSync;
+  fs.openSync = (name, ...args) => {
     if (name === marker) throw Object.assign(Error("denied"), { code: "EACCES" });
     return read(name, ...args);
   };
   try { assert.throws(() => beginSession(dir), /session marker.*EACCES/i); }
-  finally { fs.readFileSync = read; }
-  assert.equal(read(marker, "utf8"), "retained");
+  finally { fs.openSync = read; }
+  assert.equal(fs.readFileSync(marker, "utf8"), "retained");
 });
+
+for (const kind of ["oversized", "symlink", "directory", "fifo"]) {
+  test(`session input ${kind} is refused before reading or replacing it`, { skip: kind === "fifo" && process.platform === "win32" }, () => {
+    const dir = tempDir();
+    const marker = getSessionPath(dir);
+    if (kind === "oversized") fs.writeFileSync(marker, " ".repeat(4097));
+    if (kind === "symlink") {
+      fs.writeFileSync(path.join(dir, "target"), "canary");
+      fs.symlinkSync(path.join(dir, "target"), marker);
+    }
+    if (kind === "directory") fs.mkdirSync(marker);
+    if (kind === "fifo") require("node:child_process").execFileSync("mkfifo", [marker]);
+    // Guard the pre-fix read to demonstrate rejection before any bulk/blocking
+    // read, without hanging the regression suite on a real FIFO.
+    const readFile = fs.readFileSync;
+    let unsafeRead = false;
+    fs.readFileSync = (name, ...args) => {
+      if (name === marker) { unsafeRead = true; throw Error("unsafe pathname read"); }
+      return readFile(name, ...args);
+    };
+    try {
+      assert.throws(() => beginSession(dir), /session marker/i);
+      assert.equal(unsafeRead, false);
+    } finally { fs.readFileSync = readFile; }
+  });
+}

@@ -405,3 +405,15 @@ Electron hides the now unusable app window, attempts cleanup of both backends,
 shows a restart-required explanation and exits with failure. It preserves dirty
 recovery evidence, rather than starting duplicate backends or leaving a window
 connected to stopped services. Install ownership is held through failure handling.
+
+Session input is limited to 4096 bytes. Electron admits a direct regular file,
+opens it with no-follow/nonblocking flags where supported, checks that same
+single-link descriptor before reading and refuses detected in-place changes.
+Symlinks, special files and oversized inputs cannot become fresh-session state.
+
+Managed shutdown ignores the ChildProcess `killed` delivery flag and waits for
+an actual exit, including a bounded 500 ms wait after SIGKILL (or Windows
+`taskkill`). Both children receive a cleanup attempt even if one fails. Only
+confirmed retirement of both permits `running: false`; unresolved shutdown keeps
+the dirty marker so the next launch must recover. The shell still exits on
+cleanup failure, and does not claim that signal delivery proves termination.

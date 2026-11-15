@@ -27,6 +27,8 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-"))) {
   vm.runInNewContext(fs.readFileSync(filename, "utf8") + `
     globalThis.control = {
       bootstrap, prepareForUpdateInstall,
+      children: (worker, django) => { taskWorkerProcess = worker; djangoProcess = django; },
+      session: value => { shellSession = value; },
       recover: error => recoverFailedUpdateInstall(error),
       state: () => ({ currentAppUrl, updateInstallInProgress, quitting, shellSession }),
       stops: (worker, django) => { stopTaskWorker = worker; stopDjango = django; },
@@ -74,3 +76,32 @@ for (const failure of ["worker", "django", "installer"]) {
     assert.match(errors.at(-1)[1], /restart/i);
   });
 }
+
+test("shutdown keeps dirty marker until both child exits are confirmed", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-retirement-"));
+  const { beginSession, readSession } = require("./orphan-processes.cjs");
+  const session = beginSession(dir).session;
+  const { app, control } = runtime(dir);
+  control.session(session);
+  let release;
+  const stopped = new Promise(resolve => { release = resolve; });
+  control.stops(() => stopped, async () => {});
+  const shutdown = app.listeners("will-quit")[0]({ preventDefault() {} });
+  assert.equal(readSession(dir).running, true);
+  release();
+  await shutdown;
+  assert.equal(readSession(dir).running, false);
+});
+
+test("unconfirmed shutdown attempts both children and preserves dirty recovery", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-unresolved-"));
+  const { beginSession, readSession } = require("./orphan-processes.cjs");
+  const { app, control } = runtime(dir);
+  control.session(beginSession(dir).session);
+  let djangoStop = false;
+  control.stops(async () => { throw Error("original worker failure"); }, async () => { djangoStop = true; });
+  await app.listeners("will-quit")[0]({ preventDefault() {} });
+  assert.equal(djangoStop, true);
+  assert.equal(readSession(dir).running, true);
+  assert.equal(beginSession(dir).previousRunWasUnclean, true);
+});

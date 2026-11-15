@@ -29,11 +29,43 @@ class SessionMarkerError extends Error {
 
 function readSession(appDataDir) {
   let bytes;
+  let descriptor;
   try {
-    bytes = fs.readFileSync(getSessionPath(appDataDir), "utf8");
+    const marker = getSessionPath(appDataDir);
+    // lstat distinguishes an absent leaf from a dangling symlink. O_NOFOLLOW
+    // is authoritative where supported; descriptor checks precede all reads.
+    const named = fs.lstatSync(marker);
+    if (!named.isFile() || named.isSymbolicLink()) throw new SessionMarkerError("not a regular direct file");
+    descriptor = fs.openSync(marker, fs.constants.O_RDONLY
+      | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
+    const opened = fs.fstatSync(descriptor);
+    if (!opened.isFile() || opened.nlink !== 1 || opened.size > 4096
+      || opened.dev !== named.dev || opened.ino !== named.ino) {
+      throw new SessionMarkerError("not an admitted regular marker (maximum 4096 bytes)");
+    }
+    const buffer = Buffer.alloc(4097);
+    let length = 0;
+    while (length < buffer.length) {
+      const count = fs.readSync(descriptor, buffer, length, buffer.length - length, null);
+      if (count === 0) break;
+      length += count;
+    }
+    const after = fs.fstatSync(descriptor);
+    if (length > 4096 || length !== opened.size || after.size !== opened.size
+      || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) {
+      throw new SessionMarkerError("oversized or changed marker");
+    }
+    bytes = buffer.subarray(0, length).toString("utf8");
   } catch (error) {
-    if (error.code === "ENOENT") return null;
+    if (error.code === "ENOENT" && descriptor === undefined) {
+      // Only a genuinely absent path is a first launch (not an open race).
+      try { fs.lstatSync(getSessionPath(appDataDir)); }
+      catch (probeError) { if (probeError.code === "ENOENT") return null; }
+    }
+    if (error instanceof SessionMarkerError) throw error;
     throw new SessionMarkerError(error.code || "read failed");
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
   }
   try {
     const session = JSON.parse(bytes);
