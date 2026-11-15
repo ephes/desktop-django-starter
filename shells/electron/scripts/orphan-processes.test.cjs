@@ -52,14 +52,14 @@ test("an ended session marks the next run as clean", () => {
   assert.equal(beginSession(dir, 2).previousRunWasUnclean, false);
 });
 
-test("a corrupt session file starts a fresh session", () => {
-  const dir = tempDir();
-  fs.writeFileSync(getSessionPath(dir), "{not json");
-
-  const { session, previousRunWasUnclean } = beginSession(dir, 1);
-
-  assert.match(session.app_key, /^[0-9a-f]{32}$/);
-  assert.equal(previousRunWasUnclean, false);
+test("existing unsafe markers are preserved and refuse session publication", () => {
+  for (const bytes of ["{not json", "null", "{}", JSON.stringify({ app_key: KEY }),
+    JSON.stringify({ app_key: KEY, running: "false", shell_pid: 1 })]) {
+    const dir = tempDir();
+    fs.writeFileSync(getSessionPath(dir), bytes);
+    assert.throws(() => beginSession(dir, 1), /session marker/i);
+    assert.equal(fs.readFileSync(getSessionPath(dir), "utf8"), bytes);
+  }
 });
 
 test("orphans match only this app's guarded Python processes", () => {
@@ -177,4 +177,18 @@ test("still-owned backend escalates and must be confirmed absent", async () => {
     signal: (_pid, value) => signals.push(value)
   }), true);
   assert.deepEqual(signals, ["SIGTERM", "SIGKILL"]);
+});
+
+test("permission failure preserves marker and never rotates ownership", () => {
+  const dir = tempDir();
+  const marker = getSessionPath(dir);
+  fs.writeFileSync(marker, "retained");
+  const read = fs.readFileSync;
+  fs.readFileSync = (name, ...args) => {
+    if (name === marker) throw Object.assign(Error("denied"), { code: "EACCES" });
+    return read(name, ...args);
+  };
+  try { assert.throws(() => beginSession(dir), /session marker.*EACCES/i); }
+  finally { fs.readFileSync = read; }
+  assert.equal(read(marker, "utf8"), "retained");
 });

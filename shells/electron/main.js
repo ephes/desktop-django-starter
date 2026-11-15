@@ -860,6 +860,22 @@ async function prepareForUpdateInstall() {
   await stopDjango();
 }
 
+// A partially stopped runtime cannot safely be restarted in-place: preserve
+// the dirty marker and leave through a clear restart-required outcome.
+async function recoverFailedUpdateInstall(error) {
+  quitting = true;
+  currentAppUrl = null;
+  currentAuthToken = null;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+  closeSplashWindow();
+  for (const stop of [stopTaskWorker, stopDjango]) {
+    try { await stop(); } catch (cleanupError) { console.warn(cleanupError.message); }
+  }
+  updateInstallInProgress = false;
+  dialog.showErrorBox("Restart required", `The update could not take over the runtime. Please restart the app. ${error.message}`);
+  app.exit(1);
+}
+
 ipcMain.handle("desktop:open-app-data-directory", async (event) => {
   // Only pages from the local Django origin may use the preload bridge.
   if (!isTrustedIpcSender(event, currentAppUrl)) {
@@ -946,7 +962,8 @@ app.whenReady()
         app,
         autoUpdater,
         dialog,
-        beforeInstall: prepareForUpdateInstall
+        beforeInstall: prepareForUpdateInstall,
+        onInstallFailure: recoverFailedUpdateInstall
       }));
       await bootstrap();
     } catch (error) {

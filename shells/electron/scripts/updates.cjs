@@ -52,7 +52,8 @@ function createElectronUpdateController({
   logger = console,
   platform = process.platform,
   env = process.env,
-  beforeInstall = async () => {}
+  beforeInstall = async () => {},
+  onInstallFailure = async () => {}
 }) {
   if (!app || !autoUpdater || !dialog) {
     throw new Error("app, autoUpdater, and dialog are required for update checks.");
@@ -118,10 +119,11 @@ function createElectronUpdateController({
         });
         if (result.response !== 0) return;
         await beforeInstall();
-        autoUpdater.quitAndInstall();
+        await autoUpdater.quitAndInstall();
         installStarted = true;
       } catch (error) {
         dialog.showErrorBox("Update Install Failed", getErrorMessage(error));
+        await onInstallFailure(error);
       } finally {
         installTask = null;
       }

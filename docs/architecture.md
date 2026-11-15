@@ -394,3 +394,14 @@ These are public process-tool observations, not kernel process handles. POSIX
 observe-and-signal guarantee here. A process replaced after the last observation
 is outside that guarantee. Missing identity is refused; no PID-only fallback is
 used. Owned normal child shutdown remains separate from orphan discovery.
+
+An absent session marker is the only first-launch case. An existing malformed,
+foreign-shaped or unreadable marker is preserved and backend startup stops before
+migrations, server or worker launch. Repair its access/content with the app closed
+and explicitly launch again; do not delete a dirty marker to bypass recovery.
+
+If update preparation or the installer handoff fails after shutdown begins,
+Electron hides the now unusable app window, attempts cleanup of both backends,
+shows a restart-required explanation and exits with failure. It preserves dirty
+recovery evidence, rather than starting duplicate backends or leaving a window
+connected to stopped services. Install ownership is held through failure handling.

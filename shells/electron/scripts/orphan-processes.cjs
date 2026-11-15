@@ -20,17 +20,29 @@ function getSessionPath(appDataDir) {
   return path.join(appDataDir, SESSION_FILENAME);
 }
 
-function readSession(appDataDir) {
-  try {
-    const session = JSON.parse(fs.readFileSync(getSessionPath(appDataDir), "utf8"));
-    if (typeof session.app_key === "string" && /^[0-9a-f]{32}$/.test(session.app_key)) {
-      return { app_key: session.app_key, running: session.running === true, shell_pid: session.shell_pid };
-    }
-  } catch (_error) {
-    // Missing or unreadable: start a new session below.
+class SessionMarkerError extends Error {
+  constructor(detail) {
+    super(`Unsafe or unreadable session marker: ${detail}. Preserve the marker, repair it and restart.`);
+    this.code = "DDS_SESSION_MARKER_UNSAFE";
   }
+}
 
-  return null;
+function readSession(appDataDir) {
+  let bytes;
+  try {
+    bytes = fs.readFileSync(getSessionPath(appDataDir), "utf8");
+  } catch (error) {
+    if (error.code === "ENOENT") return null;
+    throw new SessionMarkerError(error.code || "read failed");
+  }
+  try {
+    const session = JSON.parse(bytes);
+    if (session && typeof session.app_key === "string" && /^[0-9a-f]{32}$/.test(session.app_key)
+      && typeof session.running === "boolean" && Number.isSafeInteger(session.shell_pid) && session.shell_pid > 0) {
+      return { app_key: session.app_key, running: session.running, shell_pid: session.shell_pid };
+    }
+  } catch (_) { /* Refuse malformed input below. */ }
+  throw new SessionMarkerError("invalid document");
 }
 
 function writeSession(appDataDir, session) {
