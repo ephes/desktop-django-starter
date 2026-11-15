@@ -377,3 +377,20 @@ guaranteed. These barriers do not change the running database's existing
 `synchronous=NORMAL` policy or make promises about later writes. Tests use real
 SQLite/WAL/media, deterministic process barriers, kill/restart and injected sync
 and rename failures; they do not simulate hardware power loss.
+
+### Electron orphan command and signal limits
+
+Recovery process tools have a three-second hard timeout and a further bounded
+500 ms callback/reap allowance, with output capped at 16 MiB. Tool failure gives
+a bounded diagnostic. POSIX inventory joins executable and arguments only when
+both PID and observed start time agree. Before TERM and again before KILL,
+recovery checks the start time, executable, complete command line and app marker;
+PID replacement retires only the old candidate, never authorizes the replacement.
+Windows uses CIM CreationDate and checks it again in the terminating helper;
+it does not use an unchecked orphan `taskkill /t` tree.
+
+These are public process-tool observations, not kernel process handles. POSIX
+`ps` start times have second precision, and neither platform offers an atomic
+observe-and-signal guarantee here. A process replaced after the last observation
+is outside that guarantee. Missing identity is refused; no PID-only fallback is
+used. Owned normal child shutdown remains separate from orphan discovery.

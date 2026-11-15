@@ -115,3 +115,66 @@ test("leftover guarded processes are stopped", { skip: process.platform === "win
   assert.deepEqual(stopped, [leftover.pid]);
   await exited;
 });
+
+const { EventEmitter } = require("node:events");
+const { execFileText, stopPid, listProcesses } = require("./orphan-processes.cjs");
+const candidate = (generation = "old") => ({
+  pid: 321, generation, program: "python3",
+  commandLine: `python3 desktop_process_guard.py --app-key ${KEY} --instance old -- manage.py`
+});
+
+test("owned commands have a deadline, hard cancellation and bounded reap wait", async () => {
+  let signal;
+  await assert.rejects(execFileText("hung", [], {
+    timeoutMs: 5, reapMs: 5,
+    execute: (_cmd, _args, options, _callback) => {
+      assert.equal(options.killSignal, "SIGKILL");
+      assert.equal(options.timeout, 5);
+      return { kill: value => { signal = value; } };
+    }
+  }), /deadline/);
+  assert.equal(signal, "SIGKILL");
+});
+
+test("command launch errors and output overflow reject and reap", async () => {
+  await assert.rejects(execFileText("/dds-no-such-command", []), /ENOENT/);
+  await assert.rejects(execFileText(process.execPath, ["-e", "process.stdout.write('x'.repeat(4096))"], {
+    maxBuffer: 64
+  }), /maxBuffer/);
+  await assert.rejects(execFileText(process.execPath, ["-e", "setInterval(()=>{}, 1000)"], {
+    timeoutMs: 30, reapMs: 100
+  }));
+});
+
+test("POSIX inventory refuses two listings from different process generations", async () => {
+  const entries = await listProcesses("darwin", KEY, async (_command, args) =>
+    args.at(-1).includes("comm")
+      ? "321 Sun Nov 15 12:00:00 2026 python3"
+      : `321 Sun Nov 15 12:00:01 2026 ${candidate().commandLine}`);
+  assert.equal(entries.length, 0);
+});
+
+for (const replacementAt of [0, 1]) {
+  test(`PID replacement before signal boundary ${replacementAt} is never signalled`, async () => {
+    const signals = [];
+    let probes = 0;
+    const result = await stopPid(candidate(), KEY, {
+      platform: "darwin", graceMs: 0, reapMs: 0,
+      inventory: async () => [candidate(probes++ >= replacementAt ? "replacement" : "old")],
+      signal: (pid, value) => signals.push([pid, value])
+    });
+    assert.equal(result, true);
+    assert.deepEqual(signals, replacementAt === 0 ? [] : [[321, "SIGTERM"]]);
+  });
+}
+
+test("still-owned backend escalates and must be confirmed absent", async () => {
+  const signals = [];
+  let probes = 0;
+  assert.equal(await stopPid(candidate(), KEY, {
+    platform: "darwin", graceMs: 0, reapMs: 0,
+    inventory: async () => ++probes < 3 ? [candidate()] : [],
+    signal: (_pid, value) => signals.push(value)
+  }), true);
+  assert.deepEqual(signals, ["SIGTERM", "SIGKILL"]);
+});

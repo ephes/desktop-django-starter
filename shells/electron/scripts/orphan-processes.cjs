@@ -121,15 +121,29 @@ function findOrphanPids(processes, appKey, ownPids = [process.pid]) {
     .map((entry) => entry.pid);
 }
 
-function execFileText(command, args) {
+// execFile's hard timeout bounds the helper; the outer deadline also bounds
+// waiting for its callback/stdio to close. A late callback cannot settle twice.
+function execFileText(command, args, {
+  execute = execFile, timeoutMs = 3000, reapMs = 500, maxBuffer = 16 * 1024 * 1024
+} = {}) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(stdout);
-    });
+    let child;
+    const deadline = setTimeout(() => {
+      try { child?.kill("SIGKILL"); } catch (_) { /* Already gone. */ }
+      reject(new Error("Process helper exceeded its deadline; repair the process tool and retry."));
+    }, timeoutMs + reapMs);
+    try {
+      child = execute(command, args, {
+        windowsHide: true, maxBuffer, timeout: timeoutMs, killSignal: "SIGKILL"
+      }, (error, stdout) => {
+        clearTimeout(deadline);
+        if (error) reject(error);
+        else resolve(stdout);
+      });
+    } catch (error) {
+      clearTimeout(deadline);
+      reject(error);
+    }
   });
 }
 
@@ -137,62 +151,92 @@ function windowsSystemTool(name) {
   return path.join(process.env.SystemRoot || "C:\\Windows", "System32", name);
 }
 
-async function listProcesses(platform = process.platform, appKey = "") {
+function parseGenerationColumns(text) {
+  const rows = new Map();
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^\s*(\d+)\s+(\S+\s+\S+\s+\d+\s+\d+:\d+:\d+\s+\d+)\s+(.*)$/);
+    if (match) rows.set(Number(match[1]), { generation: match[2].replace(/\s+/g, " "), value: match[3].trim() });
+  }
+  return rows;
+}
+
+async function listProcesses(platform = process.platform, appKey = "", run = execFileText) {
   if (platform === "win32") {
-    // Filter in PowerShell so only candidate rows come back.
     const script = [
-      "Get-CimInstance Win32_Process",
+      "Get-CimInstance Win32_Process -ErrorAction Stop",
       `| Where-Object { $_.CommandLine -like '*${guardMarker(appKey)}*' }`,
-      "| ForEach-Object { \"$($_.ProcessId)`t$($_.Name)`t$($_.CommandLine)\" }"
+      '| ForEach-Object { "$($_.ProcessId)`t$($_.CreationDate.ToUniversalTime().ToString(\'o\'))`t$($_.Name)`t$($_.CommandLine)" }'
     ].join(" ");
-    const output = await execFileText(
+    const output = await run(
       windowsSystemTool(path.join("WindowsPowerShell", "v1.0", "powershell.exe")),
       ["-NoProfile", "-NonInteractive", "-Command", script]
     );
-    return parseWindowsProcessListing(output);
+    return output.split(/\r?\n/).filter(Boolean).map(line => {
+      const [pid, generation, program, ...args] = line.split("\t");
+      if (!/^\d+$/.test(pid) || !generation || !program || !args.length) {
+        throw new Error("Incomplete Windows process identity.");
+      }
+      return { pid: Number(pid), generation, program, commandLine: args.join("\t") };
+    });
   }
 
-  const [programs, commandLines] = await Promise.all([
-    execFileText("/bin/ps", ["-ax", "-o", "pid=,comm="]),
-    execFileText("/bin/ps", ["-axww", "-o", "pid=,args="])
-  ]);
-  return parsePosixProcessListing(programs, commandLines);
+  // Both observations carry start time. Never join program/arguments by PID
+  // alone: it may have been reused between the two ps commands.
+  const programs = parseGenerationColumns(await run("/bin/ps", ["-ax", "-o", "pid=,lstart=,comm="]));
+  const args = parseGenerationColumns(await run("/bin/ps", ["-axww", "-o", "pid=,lstart=,args="]));
+  return [...args].flatMap(([pid, entry]) => {
+    const program = programs.get(pid);
+    if (!program || program.generation !== entry.generation) return [];
+    return [{ pid, generation: entry.generation, program: program.value, commandLine: entry.value }];
+  });
 }
 
-function isAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === "EPERM";
+function sameProcess(current, observed, appKey) {
+  return !!observed.generation && current.generation === observed.generation
+    && current.program === observed.program && current.commandLine === observed.commandLine
+    && isGuardedBackendProcess(current, appKey);
+}
+
+async function stopPid(observed, appKey, {
+  platform = process.platform, inventory = () => listProcesses(platform, appKey),
+  signal = process.kill, run = execFileText,
+  graceMs = STOP_GRACE_PERIOD_MS, reapMs = 500
+} = {}) {
+  if (!observed.generation) throw new Error("Missing process generation; refusing to signal.");
+  async function stillOwned() {
+    const current = (await inventory()).find(entry => entry.pid === observed.pid);
+    return current && sameProcess(current, observed, appKey);
   }
-}
-
-async function stopPid(pid, platform = process.platform) {
+  async function waitGone(duration) {
+    const deadline = Date.now() + duration;
+    do {
+      if (!await stillOwned()) return true;
+      if (Date.now() >= deadline) return false;
+      await new Promise(resolve => setTimeout(resolve, Math.min(100, deadline - Date.now())));
+    } while (true);
+  }
+  if (!await stillOwned()) return true;
   if (platform === "win32") {
-    await execFileText(windowsSystemTool("taskkill.exe"), ["/pid", String(pid), "/t", "/f"])
-      .catch(() => {});
-    return;
+    // Recheck the CIM creation time inside the terminating helper too. Avoid
+    // taskkill /t: descendants have not individually passed identity admission.
+    const stamp = observed.generation.replace(/'/g, "''");
+    const script = `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${observed.pid}" -ErrorAction Stop; `
+      + `if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -eq '${stamp}') { `
+      + "$r = Invoke-CimMethod -InputObject $p -MethodName Terminate -ErrorAction Stop; "
+      + "if ($r.ReturnValue -ne 0) { throw 'Termination refused' } }";
+    await run(windowsSystemTool(path.join("WindowsPowerShell", "v1.0", "powershell.exe")),
+      ["-NoProfile", "-NonInteractive", "-Command", script]);
+    return waitGone(reapMs);
   }
-
-  try {
-    process.kill(pid, "SIGTERM");
-  } catch (_error) {
-    return;
+  try { signal(observed.pid, "SIGTERM"); } catch (error) {
+    if (error.code !== "ESRCH") throw error;
   }
-
-  const deadline = Date.now() + STOP_GRACE_PERIOD_MS;
-  while (Date.now() < deadline && isAlive(pid)) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
+  if (await waitGone(graceMs)) return true;
+  // waitGone's last observation immediately precedes escalation.
+  try { signal(observed.pid, "SIGKILL"); } catch (error) {
+    if (error.code !== "ESRCH") throw error;
   }
-
-  if (isAlive(pid)) {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch (_error) {
-      // Already gone.
-    }
-  }
+  return waitGone(reapMs);
 }
 
 // Stops leftovers of this app and returns their PIDs. Never throws: a failed
@@ -209,12 +253,15 @@ async function stopOrphanedBackendProcesses(appKey, { platform = process.platfor
   const pids = findOrphanPids(processes, appKey);
   for (const pid of pids) {
     log.warn(`Stopping leftover backend process ${pid} from a previous run.`);
-    await stopPid(pid, platform);
+    await stopPid(processes.find(entry => entry.pid === pid), appKey, { platform });
   }
   return pids;
 }
 
 module.exports = {
+  execFileText,
+  listProcesses,
+  stopPid,
   SESSION_FILENAME,
   beginSession,
   endSession,
