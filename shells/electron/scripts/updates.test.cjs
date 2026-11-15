@@ -456,3 +456,28 @@ for (const boundary of ["preparation", "installer"]) {
     await again;
   });
 }
+
+for (const timing of ["synchronous", "late"]) {
+  test(`installer error event (${timing}) recovers a stopped runtime once`, async () => {
+    const updater = new FakeAutoUpdater();
+    let failures = 0;
+    const controller = createElectronUpdateController({
+      app: createApp(), autoUpdater: updater, dialog: createDialog(), logger: null,
+      onInstallFailure: async () => { failures++; }
+    });
+    updater.quitAndInstall = () => {
+      if (timing === "synchronous") updater.emit("error", Error("installation failed"));
+    };
+    updater.emit("update-downloaded");
+    await waitForAsyncEventHandlers();
+    if (timing === "late") {
+      updater.emit("error", Error("installation failed"));
+      updater.emit("error", Error("duplicate"));
+    }
+    await waitForAsyncEventHandlers();
+    assert.equal(failures, 1);
+    // Recovery has settled: a later explicit attempt can acquire ownership.
+    updater.quitAndInstall = () => {};
+    await controller.checkForUpdates();
+  });
+}

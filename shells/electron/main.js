@@ -51,6 +51,7 @@ let splashWindow = null;
 let splashShownAt = null;
 let updateInstallInProgress = false;
 let shellSession = null;
+let shellRecoveryConfirmed = false;
 const runId = crypto.randomBytes(8).toString("hex");
 const intentionallyStoppedManagedProcesses = new WeakSet();
 
@@ -802,8 +803,11 @@ async function bootstrap() {
   const { session, previousRunWasUnclean } = beginSession(app.getPath("userData"));
   shellSession = session;
   if (previousRunWasUnclean) {
-    await stopOrphanedBackendProcesses(session.app_key);
+    const cleanup = await stopOrphanedBackendProcesses(session.app_key);
+    if (cleanup.status !== "confirmed") throw new Error(cleanup.detail);
   }
+
+  shellRecoveryConfirmed = true;
 
   await runManageCommand(["migrate", "--noinput"], port, runtimeMode, backendRoot, authToken);
   if (shouldSeedDemoContent) {
@@ -946,14 +950,16 @@ app.on("will-quit", async (event) => {
   }
 
   event.preventDefault();
+  let exitCode = 0;
   try {
     await stopBackends();
-    if (shellSession) {
+    if (shellSession && shellRecoveryConfirmed) {
       // Children are stopped: the next start does not need to look for leftovers.
       endSession(app.getPath("userData"), shellSession);
     }
-  } catch (_error) {
-    // Continue quitting even if child-process cleanup fails.
+  } catch (error) {
+    console.warn(`Backend cleanup incomplete: ${error.message}`);
+    exitCode = 1;
   }
-  app.exit(0);
+  app.exit(exitCode);
 });

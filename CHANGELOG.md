@@ -8,3 +8,5 @@
   failed update handoffs now leave a clear restart-required state.
 - Read session markers through bounded regular-file descriptors and mark sessions
   clean only after both managed children have confirmed exit.
+- Publish session markers using exclusively owned private temporaries; refuse
+  startup and retain dirty recovery evidence when orphan cleanup is unknown.

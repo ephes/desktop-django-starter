@@ -7,7 +7,7 @@ const { createRequire } = require("node:module");
 const vm = require("node:vm");
 const test = require("node:test");
 
-function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-"))) {
+function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), cleanup) {
   const app = Object.assign(new EventEmitter(), {
     requestSingleInstanceLock: () => true,
     whenReady: () => new Promise(() => {}),
@@ -21,6 +21,8 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-"))) {
   const context = {
     require: name => name === "electron" ? {
       app, ipcMain: { handle() {} }, dialog: { showErrorBox: (...args) => errors.push(args) }
+    } : name === "./scripts/orphan-processes.cjs" && cleanup ? {
+      ...actualRequire(name), stopOrphanedBackendProcesses: cleanup
     } : name === "electron-updater" ? { autoUpdater: {} } : actualRequire(name),
     __dirname: path.dirname(filename), process, console, setTimeout, clearTimeout, URL
   };
@@ -28,7 +30,7 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-"))) {
     globalThis.control = {
       bootstrap, prepareForUpdateInstall,
       children: (worker, django) => { taskWorkerProcess = worker; djangoProcess = django; },
-      session: value => { shellSession = value; },
+      session: value => { shellSession = value; shellRecoveryConfirmed = true; },
       recover: error => recoverFailedUpdateInstall(error),
       state: () => ({ currentAppUrl, updateInstallInProgress, quitting, shellSession }),
       stops: (worker, django) => { stopTaskWorker = worker; stopDjango = django; },
@@ -39,6 +41,8 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-"))) {
         runManageCommand = manage;
         startDjangoServer = manage;
         startTaskWorker = manage;
+        waitForDjango = async () => {};
+        createWindow = () => {};
       },
       visible: win => { mainWindow = win; currentAppUrl = 'http://127.0.0.1:1'; }
     };`, context, { filename });
@@ -102,6 +106,67 @@ test("unconfirmed shutdown attempts both children and preserves dirty recovery",
   control.stops(async () => { throw Error("original worker failure"); }, async () => { djangoStop = true; });
   await app.listeners("will-quit")[0]({ preventDefault() {} });
   assert.equal(djangoStop, true);
+  assert.equal(app.exitStatus, 1);
   assert.equal(readSession(dir).running, true);
   assert.equal(beginSession(dir).previousRunWasUnclean, true);
+});
+
+for (const outcome of ["inventory unavailable", "exit unconfirmed"]) {
+  test(`unknown recovery (${outcome}) blocks all backend starts and keeps dirty evidence on quit`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-recovery-"));
+    const { beginSession, readSession } = require("./orphan-processes.cjs");
+    const previous = beginSession(dir).session;
+    const { app, control } = runtime(dir, async () => ({ status: "unknown", detail: outcome }));
+    let starts = 0;
+    control.startup(async () => { starts++; });
+    await assert.rejects(control.bootstrap(), new RegExp(outcome));
+    assert.equal(starts, 0);
+    await app.listeners("will-quit")[0]({ preventDefault() {} });
+    assert.equal(readSession(dir).running, true);
+    assert.equal(readSession(dir).app_key, previous.app_key);
+  });
+}
+
+for (const previous of ["absent", "clean", "dirty"]) {
+  test(`${previous} session with confirmed recovery reaches normal backend startup`, async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-confirmed-"));
+    const { beginSession, endSession } = require("./orphan-processes.cjs");
+    if (previous !== "absent") {
+      const session = beginSession(dir).session;
+      if (previous === "clean") endSession(dir, session);
+    }
+    let cleanups = 0;
+    const { control } = runtime(dir, async () => { cleanups++; return { status: "confirmed", pids: [] }; });
+    let starts = 0;
+    control.startup(async () => { starts++; });
+    await control.bootstrap();
+    assert.equal(starts, 3); // migrate, Django, worker
+    assert.equal(cleanups, previous === "dirty" ? 1 : 0);
+  });
+}
+
+test("failed shutdown preserves the original first error while attempting both stops", async () => {
+  const { control } = runtime();
+  const original = Error("worker original");
+  let djangoStopped = false;
+  control.stops(async () => { throw original; }, async () => { djangoStopped = true; throw Error("django later"); });
+  await assert.rejects(control.prepareForUpdateInstall(), error => error === original);
+  assert.equal(djangoStopped, true);
+});
+
+test("actual shutdown never marks a signal-acknowledging child as retired", async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-signal-only-"));
+  const { beginSession, readSession } = require("./orphan-processes.cjs");
+  const { app, control } = runtime(dir);
+  control.session(beginSession(dir).session);
+  const signals = [];
+  const child = Object.assign(new EventEmitter(), {
+    pid: 123, killed: true, exitCode: null, signalCode: null,
+    kill: signal => { signals.push(signal); return true; }
+  });
+  control.children(child, null);
+  await app.listeners("will-quit")[0]({ preventDefault() {} });
+  assert.deepEqual(signals, ["SIGTERM", "SIGKILL"]);
+  assert.equal(readSession(dir).running, true);
+  assert.equal(app.exitStatus, 1);
 });

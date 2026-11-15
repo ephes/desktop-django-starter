@@ -37,3 +37,17 @@ Current update scope:
 - workflow support: `.github/workflows/desktop-packages.yml` uploads `latest*.yml` metadata and can publish to a draft GitHub Release when manually triggered with `publish_release=true`
 - local behavior: development runs show a harmless "updates unavailable" dialog instead of attempting a feed check
 - release-readiness boundary: a signed/notarized macOS update from installed `0.1.2` to published `v0.1.4` now proves detection, download, restart/install, and `app.sqlite3` persistence, but a Windows NSIS update still needs live validation before claiming production updater readiness
+
+## Session recovery failures
+
+Electron preserves an unsafe or unreadable session marker and stops before any
+backend command. Recovery tools have finite command deadlines. If inventory or
+termination is unknown, close the app, repair the process tool or marker access,
+then explicitly relaunch. Do not remove a dirty marker to bypass orphan recovery.
+The app marks a session clean only after confirmed child exit; see the
+[architecture recovery contract](../architecture.md#electron-orphan-command-and-signal-limits)
+for descriptor limits, process identity checks and platform limitations.
+
+An update handoff failure (including an installer error event) hides the unusable
+window, attempts to stop both children, explains that a restart is required and
+exits. The next explicit launch uses the retained dirty marker to recover.

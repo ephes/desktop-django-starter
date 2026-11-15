@@ -72,6 +72,7 @@ function createElectronUpdateController({
   let availablePrompt = null;
   let installTask = null;
   let installStarted = false;
+  let installOwner = null;
 
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
@@ -102,11 +103,25 @@ function createElectronUpdateController({
     dialog.showErrorBox(title, message);
   }
 
+  function recoverInstall(owner, error) {
+    if (owner.recovery) return owner.recovery;
+    owner.error = owner.error || error;
+    owner.recovery = Promise.resolve().then(async () => {
+      dialog.showErrorBox("Update Install Failed", getErrorMessage(owner.error));
+      await onInstallFailure(owner.error);
+    }).finally(() => {
+      if (installOwner === owner) installOwner = null;
+      installStarted = false;
+    });
+    return owner.recovery;
+  }
+
   function promptToInstallDownloadedUpdate() {
     if (installStarted) return Promise.resolve();
     if (installTask) return installTask;
     // Acquire before running any dialog or user hook, including reentrant hooks.
     installTask = Promise.resolve().then(async () => {
+      let owner;
       try {
         const result = await dialog.showMessageBox({
           type: "info",
@@ -118,12 +133,16 @@ function createElectronUpdateController({
           detail: "Restart Desktop Django Starter to install the downloaded update."
         });
         if (result.response !== 0) return;
+        owner = { error: null, recovery: null };
+        installOwner = owner;
         await beforeInstall();
+        if (owner.error) throw owner.error;
         await autoUpdater.quitAndInstall();
+        if (owner.error) throw owner.error;
         installStarted = true;
       } catch (error) {
-        dialog.showErrorBox("Update Install Failed", getErrorMessage(error));
-        await onInstallFailure(error);
+        if (owner) await recoverInstall(owner, error);
+        else dialog.showErrorBox("Update Install Failed", getErrorMessage(error));
       } finally {
         installTask = null;
       }
@@ -257,6 +276,18 @@ function createElectronUpdateController({
   });
 
   autoUpdater.on("error", (error) => {
+    if (installOwner) {
+      const owner = installOwner;
+      owner.error = owner.error || error;
+      // During preparation/quitAndInstall the owning task handles this error.
+      // After handoff, an emitted installer error still needs runtime recovery.
+      if (!installTask) {
+        installTask = recoverInstall(owner, error)
+          .catch(recoveryError => updateLogger.error(getErrorMessage(recoveryError)))
+          .finally(() => { installTask = null; });
+      }
+      return;
+    }
     const title = downloading ? "Update Download Failed" : "Update Check Failed";
     attempt = null;
     availablePrompt = null;

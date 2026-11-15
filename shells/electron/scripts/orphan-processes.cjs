@@ -30,11 +30,13 @@ class SessionMarkerError extends Error {
 function readSession(appDataDir) {
   let bytes;
   let descriptor;
+  let observedExisting = false;
   try {
     const marker = getSessionPath(appDataDir);
     // lstat distinguishes an absent leaf from a dangling symlink. O_NOFOLLOW
     // is authoritative where supported; descriptor checks precede all reads.
     const named = fs.lstatSync(marker);
+    observedExisting = true;
     if (!named.isFile() || named.isSymbolicLink()) throw new SessionMarkerError("not a regular direct file");
     descriptor = fs.openSync(marker, fs.constants.O_RDONLY
       | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
@@ -57,11 +59,7 @@ function readSession(appDataDir) {
     }
     bytes = buffer.subarray(0, length).toString("utf8");
   } catch (error) {
-    if (error.code === "ENOENT" && descriptor === undefined) {
-      // Only a genuinely absent path is a first launch (not an open race).
-      try { fs.lstatSync(getSessionPath(appDataDir)); }
-      catch (probeError) { if (probeError.code === "ENOENT") return null; }
-    }
+    if (error.code === "ENOENT" && !observedExisting) return null;
     if (error instanceof SessionMarkerError) throw error;
     throw new SessionMarkerError(error.code || "read failed");
   } finally {
@@ -80,9 +78,27 @@ function readSession(appDataDir) {
 function writeSession(appDataDir, session) {
   fs.mkdirSync(appDataDir, { recursive: true });
   const sessionPath = getSessionPath(appDataDir);
-  const temporaryPath = `${sessionPath}.${process.pid}.tmp`;
-  fs.writeFileSync(temporaryPath, `${JSON.stringify(session, null, 2)}\n`, { mode: 0o600 });
-  fs.renameSync(temporaryPath, sessionPath);
+  const temporaryPath = `${sessionPath}.${crypto.randomUUID()}.tmp`;
+  let descriptor;
+  let owned;
+  const stillOwned = () => {
+    try {
+      const named = fs.lstatSync(temporaryPath);
+      return owned && named.isFile() && named.nlink === 1 && named.dev === owned.dev && named.ino === owned.ino;
+    } catch (_) { return false; }
+  };
+  try {
+    descriptor = fs.openSync(temporaryPath, "wx", 0o600);
+    owned = fs.fstatSync(descriptor);
+    fs.writeFileSync(descriptor, `${JSON.stringify(session, null, 2)}\n`);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    if (!stillOwned()) throw new Error("Session temporary ownership changed; publication refused.");
+    fs.renameSync(temporaryPath, sessionPath);
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    if (stillOwned()) fs.unlinkSync(temporaryPath);
+  }
 }
 
 // Returns the session for this run and whether the previous run ended uncleanly.
@@ -174,6 +190,9 @@ function execFileText(command, args, {
     let child;
     const deadline = setTimeout(() => {
       try { child?.kill("SIGKILL"); } catch (_) { /* Already gone. */ }
+      child?.stdout?.destroy();
+      child?.stderr?.destroy();
+      child?.unref?.();
       reject(new Error("Process helper exceeded its deadline; repair the process tool and retry."));
     }, timeoutMs + reapMs);
     try {
@@ -200,6 +219,7 @@ function parseGenerationColumns(text) {
   for (const line of text.split(/\r?\n/)) {
     const match = line.match(/^\s*(\d+)\s+(\S+\s+\S+\s+\d+\s+\d+:\d+:\d+\s+\d+)\s+(.*)$/);
     if (match) rows.set(Number(match[1]), { generation: match[2].replace(/\s+/g, " "), value: match[3].trim() });
+    else if (line.trim()) throw new Error("Incomplete POSIX process identity.");
   }
   return rows;
 }
@@ -230,7 +250,10 @@ async function listProcesses(platform = process.platform, appKey = "", run = exe
   const args = parseGenerationColumns(await run("/bin/ps", ["-axww", "-o", "pid=,lstart=,args="]));
   return [...args].flatMap(([pid, entry]) => {
     const program = programs.get(pid);
-    if (!program || program.generation !== entry.generation) return [];
+    if (!program || program.generation !== entry.generation) {
+      if (entry.value.includes(guardMarker(appKey))) throw new Error("Backend identity changed during inventory; retry.");
+      return [];
+    }
     return [{ pid, generation: entry.generation, program: program.value, commandLine: entry.value }];
   });
 }
@@ -263,9 +286,12 @@ async function stopPid(observed, appKey, {
   if (platform === "win32") {
     // Recheck the CIM creation time inside the terminating helper too. Avoid
     // taskkill /t: descendants have not individually passed identity admission.
-    const stamp = observed.generation.replace(/'/g, "''");
+    const literal = value => String(value).replace(/'/g, "''");
+    const stamp = literal(observed.generation);
     const script = `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${observed.pid}" -ErrorAction Stop; `
-      + `if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -eq '${stamp}') { `
+      + `if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -ceq '${stamp}' `
+      + `-and $p.Name -ceq '${literal(observed.program)}' `
+      + `-and $p.CommandLine -ceq '${literal(observed.commandLine)}') { `
       + "$r = Invoke-CimMethod -InputObject $p -MethodName Terminate -ErrorAction Stop; "
       + "if ($r.ReturnValue -ne 0) { throw 'Termination refused' } }";
     await run(windowsSystemTool(path.join("WindowsPowerShell", "v1.0", "powershell.exe")),
@@ -283,23 +309,32 @@ async function stopPid(observed, appKey, {
   return waitGone(reapMs);
 }
 
-// Stops leftovers of this app and returns their PIDs. Never throws: a failed
-// cleanup must not block startup.
-async function stopOrphanedBackendProcesses(appKey, { platform = process.platform, log = console } = {}) {
-  let processes;
+// Unknown cleanup is distinct from proven absence. Callers must refuse a new
+// runtime when inventory or termination could not be established.
+async function stopOrphanedBackendProcesses(appKey, {
+  platform = process.platform, log = console,
+  inventory = () => listProcesses(platform, appKey),
+  stop = entry => stopPid(entry, appKey, { platform, inventory })
+} = {}) {
+  const pids = [];
   try {
-    processes = await listProcesses(platform, appKey);
+    const processes = await inventory();
+    const candidates = processes.filter(entry => entry.pid !== process.pid && isGuardedBackendProcess(entry, appKey));
+    for (const entry of candidates) {
+      log.warn(`Stopping leftover backend process ${entry.pid} from a previous run.`);
+      if (!await stop(entry)) throw new Error(`Exit of backend ${entry.pid} was not confirmed`);
+      pids.push(entry.pid);
+    }
+    const remaining = await inventory();
+    if (remaining.some(entry => entry.pid !== process.pid && isGuardedBackendProcess(entry, appKey))) {
+      throw new Error("Guarded backends remain after cleanup");
+    }
+    return { status: "confirmed", pids };
   } catch (error) {
-    log.warn(`Could not list processes to look for leftovers: ${error.message}`);
-    return [];
+    const detail = `Backend recovery is unconfirmed: ${String(error.message).slice(0, 400)}. Repair the process tool/access and retry by restarting the app.`;
+    log.warn(detail);
+    return { status: "unknown", pids, detail };
   }
-
-  const pids = findOrphanPids(processes, appKey);
-  for (const pid of pids) {
-    log.warn(`Stopping leftover backend process ${pid} from a previous run.`);
-    await stopPid(processes.find(entry => entry.pid === pid), appKey, { platform });
-  }
-  return pids;
 }
 
 module.exports = {
