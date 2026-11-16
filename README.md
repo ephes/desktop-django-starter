@@ -24,7 +24,8 @@ Runnable starter slices:
   confirmations detect changes made in another window; reload the current pony
   after a conflict. Edit conflicts keep your submitted input for comparison.
 - Start Routine admits at most 16 queued/running routines globally; a full queue
-  returns a retryable refusal without creating a routine or backend result.
+  returns a retryable refusal, shown on the page, without creating a routine or
+  backend result.
 - Unexpected routine failures display a fixed safe category; stored tracebacks
   stay out of page and JSON output. Shell activity reads both counters together.
 - Routine pages and polls show every queued/running routine plus the 100 most

@@ -235,7 +235,9 @@ Current launcher contract:
 - My Ponies uses 20-row database pages, ordered by update time, creation time
   and primary key (descending) so timestamp ties cannot omit rows. Native page
   links and create/edit/delete navigation retain the displayed page; successful
-  mutations clamp the return page when the last page disappears.
+  mutations clamp the return page when the last page disappears. The release
+  modal follows that clamped redirect, and Release All Ponies returns to the
+  first page, so neither reloads a page number that no longer exists.
 - Edit and release requests carry a signed digest of the displayed pony's ID,
   editable content and update timestamp. SQLite's writer lock is acquired before
   reloading and comparing that revision, and is held through save/delete. Missing,
@@ -251,7 +253,8 @@ Current launcher contract:
   UPDATE on the existing routine table takes SQLite's writer lock before the
   count; admission and both demo/backend inserts share that transaction, including
   in local mode with deferred transactions. A full queue returns HTTP 503 with
-  `Retry-After: 1` and creates neither row. Terminal history does not consume slots.
+  `Retry-After: 1` and creates neither row; the page shows the refusal message
+  next to Start Routine. Terminal history does not consume slots.
   This contract relies on the starter's SQLite-only database and shared DB queue.
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
 - both the task page and polling endpoint show all pending/running rows and at

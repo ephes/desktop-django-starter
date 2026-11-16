@@ -9,6 +9,7 @@
     <span class="hint">Starts a simulated stable routine for the pony crew</span>
     <button type="button" id="run-task-btn" class="primary">Start Routine</button>
 </div>
+<p id="run-task-error" role="alert" hidden></p>
 
 <div id="task-list">
     {% if tasks %}
@@ -222,9 +223,19 @@
                 "X-CSRFToken": csrfToken,
             },
         })
-        .then(function(r) { return r.json(); })
-        .then(function() {
-            startPolling();
+        .then(function(r) {
+            return r.json().catch(function() { return {}; }).then(function(data) {
+                var errorEl = document.getElementById("run-task-error");
+                if (r.ok) {
+                    errorEl.hidden = true;
+                } else {
+                    // Capacity refusals (503) and other failures carry an
+                    // ``error`` message; show it instead of failing silently.
+                    errorEl.textContent = data.error || "The routine could not be started. Please try again.";
+                    errorEl.hidden = false;
+                }
+                startPolling();
+            });
         })
         .catch(function(err) {
             console.error("Run task error:", err);

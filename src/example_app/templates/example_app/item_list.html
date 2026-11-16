@@ -149,7 +149,13 @@
             redirect: "follow"
         }).then(function(response) {
             if (response.ok) {
-                window.location.reload();
+                // Follow the server's clamped redirect: reloading ?page=N
+                // would 404 when the release emptied the last page.
+                if (response.url) {
+                    window.location.assign(response.url);
+                } else {
+                    window.location.reload();
+                }
                 return;
             }
             errorEl.textContent = response.status === 409
@@ -172,7 +178,8 @@
                 method: "POST",
                 headers: { "X-CSRFToken": csrfToken }
             }).then(function() {
-                window.location.reload();
+                // Every page after the first disappears once all ponies are gone.
+                window.location.assign("{% url 'example_app:item-list' %}");
             });
         });
     }

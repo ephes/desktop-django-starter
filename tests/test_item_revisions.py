@@ -138,6 +138,7 @@ def test_modal_submits_list_revision_and_keeps_conflict_visible(client):
     )
     # The token rendered on the list is accepted by the actual delete endpoint.
     url = reverse("example_app:item-delete", args=[item.pk]) + "?page=1"
+    list_url = reverse("example_app:item-list")
     Item.objects.filter(pk=item.pk).update(notes="Newer")
     assert client.post(url, {"revision": revision}).status_code == 409
     harness = r"""
@@ -146,6 +147,7 @@ const vm = require('node:vm');
 const elements = {};
 const listeners = {};
 let reloads = 0;
+const navigations = [];
 let status = 409;
 const calls = [];
 function element(id) {
@@ -169,9 +171,9 @@ vm.runInNewContext(SCRIPT, {
     },
     fetch(url, options) {
         calls.push({url, options});
-        return Promise.resolve({ok: status === 200, status});
+        return Promise.resolve({ok: status === 200, status, url: status === 200 ? LIST_URL : ''});
     },
-    window: {location: {reload() {reloads++;}}},
+    window: {location: {reload() {reloads++;}, assign(target) {navigations.push(target);}}},
 });
 function open() {
     listeners['document:click']({target: {closest() {return link;}}, preventDefault() {}});
@@ -185,6 +187,7 @@ setImmediate(() => {
     assert.equal(body.get('csrfmiddlewaretoken'), 'synthetic-csrf');
     assert.equal(calls[0].options.headers['X-CSRFToken'], 'synthetic-csrf');
     assert.equal(reloads, 0);
+    assert.deepEqual(navigations, []);
     assert.equal(elements['delete-error'].hidden, false);
     assert.match(elements['delete-error'].textContent, /changed/);
     assert.equal(elements['delete-reload'].href, URL);
@@ -195,7 +198,17 @@ setImmediate(() => {
     assert.equal(elements['delete-confirm'].disabled, false);
     status = 200;
     listeners['delete-confirm:click']();
-    setImmediate(() => assert.equal(reloads, 1));
+    setImmediate(() => {
+        // Success follows the server's clamped redirect instead of reloading
+        // a page number that may no longer exist.
+        assert.equal(reloads, 0);
+        assert.deepEqual(navigations, [LIST_URL]);
+        listeners['clear-items-btn:click']();
+        setImmediate(() => {
+            assert.equal(calls.at(-1).url, CLEAR_URL);
+            assert.deepEqual(navigations, [LIST_URL, PLAIN_LIST_URL]);
+        });
+    });
 });
 """
     result = subprocess.run(
@@ -204,7 +217,9 @@ setImmediate(() => {
             "-e",
             f"const SCRIPT={json.dumps(script)}, REVISION={json.dumps(revision)};"
             f"const URL={json.dumps(url)};"
-            + harness,
+            f"const LIST_URL={json.dumps(list_url + '?page=1')};"
+            f"const PLAIN_LIST_URL={json.dumps(list_url)};"
+            f"const CLEAR_URL={json.dumps(reverse('example_app:item-clear'))};" + harness,
         ],
         capture_output=True,
         text=True,

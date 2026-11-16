@@ -103,3 +103,64 @@ def test_final_slot_is_shared_between_web_processes(tmp_path, mode):
         command("inspect"), env=env, check=True, capture_output=True, timeout=10
     )
     assert json.loads(inspection.stdout) == [16, 16]
+
+
+@pytest.mark.django_db
+def test_start_routine_shows_capacity_refusal_message(client):
+    """The page surfaces the 503 refusal text instead of failing silently."""
+    page = client.get(reverse("tasks_demo:task-list")).content.decode()
+    assert 'id="run-task-error"' in page
+    script = next(
+        block.split("</script>")[0] for block in page.split("<script>")[1:] if "RUN_URL" in block
+    )
+    harness = r"""
+const assert = require('node:assert/strict');
+const vm = require('node:vm');
+const elements = {};
+const listeners = {};
+const responses = [
+    {ok: false, status: 503,
+     json: () => Promise.resolve({error: 'All 16 routine slots are busy. Please retry.'})},
+    {ok: true, status: 201, json: () => Promise.resolve({id: 1})},
+];
+function element(id) {
+    return elements[id] ||= {
+        hidden: true, textContent: '', innerHTML: '',
+        addEventListener(event, fn) {listeners[id + ':' + event] = fn;},
+    };
+}
+vm.runInNewContext(SCRIPT, {
+    document: {
+        cookie: 'csrftoken=synthetic',
+        getElementById: element,
+        querySelector() {return null;},
+        querySelectorAll() {return [];},
+    },
+    fetch(url) {
+        if (url === RUN_URL) return Promise.resolve(responses.shift());
+        return new Promise(() => {});
+    },
+    setTimeout() {return 1;},
+    clearTimeout() {},
+    console,
+});
+listeners['run-task-btn:click']();
+setTimeout(() => {
+    assert.equal(elements['run-task-error'].hidden, false);
+    assert.match(elements['run-task-error'].textContent, /slots are busy/);
+    listeners['run-task-btn:click']();
+    setTimeout(() => assert.equal(elements['run-task-error'].hidden, true), 10);
+}, 10);
+"""
+    result = subprocess.run(
+        [
+            "node",
+            "-e",
+            f"const SCRIPT={json.dumps(script)};"
+            f"const RUN_URL={json.dumps(reverse('tasks_demo:task-run'))};" + harness,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
