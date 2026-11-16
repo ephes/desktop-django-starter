@@ -30,8 +30,8 @@ def test_item_list_pages_equal_timestamps_without_omissions(client, django_asser
         seen.extend(item.pk for item in items)
         html = response.content.decode()
         assert f"Page {page} of 6" in html
-        assert f'?page={page + 1}' in html
-        assert f'?page={page}' in html  # CRUD links retain the displayed page.
+        assert f"?page={page + 1}" in html
+        assert f"?page={page}" in html  # CRUD links retain the displayed page.
     response = client.get(reverse("example_app:item-list"), {"page": 6})
     seen.extend(item.pk for item in response.context["items"])
     assert seen == list(Item.objects.order_by("-pk").values_list("pk", flat=True))
@@ -106,6 +106,9 @@ def test_item_crud_flow(client) -> None:
     update_response = client.post(
         reverse("example_app:item-update", args=[item.pk]),
         {
+            "revision": client.get(reverse("example_app:item-update", args=[item.pk])).context[
+                "item_revision"
+            ],
             "title": "Updated item",
             "notes": "Edited in place.",
             "status": Item.Status.DONE,
@@ -117,6 +120,9 @@ def test_item_crud_flow(client) -> None:
     assert item.title == "Updated item"
     assert item.status == Item.Status.DONE
 
-    delete_response = client.post(reverse("example_app:item-delete", args=[item.pk]))
+    delete_url = reverse("example_app:item-delete", args=[item.pk])
+    delete_response = client.post(
+        delete_url, {"revision": client.get(delete_url).context["item_revision"]}
+    )
     assert delete_response.status_code == 302
     assert Item.objects.count() == 0

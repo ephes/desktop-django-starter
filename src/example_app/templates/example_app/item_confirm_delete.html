@@ -5,9 +5,12 @@
 
 {% block content %}
 <div class="confirm-delete">
+    {% if revision_conflict %}<p role="alert">{{ revision_conflict }} <a href="{{ request.get_full_path }}">Reload current pony</a>.</p>{% endif %}
     <p>Release <strong>{{ object.title }}</strong>?</p>
+    <p>{{ object.get_status_display }}: {{ object.notes }}</p>
     <form method="post">
         {% csrf_token %}
+        <input type="hidden" name="revision" value="{{ item_revision }}">
         <div class="actions">
             <button type="submit" class="danger">Release Pony</button>
             <a class="button secondary" href="{% url 'example_app:item-list' %}{% if return_page %}?page={{ return_page }}{% endif %}">Keep It</a>

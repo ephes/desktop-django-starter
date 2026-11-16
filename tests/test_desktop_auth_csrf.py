@@ -67,7 +67,10 @@ def test_shell_auth_and_csrf_are_both_required(credential, action, csrf) -> None
             url = reverse("example_app:item-clear")
         else:
             url = reverse(f"tasks_demo:{action}")
-        response = client.post(url, **headers)
+        data = {}
+        if action == "item-delete" and csrf in {"valid", "no-origin"}:
+            data["revision"] = client.get(url, **headers).context["item_revision"]
+        response = client.post(url, data, **headers)
 
     if csrf not in {"valid", "no-origin"}:
         assert response.status_code == 403

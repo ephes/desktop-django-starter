@@ -236,6 +236,17 @@ Current launcher contract:
   and primary key (descending) so timestamp ties cannot omit rows. Native page
   links and create/edit/delete navigation retain the displayed page; successful
   mutations clamp the return page when the last page disappears.
+- Edit and release requests carry a signed digest of the displayed pony's ID,
+  editable content and update timestamp. SQLite's writer lock is acquired before
+  reloading and comparing that revision, and is held through save/delete. Missing,
+  forged or stale tokens return HTTP 409 without changing the item; edit conflicts
+  keep the submitted input and original token. Reload current pony opens a fresh
+  form/confirmation. Invalid forms also retain their original revision. CSRF and
+  shell authentication still apply independently. No schema migration is needed.
+- The list's release modal submits the row's displayed revision and keeps conflicts
+  visible with a link to the current confirmation page. That page shows the full
+  current personality/status before a fresh release. Release All Ponies remains
+  the explicit whole-stable action.
 - Start Routine admits at most 16 pending/running demo rows globally. A no-op
   UPDATE on the existing routine table takes SQLite's writer lock before the
   count; admission and both demo/backend inserts share that transaction, including
