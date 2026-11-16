@@ -232,6 +232,16 @@ Current launcher contract:
 - existing secret keys are read once through a descriptor, with final symlinks/reparse points refused, regular-file and size checks (4096 bytes maximum), and POSIX ownership and descriptor permission checks; Windows uses `CreateFileW` with `FILE_FLAG_OPEN_REPARSE_POINT` and relies on app-data ACLs
 - no shell injects a `DJANGO_SECRET_KEY`; when the environment does not provide one, packaged settings generate a per-install `DJANGO_SECRET_KEY` in the app-data directory (`secret_key`, created once with `secrets.token_urlsafe(50)` and owner-only `0600` permissions on POSIX) and reuse it on later starts, so every install signs sessions, CSRF tokens, and password-reset links with its own key; an explicit `DJANGO_SECRET_KEY` environment variable still wins
 - packaged Django settings keep SQLite in per-user app data and now add desktop-oriented SQLite tuning with `transaction_mode=IMMEDIATE`, a 20-second timeout, `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, and modest cache/mmap settings
+- My Ponies uses 20-row database pages, ordered by update time, creation time
+  and primary key (descending) so timestamp ties cannot omit rows. Native page
+  links and create/edit/delete navigation retain the displayed page; successful
+  mutations clamp the return page when the last page disappears.
+- Start Routine admits at most 16 pending/running demo rows globally. A no-op
+  UPDATE on the existing routine table takes SQLite's writer lock before the
+  count; admission and both demo/backend inserts share that transaction, including
+  in local mode with deferred transactions. A full queue returns HTTP 503 with
+  `Retry-After: 1` and creates neither row. Terminal history does not consume slots.
+  This contract relies on the starter's SQLite-only database and shared DB queue.
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
 - both the task page and polling endpoint show all pending/running rows and at
   most 100 terminal rows, selected by newest completion time (then creation time

@@ -9,7 +9,7 @@
     {% csrf_token %}
     {{ form.as_p }}
     <div class="actions actions-right">
-        <a class="button secondary" href="{% url 'example_app:item-list' %}">Cancel</a>
+        <a class="button secondary" href="{% url 'example_app:item-list' %}{% if return_page %}?page={{ return_page }}{% endif %}">Cancel</a>
         <button type="submit" class="primary">{% if object %}Save Changes{% else %}Save{% endif %}</button>
     </div>
 </form>

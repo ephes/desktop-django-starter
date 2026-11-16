@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Paginate My Ponies in stable 20-row database pages and retain return navigation.
+- Atomically limit active routines to 16 across desktop windows, returning a
+  retryable refusal at capacity without orphan queue entries.
+
 - Smoke only the uniquely changed Tauri bundle in the current Cargo target output,
   retaining stale/unrelated artifacts and refusing ambiguous builds. Non-triple
   directories in a shared target dir are skipped, and build output lists only

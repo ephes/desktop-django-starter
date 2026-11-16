@@ -15,6 +15,38 @@ def test_item_list_empty_state(client) -> None:
     assert "The stable is empty right now." in response.content.decode()
 
 
+def test_item_list_pages_equal_timestamps_without_omissions(client, django_assert_num_queries):
+    from django.utils import timezone
+
+    Item.objects.bulk_create([Item(title=f"Pony {i}") for i in range(103)])
+    Item.objects.update(created_at=timezone.now(), updated_at=timezone.now())
+    seen = []
+    for page in range(1, 6):
+        with django_assert_num_queries(2):
+            response = client.get(reverse("example_app:item-list"), {"page": page})
+        assert response.status_code == 200
+        items = list(response.context["items"])
+        assert len(items) == (20 if page < 6 else 3)
+        seen.extend(item.pk for item in items)
+        html = response.content.decode()
+        assert f"Page {page} of 6" in html
+        assert f'?page={page + 1}' in html
+        assert f'?page={page}' in html  # CRUD links retain the displayed page.
+    response = client.get(reverse("example_app:item-list"), {"page": 6})
+    seen.extend(item.pk for item in response.context["items"])
+    assert seen == list(Item.objects.order_by("-pk").values_list("pk", flat=True))
+    assert 'rel="next"' not in response.content.decode()
+
+
+def test_item_create_returns_to_displayed_page(client):
+    Item.objects.bulk_create([Item(title=f"Pony {i}") for i in range(21)])
+    response = client.post(
+        reverse("example_app:item-create") + "?page=2",
+        {"title": "New pony", "notes": "Synthetic", "status": Item.Status.ACTIVE},
+    )
+    assert response.url == reverse("example_app:item-list") + "?page=2"
+
+
 def test_seed_demo_content_seeds_brand_new_database() -> None:
     call_command("seed_demo_content")
 
