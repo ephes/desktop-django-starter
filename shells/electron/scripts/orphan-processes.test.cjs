@@ -342,3 +342,41 @@ test("Windows inventory retains creation identity and termination rechecks its f
   assert.ok(command.includes(`$p.Name -ceq '${entry.program}'`));
   assert.ok(command.includes(`$p.CommandLine -ceq '${entry.commandLine}'`));
 });
+
+test("Windows inventory and termination use UTF-8 output for non-ASCII command lines", async () => {
+  const entry = {
+    ...candidate(), program: "python.exe", generation: "2026-11-15T12:00:00.0000000Z",
+    commandLine: `C:\\Users\\Jürgen\\AppData\\python.exe ${candidate().commandLine}`
+  };
+  let inventoryScript;
+  const rows = await listProcesses("win32", KEY, async (_tool, args) => {
+    inventoryScript = args.at(-1);
+    return `\uFEFF${entry.pid}\t${entry.generation}\t${entry.program}\t${entry.commandLine}\r\n`;
+  });
+  assert.ok(inventoryScript.startsWith("[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; "));
+  assert.deepEqual(rows, [entry]);
+  let command;
+  let observations = 0;
+  assert.equal(await stopPid(entry, KEY, {
+    platform: "win32", reapMs: 0,
+    inventory: async () => observations++ === 0 ? rows : [],
+    run: async (_tool, args) => { command = args.at(-1); }
+  }), true);
+  assert.ok(command.startsWith("[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; "));
+  assert.ok(command.includes("Jürgen"));
+});
+
+test("Windows termination waits several inventory rounds by default", async () => {
+  const entry = { ...candidate(), program: "python.exe", generation: "2026-11-15T12:00:00.0000000Z" };
+  let observations = 0;
+  assert.equal(await stopPid(entry, KEY, {
+    platform: "win32",
+    inventory: async () => {
+      observations++;
+      await new Promise(resolve => setTimeout(resolve, 200));
+      return observations <= 4 ? [entry] : [];
+    },
+    run: async () => {}
+  }), true);
+  assert.ok(observations >= 5);
+});

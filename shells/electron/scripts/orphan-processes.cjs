@@ -210,6 +210,13 @@ function execFileText(command, args, {
   });
 }
 
+// Windows PowerShell 5.1 writes redirected output in the OEM code page, which
+// turns non-ASCII command lines (e.g. user profile paths) into U+FFFD and
+// breaks the exact identity recheck. Force BOM-less UTF-8 to match execFile.
+const WINDOWS_UTF8_OUTPUT = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; ";
+// One CIM inventory can take longer than 500 ms on Windows; allow several.
+const WINDOWS_REAP_MS = 5000;
+
 function windowsSystemTool(name) {
   return path.join(process.env.SystemRoot || "C:\\Windows", "System32", name);
 }
@@ -226,7 +233,7 @@ function parseGenerationColumns(text) {
 
 async function listProcesses(platform = process.platform, appKey = "", run = execFileText) {
   if (platform === "win32") {
-    const script = [
+    const script = WINDOWS_UTF8_OUTPUT + [
       "Get-CimInstance Win32_Process -ErrorAction Stop",
       `| Where-Object { $_.CommandLine -like '*${guardMarker(appKey)}*' }`,
       '| ForEach-Object { "$($_.ProcessId)`t$($_.CreationDate.ToUniversalTime().ToString(\'o\'))`t$($_.Name)`t$($_.CommandLine)" }'
@@ -235,7 +242,7 @@ async function listProcesses(platform = process.platform, appKey = "", run = exe
       windowsSystemTool(path.join("WindowsPowerShell", "v1.0", "powershell.exe")),
       ["-NoProfile", "-NonInteractive", "-Command", script]
     );
-    return output.split(/\r?\n/).filter(Boolean).map(line => {
+    return output.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean).map(line => {
       const [pid, generation, program, ...args] = line.split("\t");
       if (!/^\d+$/.test(pid) || !generation || !program || !args.length) {
         throw new Error("Incomplete Windows process identity.");
@@ -267,7 +274,7 @@ function sameProcess(current, observed, appKey) {
 async function stopPid(observed, appKey, {
   platform = process.platform, inventory = () => listProcesses(platform, appKey),
   signal = process.kill, run = execFileText,
-  graceMs = STOP_GRACE_PERIOD_MS, reapMs = 500
+  graceMs = STOP_GRACE_PERIOD_MS, reapMs = platform === "win32" ? WINDOWS_REAP_MS : 500
 } = {}) {
   if (!observed.generation) throw new Error("Missing process generation; refusing to signal.");
   async function stillOwned() {
@@ -288,7 +295,7 @@ async function stopPid(observed, appKey, {
     // taskkill /t: descendants have not individually passed identity admission.
     const literal = value => String(value).replace(/'/g, "''");
     const stamp = literal(observed.generation);
-    const script = `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${observed.pid}" -ErrorAction Stop; `
+    const script = WINDOWS_UTF8_OUTPUT + `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${observed.pid}" -ErrorAction Stop; `
       + `if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -ceq '${stamp}' `
       + `-and $p.Name -ceq '${literal(observed.program)}' `
       + `-and $p.CommandLine -ceq '${literal(observed.commandLine)}') { `

@@ -329,7 +329,7 @@ target-project/
 │       ├── materialize-symlinks.cjs         # portability: symlinks → copies
 │       ├── prune-bundled-python-runtime.cjs # strip tkinter/idle from bundle
 │       ├── auth-token.cjs, window-guards.cjs, process-exit-policy.cjs, updates.cjs
-│       ├── orphan-processes.cjs, quit-guard.cjs  # required by main.js
+│       ├── orphan-processes.cjs, managed-process.cjs, quit-guard.cjs  # required by main.js
 │       └── desktop_process_guard.py         # copied from the starter's scripts/;
 │                                            # staged next to manage.py
 ├── .stage/                                  # (gitignored) staged backend
