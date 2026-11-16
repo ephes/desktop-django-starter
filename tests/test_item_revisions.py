@@ -130,6 +130,7 @@ def test_modal_submits_list_revision_and_keeps_conflict_visible(client):
 
     item = Item.objects.create(title="Displayed", notes="Displayed")
     page = client.get(reverse("example_app:item-list")).content.decode()
+    inventory_revision = client.get(reverse("example_app:item-list")).context["inventory_revision"]
     revision = re.search(r'data-revision="([^"]+)"', page)[1]
     script = next(
         block.split("</script>")[0]
@@ -205,8 +206,27 @@ setImmediate(() => {
         assert.deepEqual(navigations, [LIST_URL]);
         listeners['clear-items-btn:click']();
         setImmediate(() => {
-            assert.equal(calls.at(-1).url, CLEAR_URL);
-            assert.deepEqual(navigations, [LIST_URL, PLAIN_LIST_URL]);
+            // Opening the clear dialog must not delete anything yet.
+            assert.equal(calls.length, 2);
+            assert.match(elements['delete-modal-title'].textContent, /all 1 ponies/);
+            status = 409;
+            listeners['delete-confirm:click']();
+            setImmediate(() => {
+                assert.equal(calls.at(-1).url, CLEAR_URL);
+                const clearBody = new URLSearchParams(calls.at(-1).options.body);
+                assert.equal(clearBody.get('revision'), INVENTORY_REVISION);
+                assert.equal(elements['delete-error'].hidden, false);
+                assert.match(elements['delete-error'].textContent, /stable changed/);
+                assert.equal(elements['delete-reload'].href, PLAIN_LIST_URL);
+                assert.equal(elements['delete-confirm'].disabled, true);
+                assert.deepEqual(navigations, [LIST_URL]);
+                status = 200;
+                listeners['clear-items-btn:click']();
+                listeners['delete-confirm:click']();
+                setImmediate(() => {
+                    assert.deepEqual(navigations, [LIST_URL, PLAIN_LIST_URL]);
+                });
+            });
         });
     });
 });
@@ -216,6 +236,7 @@ setImmediate(() => {
             "node",
             "-e",
             f"const SCRIPT={json.dumps(script)}, REVISION={json.dumps(revision)};"
+            f"const INVENTORY_REVISION={json.dumps(inventory_revision)};"
             f"const URL={json.dumps(url)};"
             f"const LIST_URL={json.dumps(list_url + '?page=1')};"
             f"const PLAIN_LIST_URL={json.dumps(list_url)};"

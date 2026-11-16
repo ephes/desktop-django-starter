@@ -4,6 +4,11 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 
 ## Unreleased
 
+- Shell responses now use `Cache-Control: private, no-store` for application
+  content and refusals as well as bootstrap. The updated distribution also
+  redacts encoded/duplicate bootstrap credentials in request logs; older cached
+  responses and navigation history are not retroactively removed.
+
 - Bundled interpreter admission now validates schema-v1 manifests, portable
   runtime-relative paths, regular executable files and resolved containment in
   Electron/shared helpers and Tauri. Corrupt or future manifests fail closed;
@@ -20,7 +25,8 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 - First-run demo seeding claims its unique marker before reading content, so
   concurrent SQLite development command callers serialize without read-lock
   upgrades. Failed seeds roll back both marker and ponies; existing user rows
-  and previously seeded empty stables remain untouched.
+  and previously seeded empty stables remain untouched. Existing rows now also
+  commit the decision marker, keeping legacy stables empty after a later clear.
 - Task pages and polling show all active routines plus the latest 100
   completions, using bulk database-backend lookups for active rows. Older history
   stays stored until explicitly cleared; no automatic retention or pagination.

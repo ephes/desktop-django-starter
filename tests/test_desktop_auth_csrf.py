@@ -70,6 +70,10 @@ def test_shell_auth_and_csrf_are_both_required(credential, action, csrf) -> None
         data = {}
         if action == "item-delete" and csrf in {"valid", "no-origin"}:
             data["revision"] = client.get(url, **headers).context["item_revision"]
+        if action == "item-clear" and csrf in {"valid", "no-origin"}:
+            data["revision"] = client.get(reverse("example_app:item-list"), **headers).context[
+                "inventory_revision"
+            ]
         response = client.post(url, data, **headers)
 
     if csrf not in {"valid", "no-origin"}:

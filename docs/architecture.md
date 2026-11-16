@@ -50,6 +50,26 @@ and `Referrer-Policy: no-referrer` on success and failure, including when no
 launch token is configured. Safe relative redirects and the HttpOnly,
 `SameSite=Strict` cookie still apply. These headers govern response storage and
 referrer forwarding; they do not promise to erase web view navigation history.
+When a shell token is configured or required, the middleware applies
+`Cache-Control: private, no-store` to every response (including GET/HEAD, forms,
+task JSON, packaged-mode static assets, CSRF refusals, retired-token refusals and a missing
+required-token configuration). It overrides downstream `public` caching. Local
+development without shell authentication keeps its existing cache behavior,
+except for the always-private bootstrap route. Token and CSRF admission rules
+are unchanged; these headers do not erase copies cached by older app versions.
+In development with `DEBUG=True`, `runserver`'s static-files handler answers
+`/static/` before any middleware, so those assets keep Django's default headers.
+
+Django's request-log filter redacts every bootstrap query member whose decoded
+name is `token`, including percent-encoded aliases and duplicate members. It
+formats positional or mapping-style arguments before redaction, preserves safe
+URL structure and also recognizes percent-encoded bootstrap paths and repeated
+leading slashes (which `http.server` routes as a single `/`). The query runs to
+the end of the raw request target, so members after a raw `#` or quote are still
+redacted; only a closing quote of the logged request line stays outside. A record whose
+arguments cannot be formatted keeps only its redacted template instead of raising
+at the logging call site. Credentials must stay out of terminal/system logs even
+when Django accepts a nonliteral key.
 
 Current shell split note:
 
@@ -247,8 +267,17 @@ Current launcher contract:
   shell authentication still apply independently. No schema migration is needed.
 - The list's release modal submits the row's displayed revision and keeps conflicts
   visible with a link to the current confirmation page. That page shows the full
-  current personality/status before a fresh release. Release All Ponies remains
-  the explicit whole-stable action.
+  current personality/status before a fresh release. Release All Ponies opens an
+  explicit confirmation for the total stable count, including other pages. Its
+  signed inventory digest and page rows come from one deferred SQLite read
+  snapshot. Even under packaged `IMMEDIATE` transactions the list read never
+  takes the writer lock, so it does not wait for or block other writers. The
+  digest streams all IDs, content and update timestamps in primary-key order.
+  Confirmation acquires SQLite's writer before verifying the digest and deleting.
+  Any addition, edit or release since the displayed snapshot returns HTTP 409;
+  the modal preserves the conflict and links to a fresh stable view. A successful
+  clear cannot be replayed against the now-empty inventory. No migration is needed;
+  reading a list adds one streaming inventory query across the whole stable.
 - Start Routine admits at most 16 pending/running demo rows globally. A no-op
   UPDATE on the existing routine table takes SQLite's writer lock before the
   count; admission and both demo/backend inserts share that transaction, including
@@ -335,8 +364,9 @@ First-run demo seeding uses a unique `DemoContentState` marker as its first
 transactional write, before checking for existing user content. This serializes
 concurrent SQLite command callers under both development's deferred transactions
 and packaged `IMMEDIATE` transactions. The marker and all three ponies commit
-together; failure rolls them all back. Existing user content skips the seed
-without recording a marker. Call the helper before doing reads in a caller-owned
+together; failure rolls them all back and permits a later retry. Existing user
+content skips insertion but commits the marker, so clearing legacy rows and
+reopening the database cannot make it look new again. Call the helper before doing reads in a caller-owned
 SQLite transaction; it cannot upgrade a caller's pre-existing read snapshot.
 
 ## Deferred Areas

@@ -41,8 +41,8 @@ def seed_first_run_demo_content() -> int:
             # upgrade concurrent read snapshots to write locks. The unique
             # marker arbitrates seed ownership and rolls back with the ponies.
             DemoContentState.objects.create(key=seed_marker)
+            # Existing content is also a durable first-run decision.
             if Item.objects.exists():
-                transaction.set_rollback(True)
                 return 0
             for pony in FIRST_RUN_PONIES:
                 Item.objects.create(title=pony.title, notes=pony.notes, status=pony.status)

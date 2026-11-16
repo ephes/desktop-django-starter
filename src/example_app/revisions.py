@@ -27,3 +27,25 @@ def matches_displayed_revision(item: Item, token: str) -> bool:
     except signing.BadSignature:
         return False
     return isinstance(revision, str) and constant_time_compare(revision, _content_revision(item))
+
+
+INVENTORY_SALT = "example_app.inventory-revision"
+
+
+def _inventory_revision() -> str:
+    digest = hashlib.sha256()
+    for item in Item.objects.order_by("pk").iterator():
+        digest.update(_content_revision(item).encode("ascii"))
+    return digest.hexdigest()
+
+
+def displayed_inventory_revision() -> str:
+    return signing.dumps(_inventory_revision(), salt=INVENTORY_SALT)
+
+
+def matches_inventory_revision(token: str) -> bool:
+    try:
+        revision = signing.loads(token, salt=INVENTORY_SALT)
+    except signing.BadSignature:
+        return False
+    return isinstance(revision, str) and constant_time_compare(revision, _inventory_revision())

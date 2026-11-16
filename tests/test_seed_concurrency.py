@@ -32,6 +32,10 @@ if role == 'setup':
     call_command('migrate', verbosity=0)
     if existing == 'yes':
         Item.objects.create(title='User pony', notes='Keep me')
+elif role == 'seed':
+    print(seed_first_run_demo_content())
+elif role == 'clear':
+    Item.objects.all().delete()
 elif role == 'inspect':
     print(json.dumps([list(Item.objects.values_list('title', flat=True)),
                       DemoContentState.objects.count()]))
@@ -99,7 +103,7 @@ def test_concurrent_seed_processes(tmp_path, mode, existing):
     )
     titles, markers = json.loads(inspection.stdout)
     assert len(titles) == (1 if existing else 3)
-    assert markers == (0 if existing else 1)
+    assert markers == 1
     if existing:
         assert titles == ["User pony"]
 
@@ -121,6 +125,30 @@ def test_failed_seed_rolls_back_marker_and_all_ponies(monkeypatch):
         seed_first_run_demo_content()
     assert not Item.objects.exists()
     assert not DemoContentState.objects.exists()
+    monkeypatch.setattr(Item.objects, "create", create)
+    assert seed_first_run_demo_content() == 3
     # The caller's transaction remains usable after the seed's savepoint rolls back.
     with transaction.atomic():
         Item.objects.create(title="Caller pony")
+
+
+@pytest.mark.parametrize("mode", ["local", "packaged"])
+def test_existing_content_decision_survives_clear_and_reopen(tmp_path, mode):
+    env = {**os.environ, "PYTHONPATH": str(ROOT / "src")}
+
+    def run(role):
+        return subprocess.run(
+            [sys.executable, "-c", SCRIPT, str(tmp_path), mode, role, "yes"],
+            env=env,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        ).stdout
+
+    run("setup")
+    assert int(run("seed")) == 0
+    run("clear")
+    # Each command owns a fresh process/SQLite connection, as on a later launch.
+    assert int(run("seed")) == 0
+    assert json.loads(run("inspect")) == [[], 1]
