@@ -6,16 +6,21 @@ import logging
 import re
 from urllib.parse import unquote, unquote_plus, urlsplit
 
+BOOTSTRAP_PATH = "/desktop-auth/bootstrap/"
 _QUERY_URL = re.compile(r"(/[^\s\"'?#]*\?)([^\s\"'#]*)")
 
 
 def _redact_query(match: re.Match[str]) -> str:
     prefix, query = match.groups()
+    raw_path = prefix[:-1]
+    # http.server routes a leading "//" as "/" (gh-87389), so compare the
+    # normalized path too; urlsplit would read "//desktop-auth" as a netloc.
+    paths = {"/" + unquote(raw_path).lstrip("/")}
     try:
-        path = unquote(urlsplit(prefix).path)
+        paths.add(unquote(urlsplit(raw_path).path))
     except ValueError:
-        return match.group()
-    if path != "/desktop-auth/bootstrap/":
+        pass
+    if BOOTSTRAP_PATH not in paths:
         return match.group()
     members = []
     for member in query.split("&"):
@@ -39,6 +44,13 @@ class RedactDesktopAuthToken(logging.Filter):
     def filter(self, record: logging.LogRecord) -> bool:
         # Format first so tuple/mapping placeholders inside the URL cannot
         # reintroduce a credential after redaction or lose their placeholder.
-        record.msg = _QUERY_URL.sub(_redact_query, record.getMessage())
+        try:
+            message = record.getMessage()
+        except Exception:
+            # A malformed record must not raise at the logging call site, and
+            # handleError would print its raw arguments. Keep only the
+            # redacted template.
+            message = str(record.msg)
+        record.msg = _QUERY_URL.sub(_redact_query, message)
         record.args = ()
         return True

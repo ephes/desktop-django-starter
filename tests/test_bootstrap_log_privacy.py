@@ -19,12 +19,15 @@ EARLIER = "synthetic-earlier-credential"
         ("/desktop-auth/bootstrap/", f"token={EARLIER}&token={TOKEN}&next=%2F"),
         ("/desktop-auth/bootstrap/", f"to%6Ben={EARLIER}&%74oken={TOKEN}&next=%2F"),
         ("/desktop-auth/%62ootstrap/", f"%74oken={TOKEN}&next=%2F"),
+        ("//desktop-auth/bootstrap/", f"token={TOKEN}&next=%2F"),
+        ("///desktop-auth/%62ootstrap/", f"%74oken={TOKEN}&next=%2F"),
     ],
 )
 def test_formatted_logs_hide_every_canonical_token_member(client, form, path, query):
     url = f"{path}?{query}"
+    # http.server routes a leading "//" as "/"; the request log keeps the raw line.
     with override_settings(DESKTOP_DJANGO_AUTH_TOKEN=TOKEN):
-        assert client.get(url).status_code == 302
+        assert client.get("/" + url.lstrip("/")).status_code == 302
     request_line = f"GET {url} HTTP/1.1"
     if form == "message":
         message, args = f'"{request_line}" 302 0', ()
@@ -78,3 +81,18 @@ def test_malformed_unrelated_url_does_not_break_logging():
     record = logging.LogRecord("django.server", logging.INFO, __file__, 1, "GET //[?x=y", (), None)
     assert RedactDesktopAuthToken().filter(record)
     assert record.getMessage() == "GET //[?x=y"
+
+
+@pytest.mark.parametrize(
+    "message,args",
+    [
+        ("GET /desktop-auth/bootstrap/?token=%s %d", (TOKEN,)),
+        ("GET /desktop-auth/bootstrap/?token=%(token)s", (TOKEN,)),
+    ],
+)
+def test_unformattable_record_neither_raises_nor_leaks(message, args):
+    record = logging.LogRecord("django.server", logging.INFO, __file__, 1, message, args, None)
+    assert RedactDesktopAuthToken().filter(record)
+    formatted = logging.Formatter("%(message)s").format(record)
+    assert TOKEN not in formatted
+    assert "token=[redacted]" in formatted
