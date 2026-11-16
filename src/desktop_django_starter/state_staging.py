@@ -40,6 +40,9 @@ def initialization_lock(root: Path) -> Iterator[None]:
         admit(path)
     descriptor = os.open(path, flags, 0o600)
     locked = False
+    # Track the body's own outcome: inside a generator, sys.exc_info() also
+    # reports an exception the caller is handling, which is not ours.
+    primary: BaseException | None = None
     try:
         before = admit(path)
         if identity(before) != identity(os.fstat(descriptor)):
@@ -70,18 +73,37 @@ def initialization_lock(root: Path) -> Iterator[None]:
             os.lseek(descriptor, 0, os.SEEK_SET)
             os.write(descriptor, b"0")
         yield
+    except BaseException as error:
+        primary = error
+        raise
     finally:
-        if locked:
-            if os.name == "nt":
-                import msvcrt
+        unlock_error: OSError | None = None
+        try:
+            if locked:
+                if os.name == "nt":
+                    import msvcrt
 
-                os.lseek(descriptor, 0, os.SEEK_SET)
-                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
+                else:
+                    import fcntl
+
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+        except OSError as error:
+            if primary is None:
+                unlock_error = error
             else:
-                import fcntl
-
-                fcntl.flock(descriptor, fcntl.LOCK_UN)
-        os.close(descriptor)
+                logger.warning(
+                    "Initialization unlock failed; closing owned descriptor", exc_info=True
+                )
+        try:
+            os.close(descriptor)
+        except OSError:
+            if primary is None and unlock_error is None:
+                raise
+            logger.warning("Initialization descriptor close failed", exc_info=True)
+        if unlock_error is not None:
+            raise unlock_error
 
 
 def sync_file(path: Path) -> None:

@@ -96,6 +96,28 @@ function validateRuntimeManifest(manifest, backendRoot) {
   return manifest;
 }
 
+// JSON.parse validates grammar; this bounded token pass rejects ambiguous object keys,
+// including escaped spellings and objects inside unknown fields/arrays.
+function parseManifest(text) {
+  const value = JSON.parse(text);
+  const stack = [];
+  for (const match of text.matchAll(/"(?:[^"\\]|\\[\s\S])*"|[{}\[\],:]|[^\s{}\[\],:]+/g)) {
+    const token = match[0];
+    const frame = stack.at(-1);
+    if (token === "{") stack.push({ keys: new Set(), key: true });
+    else if (token === "[") stack.push({});
+    else if (token === "}" || token === "]") stack.pop();
+    else if (token === "," && frame?.keys) frame.key = true;
+    else if (token.startsWith('"') && frame?.key) {
+      const key = JSON.parse(token);
+      if (frame.keys.has(key)) throw new Error("Duplicate runtime manifest member.");
+      frame.keys.add(key);
+      frame.key = false;
+    }
+  }
+  return value;
+}
+
 function loadRuntimeManifest(backendRoot) {
   const manifestPath = getRuntimeManifestPath(backendRoot);
   let descriptor;
@@ -115,7 +137,7 @@ function loadRuntimeManifest(backendRoot) {
       length += count;
     }
     if (length > MAX_MANIFEST_BYTES) throw new Error("Manifest exceeds 65536 bytes.");
-    return validateRuntimeManifest(JSON.parse(buffer.subarray(0, length).toString("utf8")), backendRoot);
+    return validateRuntimeManifest(parseManifest(buffer.subarray(0, length).toString("utf8")), backendRoot);
   } catch (error) {
     throw new Error(`Invalid runtime manifest ${manifestPath}: ${error.message}`, { cause: error });
   } finally {

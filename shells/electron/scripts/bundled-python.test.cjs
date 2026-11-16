@@ -221,3 +221,21 @@ test("legacy discovery rejects directories and escaping interpreter links", () =
   fs.symlinkSync(path.join(root, "external"), executable);
   assert.throws(() => resolveBundledPythonExecutable(root), /No bundled Python/);
 }));
+
+for (const [key, duplicate] of [
+  ['schemaVersion', '"schemaVersion":2,"schemaVersion":1'],
+  ['python', '"python":{},"python"'],
+  ['executable', '"executable":"python/bin/other","executable":"python/bin/python3"'],
+  ['launcher', '"launcher":{},"launcher"'],
+  ['escaped', '"schemaVersion":2,"schema\\u0056ersion":1'],
+  ['unknown', '"extra":[{"key":1,"key":2}],"schemaVersion":1']
+]) {
+  test(`manifest refuses duplicate ${key} members before interpreter selection`, () => withTempBackend(root => {
+    let text = JSON.stringify(validManifest(root));
+    if (key === 'python' || key === 'launcher') text = text.replace(`"${key}"`, duplicate);
+    else if (key === 'executable') text = text.replace('"executable":"python/bin/python3"', duplicate);
+    else text = text.replace('"schemaVersion":1', duplicate);
+    fs.writeFileSync(path.join(root, 'runtime-manifest.json'), text);
+    assert.throws(() => loadRuntimeManifest(root), /[Dd]uplicate/);
+  }));
+}

@@ -6,6 +6,68 @@ use std::path::{Path, PathBuf};
 
 const MAX_MANIFEST_BYTES: u64 = 65536;
 
+// Deserialize through public Serde visitors so duplicate members are refused at
+// every depth, including unknown extension objects and objects inside arrays.
+struct ManifestValue(Value);
+impl<'de> serde::Deserialize<'de> for ManifestValue {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = ManifestValue;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("unambiguous runtime manifest JSON")
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(ManifestValue(Value::Null))
+            }
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(ManifestValue(v.into()))
+            }
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(ManifestValue(v.into()))
+            }
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+                Ok(ManifestValue(v.into()))
+            }
+            fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
+                serde_json::Number::from_f64(v)
+                    .map(|n| ManifestValue(Value::Number(n)))
+                    .ok_or_else(|| E::custom("Invalid JSON number"))
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(ManifestValue(v.into()))
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = Vec::new();
+                while let Some(ManifestValue(value)) = seq.next_element()? {
+                    values.push(value);
+                }
+                Ok(ManifestValue(Value::Array(values)))
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = serde_json::Map::new();
+                while let Some(key) = map.next_key::<String>()? {
+                    if values.contains_key(&key) {
+                        return Err(serde::de::Error::custom(
+                            "Duplicate runtime manifest member",
+                        ));
+                    }
+                    let ManifestValue(value) = map.next_value()?;
+                    values.insert(key, value);
+                }
+                Ok(ManifestValue(Value::Object(values)))
+            }
+        }
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
 fn relative(root: &Path, value: &Value) -> Result<PathBuf, String> {
     let value = value.as_str().ok_or("Expected a relative path string")?;
     if value.split('/').any(|part| {
@@ -87,6 +149,48 @@ fn usable(root: &Path, executable: PathBuf) -> Result<PathBuf, String> {
     Ok(executable)
 }
 
+fn open_manifest(path: &Path, expected: &fs::Metadata) -> Result<fs::File, String> {
+    let mut options = fs::OpenOptions::new();
+    options.read(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK);
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // FILE_FLAG_OPEN_REPARSE_POINT: inspect the entry itself, never its target.
+        options.custom_flags(0x00200000);
+    }
+    #[cfg(not(any(unix, windows)))]
+    return Err("Unsupported manifest descriptor policy".into());
+    let file = options.open(path).map_err(|e| e.to_string())?;
+    let opened = file.metadata().map_err(|e| e.to_string())?;
+    if !opened.is_file() || opened.len() > MAX_MANIFEST_BYTES {
+        return Err("Expected a bounded regular file".into());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if (expected.dev(), expected.ino()) != (opened.dev(), opened.ino()) {
+            return Err("Runtime manifest changed before open".into());
+        }
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        if opened.file_attributes() & 0x400 != 0
+            || expected.creation_time() != opened.creation_time()
+            || expected.last_write_time() != opened.last_write_time()
+            || expected.file_size() != opened.file_size()
+        {
+            return Err("Runtime manifest changed or is a reparse point".into());
+        }
+    }
+    Ok(file)
+}
+
 pub(super) fn resolve_bundled_python_executable(root: &Path) -> Result<PathBuf, String> {
     let manifest_path = root.join("runtime-manifest.json");
     let metadata = match fs::symlink_metadata(&manifest_path) {
@@ -99,7 +203,7 @@ pub(super) fn resolve_bundled_python_executable(root: &Path) -> Result<PathBuf, 
             if !metadata.is_file() || metadata.len() > MAX_MANIFEST_BYTES {
                 return Err("Expected a regular file of at most 65536 bytes".into());
             }
-            let file = fs::File::open(&manifest_path).map_err(|e| e.to_string())?;
+            let file = open_manifest(&manifest_path, &metadata)?;
             let opened = file.metadata().map_err(|e| e.to_string())?;
             if !opened.is_file() || opened.len() > MAX_MANIFEST_BYTES {
                 return Err("Expected a bounded regular file".into());
@@ -111,7 +215,8 @@ pub(super) fn resolve_bundled_python_executable(root: &Path) -> Result<PathBuf, 
             if bytes.len() as u64 > MAX_MANIFEST_BYTES {
                 return Err("Manifest exceeds 65536 bytes".into());
             }
-            let manifest: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+            let ManifestValue(manifest) =
+                serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
             usable(root, validate(&manifest, root)?)
         };
         return read()
@@ -143,6 +248,55 @@ mod tests {
             "executable":"python/bin/python3", "purelib":"python/lib/site-packages", "scripts":"python/bin"},
             "launcher":{"cwd":".", "managePy":"manage.py", "sourceRoot":"src",
                 "settingsModule":"desktop_django_starter.settings.packaged", "environment":[]}})
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replaced_manifest_symlink_is_refused_at_open() {
+        use std::os::unix::fs::symlink;
+        let root = std::env::temp_dir().join(format!("dds-open-symlink-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("runtime-manifest.json");
+        fs::write(&path, manifest().to_string()).unwrap();
+        let before = fs::symlink_metadata(&path).unwrap();
+        fs::rename(&path, root.join("foreign")).unwrap();
+        symlink(root.join("foreign"), &path).unwrap();
+        assert!(open_manifest(&path, &before).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replaced_manifest_fifo_is_refused_without_blocking() {
+        let root = std::env::temp_dir().join(format!("dds-open-fifo-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("runtime-manifest.json");
+        fs::write(&path, manifest().to_string()).unwrap();
+        let before = fs::symlink_metadata(&path).unwrap();
+        fs::remove_file(&path).unwrap();
+        assert!(std::process::Command::new("mkfifo")
+            .arg(&path)
+            .status()
+            .unwrap()
+            .success());
+        let started = std::time::Instant::now();
+        assert!(open_manifest(&path, &before).is_err());
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn replaced_regular_manifest_identity_is_refused() {
+        let root = std::env::temp_dir().join(format!("dds-open-identity-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("runtime-manifest.json");
+        fs::write(&path, manifest().to_string()).unwrap();
+        let before = fs::symlink_metadata(&path).unwrap();
+        fs::rename(&path, root.join("previous")).unwrap();
+        fs::write(&path, manifest().to_string()).unwrap();
+        assert!(open_manifest(&path, &before).is_err());
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]
@@ -189,6 +343,16 @@ mod tests {
         #[cfg(not(windows))]
         assert!(resolve_bundled_python_executable(&root).is_ok());
         for value in [
+            manifest()
+                .to_string()
+                .replacen("{", "{\"schemaVersion\":2,", 1),
+            manifest().to_string().replace(
+                "\"python\":{",
+                "\"python\":{\"executable\":\"python/bin/other\",",
+            ),
+            manifest()
+                .to_string()
+                .replacen("{", "{\"extra\":[{\"k\":1,\"k\":2}],", 1),
             "null".to_string(),
             "[]".into(),
             " ".repeat(65537),
