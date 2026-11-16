@@ -232,6 +232,30 @@ Current launcher contract:
 - existing secret keys are read once through a descriptor, with final symlinks/reparse points refused, regular-file and size checks (4096 bytes maximum), and POSIX ownership and descriptor permission checks; Windows uses `CreateFileW` with `FILE_FLAG_OPEN_REPARSE_POINT` and relies on app-data ACLs
 - no shell injects a `DJANGO_SECRET_KEY`; when the environment does not provide one, packaged settings generate a per-install `DJANGO_SECRET_KEY` in the app-data directory (`secret_key`, created once with `secrets.token_urlsafe(50)` and owner-only `0600` permissions on POSIX) and reuse it on later starts, so every install signs sessions, CSRF tokens, and password-reset links with its own key; an explicit `DJANGO_SECRET_KEY` environment variable still wins
 - packaged Django settings keep SQLite in per-user app data and now add desktop-oriented SQLite tuning with `transaction_mode=IMMEDIATE`, a 20-second timeout, `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, and modest cache/mmap settings
+- My Ponies uses 20-row database pages, ordered by update time, creation time
+  and primary key (descending) so timestamp ties cannot omit rows. Native page
+  links and create/edit/delete navigation retain the displayed page; successful
+  mutations clamp the return page when the last page disappears. The release
+  modal follows that clamped redirect, and Release All Ponies returns to the
+  first page, so neither reloads a page number that no longer exists.
+- Edit and release requests carry a signed digest of the displayed pony's ID,
+  editable content and update timestamp. SQLite's writer lock is acquired before
+  reloading and comparing that revision, and is held through save/delete. Missing,
+  forged or stale tokens return HTTP 409 without changing the item; edit conflicts
+  keep the submitted input and original token. Reload current pony opens a fresh
+  form/confirmation. Invalid forms also retain their original revision. CSRF and
+  shell authentication still apply independently. No schema migration is needed.
+- The list's release modal submits the row's displayed revision and keeps conflicts
+  visible with a link to the current confirmation page. That page shows the full
+  current personality/status before a fresh release. Release All Ponies remains
+  the explicit whole-stable action.
+- Start Routine admits at most 16 pending/running demo rows globally. A no-op
+  UPDATE on the existing routine table takes SQLite's writer lock before the
+  count; admission and both demo/backend inserts share that transaction, including
+  in local mode with deferred transactions. A full queue returns HTTP 503 with
+  `Retry-After: 1` and creates neither row; the page shows the refusal message
+  next to Start Routine. Terminal history does not consume slots.
+  This contract relies on the starter's SQLite-only database and shared DB queue.
 - the `/tasks/` demo uses the same SQLite database file as the web app, via the `django_tasks_db` backend tables
 - both the task page and polling endpoint show all pending/running rows and at
   most 100 terminal rows, selected by newest completion time (then creation time
@@ -241,6 +265,17 @@ Current launcher contract:
   Fresh completions enter history in the same response. This is a visibility
   limit, not automatic deletion: older terminal rows remain until Clear Finished
   Routines deletes them; history pagination is outside this teaching demo.
+- Shell activity counts queued and running backend tasks in one conditional
+  aggregate statement, so a READY-to-RUNNING transition cannot fall between two
+  counter reads and falsely report idle. Apps without the backend still report
+  zero without a database query; shell quit confirmation uses the same API.
+- Polling selects at most the final 1024 characters of each backend traceback in
+  SQL before constructing a task result or splitting lines. Full diagnostics stay
+  in the backend table. Unexpected exceptions display only the fixed category
+  "Task exited before the demo row was finalized."; only the exact known demo
+  exception class and allowlisted demo messages can publish a specific failure
+  message. Worker-finalized results remain authoritative, and an independent
+  routine still reconciles normally when another routine fails.
 - successful backend payloads must contain a `DONE`/`FAILED` status, string result,
   finite nonnegative numeric duration (no booleans), and timezone-aware ISO
   completion timestamp. Invalid payloads become a failed demo row through the

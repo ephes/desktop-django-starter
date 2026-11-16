@@ -5,11 +5,13 @@
 {% block header_class %}page-header-ponies{% endblock %}
 
 {% block content %}
+{% if revision_conflict %}<p role="alert"><a href="{{ request.get_full_path }}">Reload current pony</a>. Your submitted input is kept below.</p>{% endif %}
 <form method="post" novalidate id="item-form">
     {% csrf_token %}
+    {% if object %}<input type="hidden" name="revision" value="{{ item_revision }}">{% endif %}
     {{ form.as_p }}
     <div class="actions actions-right">
-        <a class="button secondary" href="{% url 'example_app:item-list' %}">Cancel</a>
+        <a class="button secondary" href="{% url 'example_app:item-list' %}{% if return_page %}?page={{ return_page }}{% endif %}">Cancel</a>
         <button type="submit" class="primary">{% if object %}Save Changes{% else %}Save{% endif %}</button>
     </div>
 </form>

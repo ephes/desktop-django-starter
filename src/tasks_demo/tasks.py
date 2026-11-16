@@ -7,6 +7,7 @@ from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID
 
+from django.db.models.functions import Right
 from django.tasks import TaskResult, TaskResultStatus, task
 from django.tasks.exceptions import TaskResultDoesNotExist, TaskResultMismatch
 from django.utils import timezone
@@ -20,6 +21,7 @@ MISSING_BACKEND_RESULT = "Task result could not be found."
 INVALID_BACKEND_PAYLOAD = "Task returned an invalid completion payload."
 UNEXPECTED_BACKEND_RESULT = "Task exited before the demo row was finalized."
 TERMINAL_HISTORY_LIMIT = 100
+TRACEBACK_PREVIEW_LIMIT = 1024
 
 TASK_LABELS: list[str] = [
     "Restocking hay loft",
@@ -103,13 +105,20 @@ def visible_tasks() -> list[SimulatedTask]:
         except ValueError:
             pass  # Malformed IDs follow the same missing-result policy as get_result().
     # in_bulk() uses parameter-safe batches on each supported database.
-    backend_rows = DBTaskResult.objects.in_bulk(result_ids)
+    # Keep full stored diagnostics in SQLite. The public task_result property
+    # receives only a bounded tail, never a deferred read of the full traceback.
+    backend_rows = (
+        DBTaskResult.objects.defer("traceback")
+        .annotate(traceback_preview=Right("traceback", TRACEBACK_PREVIEW_LIMIT))
+        .in_bulk(result_ids)
+    )
 
     def load_result(result_id: str):
         try:
             backend_row = backend_rows[UUID(result_id)]
         except (KeyError, ValueError) as exc:
             raise TaskResultDoesNotExist(result_id) from exc
+        backend_row.traceback = backend_row.traceback_preview
         result = backend_row.task_result
         if result.task.func != run_simulated_task.func:
             raise TaskResultMismatch("Task does not match")
@@ -251,6 +260,17 @@ def _save_reconciled_task(task_row: SimulatedTask, fields: list[str]) -> None:
 
 def _backend_failure_message(backend_result) -> str:
     if backend_result.errors:
-        lines = backend_result.errors[-1].traceback.strip().splitlines()
-        return lines[-1] if lines else UNEXPECTED_BACKEND_RESULT
+        error = backend_result.errors[-1]
+        exception_class = f"{SimulatedTaskFailure.__module__}.{SimulatedTaskFailure.__qualname__}"
+        if error.exception_class_path == exception_class:
+            # Also bound callers using get_result() or a supplied result loader.
+            preview = error.traceback[-TRACEBACK_PREVIEW_LIMIT:]
+            lines = preview.strip().splitlines()
+            last_line = lines[-1] if lines else ""
+            for message in FAILURE_RESULTS:
+                if last_line in {
+                    f"{exception_class}: {message}",
+                    f"SimulatedTaskFailure: {message}",
+                }:
+                    return message
     return UNEXPECTED_BACKEND_RESULT

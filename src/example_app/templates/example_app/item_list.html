@@ -7,7 +7,7 @@
 {% block content %}
 <div class="panel-toolbar">
     <span class="hint">Manage your stable of ponies</span>
-    <a class="button primary" href="{% url 'example_app:item-create' %}">Add Pony</a>
+    <a class="button primary" href="{% url 'example_app:item-create' %}?page={{ page_obj.number }}">Add Pony</a>
 </div>
 
 {% if items %}
@@ -29,10 +29,10 @@
                     <td class="cell-notes">{{ item.notes|default:"—"|truncatewords:20 }}</td>
                     <td class="cell-date">{{ item.updated_at|date:"Y-m-d" }}<br>{{ item.updated_at|date:"H:i" }}</td>
                     <td class="row-actions">
-                        <a href="{% url 'example_app:item-update' item.pk %}" class="action-edit" title="Edit">
+                        <a href="{% url 'example_app:item-update' item.pk %}?page={{ page_obj.number }}" class="action-edit" title="Edit">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.85 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg>
                         </a>
-                        <a href="{% url 'example_app:item-delete' item.pk %}" class="action-delete" title="Release">
+                        <a href="{% url 'example_app:item-delete' item.pk %}?page={{ page_obj.number }}" data-revision="{{ item.displayed_revision }}" class="action-delete" title="Release">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>
                         </a>
                     </td>
@@ -57,6 +57,14 @@
     </div>
 {% endif %}
 
+{% if is_paginated %}
+<nav aria-label="Pony pages" class="panel-toolbar">
+    {% if page_obj.has_previous %}<a rel="prev" href="?page={{ page_obj.previous_page_number }}">Previous</a>{% endif %}
+    <span>Page {{ page_obj.number }} of {{ paginator.num_pages }}</span>
+    {% if page_obj.has_next %}<a rel="next" href="?page={{ page_obj.next_page_number }}">Next</a>{% endif %}
+</nav>
+{% endif %}
+
 {% if items %}
 <div class="panel-footer">
     <button type="button" class="secondary" id="clear-items-btn">Release All Ponies</button>
@@ -67,6 +75,8 @@
 <div class="modal-overlay" id="delete-modal">
     <div class="modal" role="dialog" aria-modal="true" aria-labelledby="delete-modal-title">
         <p class="modal-text">Release <strong id="delete-modal-title"></strong>?</p>
+        <p id="delete-error" role="alert" hidden></p>
+        <a id="delete-reload" hidden>Reload current pony</a>
         <div class="actions actions-right">
             <button type="button" class="secondary" id="delete-cancel">Keep It</button>
             <button type="button" class="danger" id="delete-confirm">Release Pony</button>
@@ -81,6 +91,9 @@
     var confirmBtn = document.getElementById("delete-confirm");
     var cancelBtn = document.getElementById("delete-cancel");
     var deleteUrl = "";
+    var revision = "";
+    var errorEl = document.getElementById("delete-error");
+    var reloadEl = document.getElementById("delete-reload");
     var csrfToken = document.querySelector("[name=csrfmiddlewaretoken]");
     if (!csrfToken) {
         var m = document.cookie.match(/csrftoken=([^;]+)/);
@@ -89,9 +102,13 @@
         csrfToken = csrfToken.value;
     }
 
-    function openModal(title, url) {
+    function openModal(title, url, displayedRevision) {
         titleEl.textContent = title;
         deleteUrl = url;
+        revision = displayedRevision;
+        errorEl.hidden = true;
+        reloadEl.hidden = true;
+        confirmBtn.disabled = false;
         modal.classList.add("is-open");
         cancelBtn.focus();
     }
@@ -112,7 +129,7 @@
         e.preventDefault();
         var row = link.closest("tr");
         var title = row.querySelector(".cell-title").textContent.trim();
-        openModal(title, link.getAttribute("href"));
+        openModal(title, link.getAttribute("href"), link.getAttribute("data-revision"));
     });
 
     cancelBtn.addEventListener("click", closeModal);
@@ -128,10 +145,29 @@
                 "X-CSRFToken": csrfToken,
                 "Content-Type": "application/x-www-form-urlencoded"
             },
-            body: "csrfmiddlewaretoken=" + encodeURIComponent(csrfToken),
+            body: "csrfmiddlewaretoken=" + encodeURIComponent(csrfToken) + "&revision=" + encodeURIComponent(revision),
             redirect: "follow"
-        }).then(function() {
-            window.location.reload();
+        }).then(function(response) {
+            if (response.ok) {
+                // Follow the server's clamped redirect: reloading ?page=N
+                // would 404 when the release emptied the last page.
+                if (response.url) {
+                    window.location.assign(response.url);
+                } else {
+                    window.location.reload();
+                }
+                return;
+            }
+            errorEl.textContent = response.status === 409
+                ? "This pony changed. Reload it before releasing."
+                : "The pony could not be released. Reload it before retrying.";
+            errorEl.hidden = false;
+            reloadEl.href = deleteUrl;
+            reloadEl.hidden = false;
+            confirmBtn.disabled = true;
+        }).catch(function() {
+            errorEl.textContent = "The pony could not be released. Please try again.";
+            errorEl.hidden = false;
         });
     });
 
@@ -142,7 +178,8 @@
                 method: "POST",
                 headers: { "X-CSRFToken": csrfToken }
             }).then(function() {
-                window.location.reload();
+                // Every page after the first disappears once all ponies are gone.
+                window.location.assign("{% url 'example_app:item-list' %}");
             });
         });
     }

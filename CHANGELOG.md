@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+- Count queued/running backend work in one statement to avoid false idle reports.
+- Read bounded backend traceback previews before reconciliation and publish only
+  safe failure categories or known demo messages in routine pages and polls.
+
+- Fence pony edits and releases with signed displayed content revisions, checking
+  under SQLite's write lock. Conflicts preserve current data and edit input;
+  the release modal offers a fresh confirmation instead of hiding the conflict.
+
+- Paginate My Ponies in stable 20-row database pages and retain return navigation;
+  modal and Release All navigation never land on a vanished page.
+- Atomically limit active routines to 16 across desktop windows, returning a
+  retryable refusal at capacity without orphan queue entries, shown on the page.
+
 - Smoke only the uniquely changed Tauri bundle in the current Cargo target output,
   retaining stale/unrelated artifacts and refusing ambiguous builds. Non-triple
   directories in a shared target dir are skipped, and build output lists only
