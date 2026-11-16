@@ -121,14 +121,14 @@ The current implementation follows this sequence:
 
 1. Electron takes the single-instance lock; a second launch only focuses the running window and never reaches the steps below.
 2. Electron chooses an open localhost port and creates a local splash window.
-3. Electron reads `desktop-shell-session.json` in the app-data directory. If the previous run never marked itself finished (a crash, a force quit, power loss), Electron stops backend processes that run left behind: every backend process carries this install's random app key on its command line, so they can be found without touching other apps.
+3. Electron admits a regular session marker of at most 4096 bytes in the app-data directory, preserving and refusing unreadable/unsafe markers. If the previous run never marked itself finished (a crash, a force quit, power loss), Electron stops backend processes that run left behind: every backend process carries this install's random app key on its command line, so they can be found without touching other apps.
 4. Electron runs migrations using either the bundled runtime or a local development interpreter. In packaged mode, the first start of a new app version prepares that version's state directory first (see Data and Files).
 5. Electron starts Django.
 6. Django exposes a dedicated health endpoint.
 7. Electron polls that endpoint until it succeeds or times out (15 seconds).
 8. Electron starts the single `db_worker` process only after Django is healthy.
 9. Electron loads the main app window, then closes the splash window once the main window is ready to show.
-10. When the user closes the window or quits while background tasks are running or queued (`/desktop/activity/`), Electron asks first. Quitting then stops both child processes; on Windows with explicit forced process-tree termination (`taskkill /t /f`) rather than a graceful drain. Electron marks the session finished once the children are stopped.
+10. When the user closes the window or quits while background tasks are running or queued (`/desktop/activity/`), Electron asks first. Quitting then stops both child processes; on Windows with explicit forced process-tree termination (`taskkill /t /f`) rather than a graceful drain. Electron marks the session finished only after confirmed child exit and confirmed orphan recovery; uncertainty retains dirty evidence.
 
 Every backend process (`migrate`, `seed_demo_content`, `runserver`, `db_worker`) is started through `desktop_process_guard.py`, a small standard-library launcher staged next to `manage.py`. It runs `manage.py` in the same process and adds two safety nets for the case where the shell dies without cleaning up:
 
@@ -377,3 +377,58 @@ guaranteed. These barriers do not change the running database's existing
 `synchronous=NORMAL` policy or make promises about later writes. Tests use real
 SQLite/WAL/media, deterministic process barriers, kill/restart and injected sync
 and rename failures; they do not simulate hardware power loss.
+
+(electron-orphan-command-and-signal-limits)=
+
+### Electron orphan command and signal limits
+
+Recovery process tools have a three-second hard timeout and a further bounded
+500 ms callback/reap allowance, with output capped at 16 MiB. Tool failure gives
+a bounded diagnostic. POSIX inventory joins executable and arguments only when
+both PID and observed start time agree. Before TERM and again before KILL,
+recovery checks the start time, executable, complete command line and app marker;
+PID replacement retires only the old candidate, never authorizes the replacement.
+Windows uses CIM CreationDate and checks it again in the terminating helper;
+it does not use an unchecked orphan `taskkill /t` tree.
+
+These are public process-tool observations, not kernel process handles. POSIX
+`ps` start times have second precision, and neither platform offers an atomic
+observe-and-signal guarantee here. A process replaced after the last observation
+is outside that guarantee. Missing identity is refused; no PID-only fallback is
+used. Owned normal child shutdown remains separate from orphan discovery.
+
+An absent session marker is the only first-launch case. An existing malformed,
+foreign-shaped or unreadable marker is preserved and backend startup stops before
+migrations, server or worker launch. Repair its access/content with the app closed
+and explicitly launch again; do not delete a dirty marker to bypass recovery.
+
+If update preparation or the installer handoff fails after shutdown begins,
+Electron hides the now unusable app window, attempts cleanup of both backends,
+shows a restart-required explanation and exits with failure. It preserves dirty
+recovery evidence, rather than starting duplicate backends or leaving a window
+connected to stopped services. Install ownership is held through failure handling.
+
+Session input is limited to 4096 bytes. Electron admits a direct regular file,
+opens it with no-follow/nonblocking flags where supported, checks that same
+single-link descriptor before reading and refuses detected in-place changes.
+Symlinks, special files and oversized inputs cannot become fresh-session state.
+
+Managed shutdown ignores the ChildProcess `killed` delivery flag and waits for
+an actual exit, including a bounded 500 ms wait after SIGKILL (or Windows
+`taskkill`). Both children receive a cleanup attempt even if one fails. Only
+confirmed retirement of both permits `running: false`; unresolved shutdown keeps
+the dirty marker so the next launch must recover. The shell still exits on
+cleanup failure, and does not claim that signal delivery proves termination.
+
+Marker publication uses an exclusive, unique sibling temporary with private
+permissions, writes through its owned descriptor and renames only that admitted
+inode. Stale PID temporaries and foreign entries are neither truncated nor
+removed; failed publication removes only its own temporary.
+
+Orphan recovery returns **confirmed** or **unknown**, rather than disguising a
+failed inventory as an empty list. Unknown inventory, changed/ambiguous backend
+identity or unconfirmed termination blocks migrations and all new backend starts.
+Even subsequent shell shutdown leaves the marker dirty. Repair the process tool
+or permissions with the app closed, then explicitly relaunch to retry. A proven
+empty inventory or confirmed retirement permits normal startup. This stricter
+startup refusal supersedes the earlier nonfatal cleanup-failure behavior.

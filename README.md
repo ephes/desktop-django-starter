@@ -42,6 +42,11 @@ Electron and Tauri load the Django UI over `http://127.0.0.1:<random-port>`, whi
 
 The example app uses a branded presentation layer called "Flying Stable" (a Pegasus/pony theme) to demonstrate that the starter can carry a real visual identity while remaining a generic teaching scaffold underneath. The theme includes a dark topnav with logo and brand name, teal page headers with background images, a content panel with toolbar, a sticky footer, CSS custom-property design tokens, SVG empty-state illustrations, an in-page delete-confirmation modal, client-side form validation with themed error messages, a splash screen at `/splash/` that Electron now shows during backend startup, and packaged app icons generated in `shells/electron/assets/icons/` and `shells/tauri/src-tauri/icons/` from the shared source art under `assets/brand/`. Item statuses are themed as Grazing (backlog), Galloping (active), and Show Ready (done). In the current `v0.1.5+` starter, brand-new per-user desktop databases get a small first-run pony roster through the explicit `seed_demo_content` management command after migrations create `app.sqlite3`; existing databases stay untouched, and using "Release All Ponies" keeps the stable empty on later launches. Development mode includes `django-browser-reload` for auto-reload.
 
+Electron preserves unsafe session markers and refuses startup when orphan recovery
+cannot be confirmed. Failed update handoffs exit with a restart-required message.
+See [session recovery](docs/shells/electron.md#session-recovery-failures) for repair
+and retry guidance.
+
 ## Docs
 
 - [`docs/specification.md`](docs/specification.md): main product and technical specification

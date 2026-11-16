@@ -18,6 +18,8 @@ CANONICAL_ASSETS: list[str] = [
     "shells/electron/scripts/process-exit-policy.cjs",
     "shells/electron/scripts/updates.cjs",
     "shells/electron/scripts/orphan-processes.cjs",
+    "shells/electron/scripts/managed-process.cjs",
+    "shells/electron/scripts/managed-process.test.cjs",
     "shells/electron/scripts/quit-guard.cjs",
     "shells/electron/scripts/bundled-python.test.cjs",
     "shells/electron/scripts/electron-builder-config.test.cjs",

@@ -20,25 +20,85 @@ function getSessionPath(appDataDir) {
   return path.join(appDataDir, SESSION_FILENAME);
 }
 
-function readSession(appDataDir) {
-  try {
-    const session = JSON.parse(fs.readFileSync(getSessionPath(appDataDir), "utf8"));
-    if (typeof session.app_key === "string" && /^[0-9a-f]{32}$/.test(session.app_key)) {
-      return { app_key: session.app_key, running: session.running === true, shell_pid: session.shell_pid };
-    }
-  } catch (_error) {
-    // Missing or unreadable: start a new session below.
+class SessionMarkerError extends Error {
+  constructor(detail) {
+    super(`Unsafe or unreadable session marker: ${detail}. Preserve the marker, repair it and restart.`);
+    this.code = "DDS_SESSION_MARKER_UNSAFE";
   }
+}
 
-  return null;
+function readSession(appDataDir) {
+  let bytes;
+  let descriptor;
+  let observedExisting = false;
+  try {
+    const marker = getSessionPath(appDataDir);
+    // lstat distinguishes an absent leaf from a dangling symlink. O_NOFOLLOW
+    // is authoritative where supported; descriptor checks precede all reads.
+    const named = fs.lstatSync(marker);
+    observedExisting = true;
+    if (!named.isFile() || named.isSymbolicLink()) throw new SessionMarkerError("not a regular direct file");
+    descriptor = fs.openSync(marker, fs.constants.O_RDONLY
+      | (fs.constants.O_NOFOLLOW || 0) | (fs.constants.O_NONBLOCK || 0));
+    const opened = fs.fstatSync(descriptor);
+    if (!opened.isFile() || opened.nlink !== 1 || opened.size > 4096
+      || opened.dev !== named.dev || opened.ino !== named.ino) {
+      throw new SessionMarkerError("not an admitted regular marker (maximum 4096 bytes)");
+    }
+    const buffer = Buffer.alloc(4097);
+    let length = 0;
+    while (length < buffer.length) {
+      const count = fs.readSync(descriptor, buffer, length, buffer.length - length, null);
+      if (count === 0) break;
+      length += count;
+    }
+    const after = fs.fstatSync(descriptor);
+    if (length > 4096 || length !== opened.size || after.size !== opened.size
+      || after.mtimeMs !== opened.mtimeMs || after.ctimeMs !== opened.ctimeMs) {
+      throw new SessionMarkerError("oversized or changed marker");
+    }
+    bytes = buffer.subarray(0, length).toString("utf8");
+  } catch (error) {
+    if (error.code === "ENOENT" && !observedExisting) return null;
+    if (error instanceof SessionMarkerError) throw error;
+    throw new SessionMarkerError(error.code || "read failed");
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+  }
+  try {
+    const session = JSON.parse(bytes);
+    if (session && typeof session.app_key === "string" && /^[0-9a-f]{32}$/.test(session.app_key)
+      && typeof session.running === "boolean" && Number.isSafeInteger(session.shell_pid) && session.shell_pid > 0) {
+      return { app_key: session.app_key, running: session.running, shell_pid: session.shell_pid };
+    }
+  } catch (_) { /* Refuse malformed input below. */ }
+  throw new SessionMarkerError("invalid document");
 }
 
 function writeSession(appDataDir, session) {
   fs.mkdirSync(appDataDir, { recursive: true });
   const sessionPath = getSessionPath(appDataDir);
-  const temporaryPath = `${sessionPath}.${process.pid}.tmp`;
-  fs.writeFileSync(temporaryPath, `${JSON.stringify(session, null, 2)}\n`, { mode: 0o600 });
-  fs.renameSync(temporaryPath, sessionPath);
+  const temporaryPath = `${sessionPath}.${crypto.randomUUID()}.tmp`;
+  let descriptor;
+  let owned;
+  const stillOwned = () => {
+    try {
+      const named = fs.lstatSync(temporaryPath);
+      return owned && named.isFile() && named.nlink === 1 && named.dev === owned.dev && named.ino === owned.ino;
+    } catch (_) { return false; }
+  };
+  try {
+    descriptor = fs.openSync(temporaryPath, "wx", 0o600);
+    owned = fs.fstatSync(descriptor);
+    fs.writeFileSync(descriptor, `${JSON.stringify(session, null, 2)}\n`);
+    fs.closeSync(descriptor);
+    descriptor = undefined;
+    if (!stillOwned()) throw new Error("Session temporary ownership changed; publication refused.");
+    fs.renameSync(temporaryPath, sessionPath);
+  } finally {
+    if (descriptor !== undefined) fs.closeSync(descriptor);
+    if (stillOwned()) fs.unlinkSync(temporaryPath);
+  }
 }
 
 // Returns the session for this run and whether the previous run ended uncleanly.
@@ -121,100 +181,173 @@ function findOrphanPids(processes, appKey, ownPids = [process.pid]) {
     .map((entry) => entry.pid);
 }
 
-function execFileText(command, args) {
+// execFile's hard timeout bounds the helper; the outer deadline also bounds
+// waiting for its callback/stdio to close. A late callback cannot settle twice.
+function execFileText(command, args, {
+  execute = execFile, timeoutMs = 3000, reapMs = 500, maxBuffer = 16 * 1024 * 1024
+} = {}) {
   return new Promise((resolve, reject) => {
-    execFile(command, args, { windowsHide: true, maxBuffer: 16 * 1024 * 1024 }, (error, stdout) => {
-      if (error) {
-        reject(error);
-        return;
-      }
-      resolve(stdout);
-    });
+    let child;
+    const deadline = setTimeout(() => {
+      try { child?.kill("SIGKILL"); } catch (_) { /* Already gone. */ }
+      child?.stdout?.destroy();
+      child?.stderr?.destroy();
+      child?.unref?.();
+      reject(new Error("Process helper exceeded its deadline; repair the process tool and retry."));
+    }, timeoutMs + reapMs);
+    try {
+      child = execute(command, args, {
+        windowsHide: true, maxBuffer, timeout: timeoutMs, killSignal: "SIGKILL"
+      }, (error, stdout) => {
+        clearTimeout(deadline);
+        if (error) reject(error);
+        else resolve(stdout);
+      });
+    } catch (error) {
+      clearTimeout(deadline);
+      reject(error);
+    }
   });
 }
+
+// Windows PowerShell 5.1 writes redirected output in the OEM code page, which
+// turns non-ASCII command lines (e.g. user profile paths) into U+FFFD and
+// breaks the exact identity recheck. Force BOM-less UTF-8 to match execFile.
+const WINDOWS_UTF8_OUTPUT = "[Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false; ";
+// One CIM inventory can take longer than 500 ms on Windows; allow several.
+const WINDOWS_REAP_MS = 5000;
 
 function windowsSystemTool(name) {
   return path.join(process.env.SystemRoot || "C:\\Windows", "System32", name);
 }
 
-async function listProcesses(platform = process.platform, appKey = "") {
+function parseGenerationColumns(text) {
+  const rows = new Map();
+  for (const line of text.split(/\r?\n/)) {
+    const match = line.match(/^\s*(\d+)\s+(\S+\s+\S+\s+\d+\s+\d+:\d+:\d+\s+\d+)\s+(.*)$/);
+    if (match) rows.set(Number(match[1]), { generation: match[2].replace(/\s+/g, " "), value: match[3].trim() });
+    else if (line.trim()) throw new Error("Incomplete POSIX process identity.");
+  }
+  return rows;
+}
+
+async function listProcesses(platform = process.platform, appKey = "", run = execFileText) {
   if (platform === "win32") {
-    // Filter in PowerShell so only candidate rows come back.
-    const script = [
-      "Get-CimInstance Win32_Process",
+    const script = WINDOWS_UTF8_OUTPUT + [
+      "Get-CimInstance Win32_Process -ErrorAction Stop",
       `| Where-Object { $_.CommandLine -like '*${guardMarker(appKey)}*' }`,
-      "| ForEach-Object { \"$($_.ProcessId)`t$($_.Name)`t$($_.CommandLine)\" }"
+      '| ForEach-Object { "$($_.ProcessId)`t$($_.CreationDate.ToUniversalTime().ToString(\'o\'))`t$($_.Name)`t$($_.CommandLine)" }'
     ].join(" ");
-    const output = await execFileText(
+    const output = await run(
       windowsSystemTool(path.join("WindowsPowerShell", "v1.0", "powershell.exe")),
       ["-NoProfile", "-NonInteractive", "-Command", script]
     );
-    return parseWindowsProcessListing(output);
+    return output.replace(/^\uFEFF/, "").split(/\r?\n/).filter(Boolean).map(line => {
+      const [pid, generation, program, ...args] = line.split("\t");
+      if (!/^\d+$/.test(pid) || !generation || !program || !args.length) {
+        throw new Error("Incomplete Windows process identity.");
+      }
+      return { pid: Number(pid), generation, program, commandLine: args.join("\t") };
+    });
   }
 
-  const [programs, commandLines] = await Promise.all([
-    execFileText("/bin/ps", ["-ax", "-o", "pid=,comm="]),
-    execFileText("/bin/ps", ["-axww", "-o", "pid=,args="])
-  ]);
-  return parsePosixProcessListing(programs, commandLines);
-}
-
-function isAlive(pid) {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch (error) {
-    return error.code === "EPERM";
-  }
-}
-
-async function stopPid(pid, platform = process.platform) {
-  if (platform === "win32") {
-    await execFileText(windowsSystemTool("taskkill.exe"), ["/pid", String(pid), "/t", "/f"])
-      .catch(() => {});
-    return;
-  }
-
-  try {
-    process.kill(pid, "SIGTERM");
-  } catch (_error) {
-    return;
-  }
-
-  const deadline = Date.now() + STOP_GRACE_PERIOD_MS;
-  while (Date.now() < deadline && isAlive(pid)) {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  }
-
-  if (isAlive(pid)) {
-    try {
-      process.kill(pid, "SIGKILL");
-    } catch (_error) {
-      // Already gone.
+  // Both observations carry start time. Never join program/arguments by PID
+  // alone: it may have been reused between the two ps commands.
+  const programs = parseGenerationColumns(await run("/bin/ps", ["-ax", "-o", "pid=,lstart=,comm="]));
+  const args = parseGenerationColumns(await run("/bin/ps", ["-axww", "-o", "pid=,lstart=,args="]));
+  return [...args].flatMap(([pid, entry]) => {
+    const program = programs.get(pid);
+    if (!program || program.generation !== entry.generation) {
+      if (entry.value.includes(guardMarker(appKey))) throw new Error("Backend identity changed during inventory; retry.");
+      return [];
     }
-  }
+    return [{ pid, generation: entry.generation, program: program.value, commandLine: entry.value }];
+  });
 }
 
-// Stops leftovers of this app and returns their PIDs. Never throws: a failed
-// cleanup must not block startup.
-async function stopOrphanedBackendProcesses(appKey, { platform = process.platform, log = console } = {}) {
-  let processes;
-  try {
-    processes = await listProcesses(platform, appKey);
-  } catch (error) {
-    log.warn(`Could not list processes to look for leftovers: ${error.message}`);
-    return [];
-  }
+function sameProcess(current, observed, appKey) {
+  return !!observed.generation && current.generation === observed.generation
+    && current.program === observed.program && current.commandLine === observed.commandLine
+    && isGuardedBackendProcess(current, appKey);
+}
 
-  const pids = findOrphanPids(processes, appKey);
-  for (const pid of pids) {
-    log.warn(`Stopping leftover backend process ${pid} from a previous run.`);
-    await stopPid(pid, platform);
+async function stopPid(observed, appKey, {
+  platform = process.platform, inventory = () => listProcesses(platform, appKey),
+  signal = process.kill, run = execFileText,
+  graceMs = STOP_GRACE_PERIOD_MS, reapMs = platform === "win32" ? WINDOWS_REAP_MS : 500
+} = {}) {
+  if (!observed.generation) throw new Error("Missing process generation; refusing to signal.");
+  async function stillOwned() {
+    const current = (await inventory()).find(entry => entry.pid === observed.pid);
+    return current && sameProcess(current, observed, appKey);
   }
-  return pids;
+  async function waitGone(duration) {
+    const deadline = Date.now() + duration;
+    do {
+      if (!await stillOwned()) return true;
+      if (Date.now() >= deadline) return false;
+      await new Promise(resolve => setTimeout(resolve, Math.min(100, deadline - Date.now())));
+    } while (true);
+  }
+  if (!await stillOwned()) return true;
+  if (platform === "win32") {
+    // Recheck the CIM creation time inside the terminating helper too. Avoid
+    // taskkill /t: descendants have not individually passed identity admission.
+    const literal = value => String(value).replace(/'/g, "''");
+    const stamp = literal(observed.generation);
+    const script = WINDOWS_UTF8_OUTPUT + `$p = Get-CimInstance Win32_Process -Filter "ProcessId = ${observed.pid}" -ErrorAction Stop; `
+      + `if ($p -and $p.CreationDate.ToUniversalTime().ToString('o') -ceq '${stamp}' `
+      + `-and $p.Name -ceq '${literal(observed.program)}' `
+      + `-and $p.CommandLine -ceq '${literal(observed.commandLine)}') { `
+      + "$r = Invoke-CimMethod -InputObject $p -MethodName Terminate -ErrorAction Stop; "
+      + "if ($r.ReturnValue -ne 0) { throw 'Termination refused' } }";
+    await run(windowsSystemTool(path.join("WindowsPowerShell", "v1.0", "powershell.exe")),
+      ["-NoProfile", "-NonInteractive", "-Command", script]);
+    return waitGone(reapMs);
+  }
+  try { signal(observed.pid, "SIGTERM"); } catch (error) {
+    if (error.code !== "ESRCH") throw error;
+  }
+  if (await waitGone(graceMs)) return true;
+  // waitGone's last observation immediately precedes escalation.
+  try { signal(observed.pid, "SIGKILL"); } catch (error) {
+    if (error.code !== "ESRCH") throw error;
+  }
+  return waitGone(reapMs);
+}
+
+// Unknown cleanup is distinct from proven absence. Callers must refuse a new
+// runtime when inventory or termination could not be established.
+async function stopOrphanedBackendProcesses(appKey, {
+  platform = process.platform, log = console,
+  inventory = () => listProcesses(platform, appKey),
+  stop = entry => stopPid(entry, appKey, { platform, inventory })
+} = {}) {
+  const pids = [];
+  try {
+    const processes = await inventory();
+    const candidates = processes.filter(entry => entry.pid !== process.pid && isGuardedBackendProcess(entry, appKey));
+    for (const entry of candidates) {
+      log.warn(`Stopping leftover backend process ${entry.pid} from a previous run.`);
+      if (!await stop(entry)) throw new Error(`Exit of backend ${entry.pid} was not confirmed`);
+      pids.push(entry.pid);
+    }
+    const remaining = await inventory();
+    if (remaining.some(entry => entry.pid !== process.pid && isGuardedBackendProcess(entry, appKey))) {
+      throw new Error("Guarded backends remain after cleanup");
+    }
+    return { status: "confirmed", pids };
+  } catch (error) {
+    const detail = `Backend recovery is unconfirmed: ${String(error.message).slice(0, 400)}. Repair the process tool/access and retry by restarting the app.`;
+    log.warn(detail);
+    return { status: "unknown", pids, detail };
+  }
 }
 
 module.exports = {
+  execFileText,
+  listProcesses,
+  stopPid,
   SESSION_FILENAME,
   beginSession,
   endSession,

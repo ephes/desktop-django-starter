@@ -29,6 +29,7 @@ const {
   endSession,
   stopOrphanedBackendProcesses
 } = require("./scripts/orphan-processes.cjs");
+const { stopManagedProcess: stopChildProcess } = require("./scripts/managed-process.cjs");
 const { createQuitGuard } = require("./scripts/quit-guard.cjs");
 
 const HOST = "127.0.0.1";
@@ -50,6 +51,7 @@ let splashWindow = null;
 let splashShownAt = null;
 let updateInstallInProgress = false;
 let shellSession = null;
+let shellRecoveryConfirmed = false;
 const runId = crypto.randomBytes(8).toString("hex");
 const intentionallyStoppedManagedProcesses = new WeakSet();
 
@@ -757,63 +759,27 @@ function createWindow(url, authToken) {
 }
 
 async function stopDjango() {
-  const processToStop = djangoProcess;
-  djangoProcess = null;
-  await stopManagedProcess(processToStop);
+  const child = djangoProcess;
+  if (!await stopManagedProcess(child)) throw new Error("Django exit was not confirmed; restart required.");
+  if (djangoProcess === child) djangoProcess = null;
 }
 
 async function stopTaskWorker() {
-  const processToStop = taskWorkerProcess;
-  taskWorkerProcess = null;
-  await stopManagedProcess(processToStop);
+  const child = taskWorkerProcess;
+  if (!await stopManagedProcess(child)) throw new Error("Task worker exit was not confirmed; restart required.");
+  if (taskWorkerProcess === child) taskWorkerProcess = null;
 }
 
-async function stopManagedProcess(processToStop) {
-  if (!processToStop || processToStop.killed) {
-    return;
-  }
+async function stopManagedProcess(child) {
+  if (child) intentionallyStoppedManagedProcesses.add(child);
+  return stopChildProcess(child);
+}
 
-  intentionallyStoppedManagedProcesses.add(processToStop);
-
-  if (process.platform === "win32") {
-    await new Promise((resolve) => {
-      // Use the system copy of taskkill rather than whatever PATH finds first.
-      const taskkill = path.join(process.env.SystemRoot || "C:\\Windows", "System32", "taskkill.exe");
-      const killer = spawn(taskkill, ["/pid", String(processToStop.pid), "/t", "/f"], {
-        stdio: "ignore",
-        windowsHide: true
-      });
-
-      const fallBackToKill = () => {
-        if (processToStop.exitCode === null) {
-          processToStop.kill();
-        }
-        resolve();
-      };
-      killer.on("error", fallBackToKill);
-      killer.on("exit", (code) => (code === 0 ? resolve() : fallBackToKill()));
-    });
-    return;
-  }
-
-  await new Promise((resolve) => {
-    let resolved = false;
-
-    processToStop.once("exit", () => {
-      resolved = true;
-      resolve();
-    });
-
-    processToStop.kill("SIGTERM");
-
-    setTimeout(() => {
-      if (resolved) {
-        return;
-      }
-      processToStop.kill("SIGKILL");
-      resolve();
-    }, 2000);
-  });
+async function stopBackends() {
+  // Attempt both even if one stop fails. Preserve the first original failure.
+  const results = await Promise.allSettled([stopTaskWorker(), stopDjango()]);
+  const failure = results.find(result => result.status === "rejected");
+  if (failure) throw failure.reason;
 }
 
 async function bootstrap() {
@@ -837,8 +803,11 @@ async function bootstrap() {
   const { session, previousRunWasUnclean } = beginSession(app.getPath("userData"));
   shellSession = session;
   if (previousRunWasUnclean) {
-    await stopOrphanedBackendProcesses(session.app_key);
+    const cleanup = await stopOrphanedBackendProcesses(session.app_key);
+    if (cleanup.status !== "confirmed") throw new Error(cleanup.detail);
   }
+
+  shellRecoveryConfirmed = true;
 
   await runManageCommand(["migrate", "--noinput"], port, runtimeMode, backendRoot, authToken);
   if (shouldSeedDemoContent) {
@@ -856,8 +825,23 @@ async function prepareForUpdateInstall() {
   // Mark the updater handoff before stopping child processes so their expected
   // exits do not surface as false-positive crash dialogs.
   updateInstallInProgress = true;
-  await stopTaskWorker();
-  await stopDjango();
+  await stopBackends();
+}
+
+// A partially stopped runtime cannot safely be restarted in-place: preserve
+// the dirty marker and leave through a clear restart-required outcome.
+async function recoverFailedUpdateInstall(error) {
+  quitting = true;
+  currentAppUrl = null;
+  currentAuthToken = null;
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.hide();
+  closeSplashWindow();
+  for (const stop of [stopTaskWorker, stopDjango]) {
+    try { await stop(); } catch (cleanupError) { console.warn(cleanupError.message); }
+  }
+  updateInstallInProgress = false;
+  dialog.showErrorBox("Restart required", `The update could not take over the runtime. Please restart the app. ${error.message}`);
+  app.exit(1);
 }
 
 ipcMain.handle("desktop:open-app-data-directory", async (event) => {
@@ -946,7 +930,8 @@ app.whenReady()
         app,
         autoUpdater,
         dialog,
-        beforeInstall: prepareForUpdateInstall
+        beforeInstall: prepareForUpdateInstall,
+        onInstallFailure: recoverFailedUpdateInstall
       }));
       await bootstrap();
     } catch (error) {
@@ -965,15 +950,16 @@ app.on("will-quit", async (event) => {
   }
 
   event.preventDefault();
+  let exitCode = 0;
   try {
-    await stopTaskWorker();
-    await stopDjango();
-    if (shellSession) {
+    await stopBackends();
+    if (shellSession && shellRecoveryConfirmed) {
       // Children are stopped: the next start does not need to look for leftovers.
       endSession(app.getPath("userData"), shellSession);
     }
-  } catch (_error) {
-    // Continue quitting even if child-process cleanup fails.
+  } catch (error) {
+    console.warn(`Backend cleanup incomplete: ${error.message}`);
+    exitCode = 1;
   }
-  app.exit(0);
+  app.exit(exitCode);
 });

@@ -73,3 +73,8 @@ Important constraints:
   that persistent lock inode. Owned `.dds-stage-<uuid>` generations are recovered
   under the same lock. Payload sync precedes marker sync, rename and POSIX parent
   sync; Windows directory durability is explicitly limited in the release guide.
+
+- Electron session/orphan recovery fails closed on unsafe marker input or unknown
+  cleanup; clean publication requires confirmed child exit. Failed update handoffs
+  exit for explicit restart. See `docs/shells/electron.md` and the architecture
+  recovery contract for bounds, repair guidance and platform limitations.

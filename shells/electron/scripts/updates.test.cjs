@@ -436,3 +436,48 @@ test("failed install preparation releases ownership for retry", async () => {
   assert.equal(preparations, 2);
   assert.equal(updater.installs, 1);
 });
+
+for (const boundary of ["preparation", "installer"]) {
+  test(`failed ${boundary} awaits runtime recovery before releasing install ownership`, async () => {
+    const updater = new FakeAutoUpdater();
+    const recovery = deferred();
+    let recovered;
+    if (boundary === "installer") updater.quitAndInstall = () => { throw Error("installer failed"); };
+    const controller = createElectronUpdateController({
+      app: createApp(), autoUpdater: updater, dialog: createDialog(), logger: null,
+      beforeInstall: async () => { if (boundary === "preparation") throw Error("preparation failed"); },
+      onInstallFailure: async error => { recovered = error.message; await recovery.promise; }
+    });
+    updater.emit("update-downloaded");
+    await waitForAsyncEventHandlers();
+    assert.equal(recovered, `${boundary} failed`);
+    const again = controller.checkForUpdates();
+    recovery.resolve();
+    await again;
+  });
+}
+
+for (const timing of ["synchronous", "late"]) {
+  test(`installer error event (${timing}) recovers a stopped runtime once`, async () => {
+    const updater = new FakeAutoUpdater();
+    let failures = 0;
+    const controller = createElectronUpdateController({
+      app: createApp(), autoUpdater: updater, dialog: createDialog(), logger: null,
+      onInstallFailure: async () => { failures++; }
+    });
+    updater.quitAndInstall = () => {
+      if (timing === "synchronous") updater.emit("error", Error("installation failed"));
+    };
+    updater.emit("update-downloaded");
+    await waitForAsyncEventHandlers();
+    if (timing === "late") {
+      updater.emit("error", Error("installation failed"));
+      updater.emit("error", Error("duplicate"));
+    }
+    await waitForAsyncEventHandlers();
+    assert.equal(failures, 1);
+    // Recovery has settled: a later explicit attempt can acquire ownership.
+    updater.quitAndInstall = () => {};
+    await controller.checkForUpdates();
+  });
+}
