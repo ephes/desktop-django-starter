@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preflight all runtime pruning parents before deletion and refuse symlinked trees.
+- Reject duplicate runtime-manifest members in Node and Tauri before interpreter selection.
+
 - Bound Electron recovery process tools and revalidate observed backend process
   identity before orphan termination and escalation.
 - Preserve unreadable or invalid session markers and refuse backend startup;

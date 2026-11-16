@@ -6,6 +6,68 @@ use std::path::{Path, PathBuf};
 
 const MAX_MANIFEST_BYTES: u64 = 65536;
 
+// Deserialize through public Serde visitors so duplicate members are refused at
+// every depth, including unknown extension objects and objects inside arrays.
+struct ManifestValue(Value);
+impl<'de> serde::Deserialize<'de> for ManifestValue {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        struct Visitor;
+        impl<'de> serde::de::Visitor<'de> for Visitor {
+            type Value = ManifestValue;
+            fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                f.write_str("unambiguous runtime manifest JSON")
+            }
+            fn visit_unit<E: serde::de::Error>(self) -> Result<Self::Value, E> {
+                Ok(ManifestValue(Value::Null))
+            }
+            fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Self::Value, E> {
+                Ok(ManifestValue(v.into()))
+            }
+            fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
+                Ok(ManifestValue(v.into()))
+            }
+            fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
+                Ok(ManifestValue(v.into()))
+            }
+            fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Self::Value, E> {
+                serde_json::Number::from_f64(v)
+                    .map(|n| ManifestValue(Value::Number(n)))
+                    .ok_or_else(|| E::custom("Invalid JSON number"))
+            }
+            fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                Ok(ManifestValue(v.into()))
+            }
+            fn visit_seq<A: serde::de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = Vec::new();
+                while let Some(ManifestValue(value)) = seq.next_element()? {
+                    values.push(value);
+                }
+                Ok(ManifestValue(Value::Array(values)))
+            }
+            fn visit_map<A: serde::de::MapAccess<'de>>(
+                self,
+                mut map: A,
+            ) -> Result<Self::Value, A::Error> {
+                let mut values = serde_json::Map::new();
+                while let Some(key) = map.next_key::<String>()? {
+                    if values.contains_key(&key) {
+                        return Err(serde::de::Error::custom(
+                            "Duplicate runtime manifest member",
+                        ));
+                    }
+                    let ManifestValue(value) = map.next_value()?;
+                    values.insert(key, value);
+                }
+                Ok(ManifestValue(Value::Object(values)))
+            }
+        }
+        deserializer.deserialize_any(Visitor)
+    }
+}
+
 fn relative(root: &Path, value: &Value) -> Result<PathBuf, String> {
     let value = value.as_str().ok_or("Expected a relative path string")?;
     if value.split('/').any(|part| {
@@ -111,7 +173,8 @@ pub(super) fn resolve_bundled_python_executable(root: &Path) -> Result<PathBuf, 
             if bytes.len() as u64 > MAX_MANIFEST_BYTES {
                 return Err("Manifest exceeds 65536 bytes".into());
             }
-            let manifest: Value = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+            let ManifestValue(manifest) =
+                serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
             usable(root, validate(&manifest, root)?)
         };
         return read()
@@ -189,6 +252,16 @@ mod tests {
         #[cfg(not(windows))]
         assert!(resolve_bundled_python_executable(&root).is_ok());
         for value in [
+            manifest()
+                .to_string()
+                .replacen("{", "{\"schemaVersion\":2,", 1),
+            manifest().to_string().replace(
+                "\"python\":{",
+                "\"python\":{\"executable\":\"python/bin/other\",",
+            ),
+            manifest()
+                .to_string()
+                .replacen("{", "{\"extra\":[{\"k\":1,\"k\":2}],", 1),
             "null".to_string(),
             "[]".into(),
             " ".repeat(65537),

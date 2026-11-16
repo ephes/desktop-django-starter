@@ -15,6 +15,30 @@ function removeIfPresent(targetPath) {
 }
 
 function pruneBundledPythonRuntime(pythonRoot) {
+  // Admit every directory that traversal will use before the first deletion.
+  // Build staging is exclusive; this preflight does not support concurrent tree mutation.
+  const admitDirectory = (directory, required = false) => {
+    let stats;
+    try { stats = fs.lstatSync(directory); }
+    catch (error) { if (!required && error.code === "ENOENT") return false; throw error; }
+    if (!stats.isDirectory() || stats.isSymbolicLink()
+        || fs.realpathSync(directory) !== path.join(fs.realpathSync(path.dirname(directory)), path.basename(directory))) {
+      throw new Error(`Unsafe runtime directory: ${directory}`);
+    }
+    return true;
+  };
+  pythonRoot = path.resolve(pythonRoot);
+  admitDirectory(pythonRoot, true);
+  admitDirectory(path.join(pythonRoot, "bin"));
+  const library = path.join(pythonRoot, "lib");
+  if (admitDirectory(library)) {
+    for (const name of fs.readdirSync(library)) {
+      if (!/^python\d+\.\d+$/.test(name)) continue;
+      const stdlib = path.join(library, name);
+      admitDirectory(stdlib, true);
+      admitDirectory(path.join(stdlib, "lib-dynload"));
+    }
+  }
   const removed = [];
   const binRoot = path.join(pythonRoot, "bin");
   const libRoot = path.join(pythonRoot, "lib");

@@ -1,5 +1,14 @@
 # Release and Update Guide
 
+Runtime pruning preflights the runtime root, `bin`, `lib`, versioned stdlib
+and `lib-dynload` directories before removing anything. Symlinked or non-directory
+parents are refused; use an exclusively owned staging tree with no concurrent
+writers. Interpreter symlinks within the runtime remain supported.
+Both Node and Tauri reject duplicate JSON object members anywhere in the bounded
+schema-v1 manifest, including escaped duplicate keys and extension objects.
+Repair ambiguous manifests before retrying; they never enable legacy discovery.
+
+
 This starter now includes the packaging scaffolding needed to make signing, notarization, a minimal Electron connected updater, an experimental Tauri connected updater, and manual updates explicit without turning the repository into a full production release system.
 
 ## Unreleased
