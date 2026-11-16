@@ -69,3 +69,30 @@ Current minimal CSP posture:
 
 - supported
 - Tauri follows the same staged-backend subprocess model as Electron and starts `db_worker` after Django passes the `/health/` readiness check
+
+
+## Current-build packaged smoke
+
+`npm --prefix shells/tauri run smoke:build` stages and builds normally, then
+smokes exactly one runnable bundle changed by that invocation. Cargo metadata
+resolves custom target directories (including `CARGO_TARGET_DIR` and Cargo config);
+`--target`/`-t` or `CARGO_BUILD_TARGET` restrict the target triple. Forwarded
+Cargo `--target-dir` arguments override that directory and resolve relative to
+`src-tauri`; `--debug`/`-d` and forwarded `--profile` select the output profile. With an implicit
+Cargo `build.target`, host and target subdirectories are observed and only the
+single changed bundle is admitted. Existing unrelated bundles remain untouched.
+No changed bundle, multiple changed bundles or multiple executable files in a
+macOS app fail before launch. Run builds exclusively in that target directory;
+concurrent builds cannot provide trustworthy smoke evidence. Windows installers
+still require manual installed-app validation.
+
+Smoke execution defaults to 120 seconds. Set
+`DESKTOP_DJANGO_PACKAGED_SMOKE_TIMEOUT_MS` to an integer from 1 through 600000
+for a different finite deadline. This applies only to the packaged executable,
+not staging or compilation. The wrapper retains at most 8 KiB of diagnostic
+output and retires the owned Unix process group with SIGKILL on timeout and
+leader exit, including leftover descendants. Cleanup has a separate 3-second
+confirmation limit. Timeout, failed launch, nonzero exit or uncertain cleanup
+fails the smoke. Processes that deliberately escape the group are outside this
+build-helper ownership contract. This wrapper validates only the locally built
+platform; it does not provide Windows install/run or cross-platform proof.

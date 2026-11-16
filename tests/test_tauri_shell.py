@@ -43,8 +43,8 @@ def test_tauri_package_scripts_cover_local_runtime_flows() -> None:
     assert '--bundles", "nsis' in builder
     assert '--bundles", "appimage' in builder
     assert '--bundles", shouldSmokeTest ? "app" : "dmg"' in builder
-    assert "bundle/nsis/" in builder
-    assert "Windows bundle smoke testing is not automated" in builder
+    assert "target_directory" in builder
+    assert "runPackagedSmoke" in builder
     assert "Windows NSIS validation checklist" in builder
     expected = "Confirm closing the app stops the bundled Django and db_worker processes cleanly."
     assert expected in builder

@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { buildOutputRoots, snapshotArtifacts, resolveSmokeBinary, runPackagedSmoke, smokeTimeout } from "./packaged-smoke.mjs";
 
 const tauriRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(tauriRoot, "..", "..");
@@ -90,8 +91,7 @@ function listPaths(root, predicate) {
   return matches.sort();
 }
 
-function resolveBuiltArtifacts(profile) {
-  const bundleRoot = path.join(tauriRoot, "src-tauri", "target", profile, "bundle");
+function resolveBuiltArtifacts(bundleRoot) {
   const dmgRoot = path.join(bundleRoot, "dmg");
   const macosRoot = path.join(bundleRoot, "macos");
 
@@ -118,51 +118,6 @@ function resolveBuiltArtifacts(profile) {
   }
 
   return [];
-}
-
-function resolveSmokeBinary(profile) {
-  const bundleRoot = path.join(tauriRoot, "src-tauri", "target", profile, "bundle");
-
-  if (process.platform === "darwin") {
-    const appBundles = listPaths(bundleRoot, (entryPath) => entryPath.endsWith(".app"));
-    for (const appBundle of appBundles) {
-      const macOsRoot = path.join(appBundle, "Contents", "MacOS");
-      if (!fs.existsSync(macOsRoot)) {
-        continue;
-      }
-
-      const binaries = fs.readdirSync(macOsRoot)
-        .map((entry) => path.join(macOsRoot, entry))
-        .filter((entry) => fs.statSync(entry).isFile());
-
-      if (binaries.length > 0) {
-        return {
-          command: binaries[0],
-          args: []
-        };
-      }
-    }
-  }
-
-  if (process.platform === "linux") {
-    const appImages = listPaths(bundleRoot, (entryPath) => entryPath.endsWith(".AppImage"));
-    if (appImages.length > 0) {
-      return {
-        command: appImages[0],
-        args: []
-      };
-    }
-  }
-
-  if (process.platform === "win32") {
-    throw new Error(
-      "Windows bundle smoke testing is not automated in this wrapper because Tauri emits "
-      + "installers under target/<profile>/bundle/nsis/ or bundle/msi/ rather than a directly "
-      + "runnable app bundle. Validate the generated installer on a Windows machine."
-    );
-  }
-
-  throw new Error(`Unable to locate a runnable bundled Tauri app under ${bundleRoot}.`);
 }
 
 function printWindowsValidationChecklist(artifacts) {
@@ -193,35 +148,45 @@ if (buildArgs[0] === "--no-sign") {
   );
 }
 
-run(npmCommand, ["run", "stage-backend"], {
-  cwd: tauriRoot
+function argumentValue(name, short) {
+  const values = buildArgs.flatMap((arg, index) => arg === name || (short && arg === short) ? [buildArgs[index + 1]]
+    : arg.startsWith(`${name}=`) ? [arg.slice(name.length + 1)]
+    : short && arg.startsWith(short) ? [arg.slice(short.length).replace(/^=/, '')] : []);
+  if (values.length > 1 || values.some(value => !value || value.startsWith('-'))) {
+    throw new Error(`Ambiguous or missing ${name}`);
+  }
+  return values[0];
+}
+const metadata = spawnSync('cargo', ['metadata', '--format-version', '1', '--no-deps',
+  '--manifest-path', path.join(tauriRoot, 'src-tauri/Cargo.toml')], {
+  cwd: tauriRoot, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024
 });
+if (metadata.error || metadata.status !== 0) throw new Error(`Unable to determine Cargo target directory: ${metadata.error?.message || metadata.stderr}`);
+const profile = argumentValue('--profile') || (buildArgs.includes('--debug') || buildArgs.includes('-d') ? 'debug' : 'release');
+const runnerTargetDir = argumentValue('--target-dir');
+const layout = { tauriRoot,
+  targetDirectory: runnerTargetDir ? path.resolve(tauriRoot, 'src-tauri', runnerTargetDir)
+    : JSON.parse(metadata.stdout).target_directory,
+  target: argumentValue('--target', '-t') || process.env.CARGO_BUILD_TARGET,
+  profile: profile === 'dev' ? 'debug' : profile };
+const bundleRoots = buildOutputRoots(layout);
+const timeoutMs = smokeTest ? smokeTimeout() : undefined;
+const before = smokeTest ? snapshotArtifacts(bundleRoots) : null;
 
-run(tauriBinary, ["build", ...buildArgs], {
-  cwd: tauriRoot,
-  env: process.env
-});
-
-const profile = buildArgs.includes("--debug") ? "debug" : "release";
-const builtArtifacts = resolveBuiltArtifacts(profile);
-
+run(npmCommand, ["run", "stage-backend"], { cwd: tauriRoot });
+run(tauriBinary, ["build", ...buildArgs], { cwd: tauriRoot, env: process.env });
+// Re-evaluate roots after the build to admit a newly created configured target.
+const currentRoots = buildOutputRoots(layout);
+const builtArtifacts = currentRoots.flatMap(root => resolveBuiltArtifacts(root));
 if (builtArtifacts.length > 0) {
   process.stdout.write("Built Tauri artifacts:\n");
-  for (const artifactPath of builtArtifacts) {
-    process.stdout.write(`- ${artifactPath}\n`);
-  }
+  for (const artifactPath of builtArtifacts) process.stdout.write(`- ${artifactPath}\n`);
 }
-
 printWindowsValidationChecklist(builtArtifacts);
-
 if (smokeTest) {
-  const smokeBinary = resolveSmokeBinary(profile);
-
-  run(smokeBinary.command, smokeBinary.args, {
-    cwd: repoRoot,
-    env: {
-      ...process.env,
-      DESKTOP_DJANGO_SMOKE_TEST: "1"
-    }
+  const smokeBinary = resolveSmokeBinary(currentRoots, before);
+  await runPackagedSmoke(smokeBinary.command, smokeBinary.args, {
+    timeoutMs, cwd: repoRoot,
+    env: { ...process.env, DESKTOP_DJANGO_SMOKE_TEST: "1" }
   });
 }

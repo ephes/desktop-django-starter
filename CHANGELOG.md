@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Smoke only the uniquely changed Tauri bundle in the current Cargo target output,
+  retaining stale/unrelated artifacts and refusing ambiguous builds.
+- Bound packaged smoke execution and diagnostics, retiring its owned process group
+  even when the smoke leader exits with surviving descendants.
+
 - Harden Tauri manifest opening against symlink/FIFO substitution and validate the opened descriptor.
 - Always close initialization lock descriptors after unlock failure, preserving primary errors.
 
