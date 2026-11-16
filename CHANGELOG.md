@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Harden Tauri manifest opening against symlink/FIFO substitution and validate the opened descriptor.
+- Always close initialization lock descriptors after unlock failure, preserving primary errors.
+
 - Preflight all runtime pruning parents before deletion and refuse symlinked trees.
 - Reject duplicate runtime-manifest members in Node and Tauri before interpreter selection.
 

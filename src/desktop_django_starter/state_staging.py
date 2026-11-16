@@ -71,17 +71,30 @@ def initialization_lock(root: Path) -> Iterator[None]:
             os.write(descriptor, b"0")
         yield
     finally:
-        if locked:
-            if os.name == "nt":
-                import msvcrt
+        primary = sys.exc_info()[1]
+        try:
+            if locked:
+                if os.name == "nt":
+                    import msvcrt
 
-                os.lseek(descriptor, 0, os.SEEK_SET)
-                msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
-            else:
-                import fcntl
+                    os.lseek(descriptor, 0, os.SEEK_SET)
+                    msvcrt.locking(descriptor, msvcrt.LK_UNLCK, 1)  # type: ignore[attr-defined]
+                else:
+                    import fcntl
 
-                fcntl.flock(descriptor, fcntl.LOCK_UN)
-        os.close(descriptor)
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
+        except OSError:
+            if primary is None:
+                raise
+            logger.warning("Initialization unlock failed; closing owned descriptor", exc_info=True)
+        finally:
+            cleanup = sys.exc_info()[1]
+            try:
+                os.close(descriptor)
+            except OSError:
+                if primary is None and cleanup is None:
+                    raise
+                logger.warning("Initialization descriptor close failed", exc_info=True)
 
 
 def sync_file(path: Path) -> None:

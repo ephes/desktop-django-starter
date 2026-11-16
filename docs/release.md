@@ -7,6 +7,16 @@ writers. Interpreter symlinks within the runtime remain supported.
 Both Node and Tauri reject duplicate JSON object members anywhere in the bounded
 schema-v1 manifest, including escaped duplicate keys and extension objects.
 Repair ambiguous manifests before retrying; they never enable legacy discovery.
+Tauri opens manifests with no-follow/nonblocking flags on Unix and opens reparse
+points themselves on Windows, then checks the opened bounded regular descriptor.
+Unix also compares the admitted device/inode; Windows refuses reparse attributes
+and changed creation/write/size metadata. Unsafe or substituted manifests fail
+closed before reading; packaged Windows validation remains platform-local.
+
+Initialization always attempts to close its lock descriptor, including when
+explicit unlock fails. An initialization error remains the primary error;
+secondary unlock/close failures are logged. With no prior error, unlock failure
+is reported to the caller after the close attempt.
 
 
 This starter now includes the packaging scaffolding needed to make signing, notarization, a minimal Electron connected updater, an experimental Tauri connected updater, and manual updates explicit without turning the repository into a full production release system.
