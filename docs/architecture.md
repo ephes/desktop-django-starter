@@ -335,8 +335,9 @@ First-run demo seeding uses a unique `DemoContentState` marker as its first
 transactional write, before checking for existing user content. This serializes
 concurrent SQLite command callers under both development's deferred transactions
 and packaged `IMMEDIATE` transactions. The marker and all three ponies commit
-together; failure rolls them all back. Existing user content skips the seed
-without recording a marker. Call the helper before doing reads in a caller-owned
+together; failure rolls them all back and permits a later retry. Existing user
+content skips insertion but commits the marker, so clearing legacy rows and
+reopening the database cannot make it look new again. Call the helper before doing reads in a caller-owned
 SQLite transaction; it cannot upgrade a caller's pre-existing read snapshot.
 
 ## Deferred Areas

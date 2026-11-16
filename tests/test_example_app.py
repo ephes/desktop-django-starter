@@ -68,7 +68,7 @@ def test_seed_demo_content_noops_when_pony_rows_exist() -> None:
 
     assert Item.objects.count() == 1
     assert Item.objects.get().title == "Existing Pony"
-    assert DemoContentState.objects.count() == 0
+    assert DemoContentState.objects.count() == 1
 
 
 def test_seed_demo_content_does_not_reseed_after_clearing_stable(client) -> None:

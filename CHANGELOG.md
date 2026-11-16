@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Persist the first-run decision when existing content suppresses demo seeding,
+  so clearing a legacy stable stays empty after reopening. Failed seed batches
+  still roll back completely and can be retried.
+
 - Count queued/running backend work in one statement to avoid false idle reports.
 - Read bounded backend traceback previews before reconciliation and publish only
   safe failure categories or known demo messages in routine pages and polls.
