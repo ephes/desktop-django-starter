@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.apps import apps
+from django.db.models import Count, Q
 
 
 def background_task_counts() -> dict[str, int]:
@@ -17,7 +18,7 @@ def background_task_counts() -> dict[str, int]:
     from django.tasks import TaskResultStatus
     from django_tasks_db.models import DBTaskResult
 
-    return {
-        "running_tasks": DBTaskResult.objects.filter(status=TaskResultStatus.RUNNING).count(),
-        "queued_tasks": DBTaskResult.objects.filter(status=TaskResultStatus.READY).count(),
-    }
+    return DBTaskResult.objects.aggregate(
+        running_tasks=Count("pk", filter=Q(status=TaskResultStatus.RUNNING)),
+        queued_tasks=Count("pk", filter=Q(status=TaskResultStatus.READY)),
+    )

@@ -262,6 +262,17 @@ Current launcher contract:
   Fresh completions enter history in the same response. This is a visibility
   limit, not automatic deletion: older terminal rows remain until Clear Finished
   Routines deletes them; history pagination is outside this teaching demo.
+- Shell activity counts queued and running backend tasks in one conditional
+  aggregate statement, so a READY-to-RUNNING transition cannot fall between two
+  counter reads and falsely report idle. Apps without the backend still report
+  zero without a database query; shell quit confirmation uses the same API.
+- Polling selects at most the final 1024 characters of each backend traceback in
+  SQL before constructing a task result or splitting lines. Full diagnostics stay
+  in the backend table. Unexpected exceptions display only the fixed category
+  "Task exited before the demo row was finalized."; only the exact known demo
+  exception class and allowlisted demo messages can publish a specific failure
+  message. Worker-finalized results remain authoritative, and an independent
+  routine still reconciles normally when another routine fails.
 - successful backend payloads must contain a `DONE`/`FAILED` status, string result,
   finite nonnegative numeric duration (no booleans), and timezone-aware ISO
   completion timestamp. Invalid payloads become a failed demo row through the

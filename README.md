@@ -25,6 +25,8 @@ Runnable starter slices:
   after a conflict. Edit conflicts keep your submitted input for comparison.
 - Start Routine admits at most 16 queued/running routines globally; a full queue
   returns a retryable refusal without creating a routine or backend result.
+- Unexpected routine failures display a fixed safe category; stored tracebacks
+  stay out of page and JSON output. Shell activity reads both counters together.
 - Routine pages and polls show every queued/running routine plus the 100 most
   recently completed routines. Older history stays in SQLite until Clear Finished
   Routines removes it; the demo has no history pagination.
