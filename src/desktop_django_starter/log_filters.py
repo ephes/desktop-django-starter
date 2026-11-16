@@ -7,7 +7,9 @@ import re
 from urllib.parse import unquote, unquote_plus, urlsplit
 
 BOOTSTRAP_PATH = "/desktop-auth/bootstrap/"
-_QUERY_URL = re.compile(r"(/[^\s\"'?#]*\?)([^\s\"'#]*)")
+# http.server request targets contain no whitespace, and Django's QUERY_STRING
+# runs to the end of the target: "#" and quotes are not query delimiters there.
+_QUERY_URL = re.compile(r"(/[^\s\"'?#]*\?)(\S*)")
 
 
 def _redact_query(match: re.Match[str]) -> str:
@@ -22,6 +24,9 @@ def _redact_query(match: re.Match[str]) -> str:
         pass
     if BOOTSTRAP_PATH not in paths:
         return match.group()
+    # Keep a closing quote of a quoted request line outside the query.
+    stripped = query.rstrip("\"'")
+    query, closing = stripped, query[len(stripped) :]
     members = []
     for member in query.split("&"):
         key = member.partition("=")[0]
@@ -30,7 +35,7 @@ def _redact_query(match: re.Match[str]) -> str:
         if unquote_plus(key) == "token":
             member = key + "=[redacted]"
         members.append(member)
-    return prefix + "&".join(members)
+    return prefix + "&".join(members) + closing
 
 
 class RedactDesktopAuthToken(logging.Filter):

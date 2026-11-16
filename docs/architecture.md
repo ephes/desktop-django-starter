@@ -62,7 +62,9 @@ Django's request-log filter redacts every bootstrap query member whose decoded
 name is `token`, including percent-encoded aliases and duplicate members. It
 formats positional or mapping-style arguments before redaction, preserves safe
 URL structure and also recognizes percent-encoded bootstrap paths and repeated
-leading slashes (which `http.server` routes as a single `/`). A record whose
+leading slashes (which `http.server` routes as a single `/`). The query runs to
+the end of the raw request target, so members after a raw `#` or quote are still
+redacted; only a closing quote of the logged request line stays outside. A record whose
 arguments cannot be formatted keeps only its redacted template instead of raising
 at the logging call site. Credentials must stay out of terminal/system logs even
 when Django accepts a nonliteral key.

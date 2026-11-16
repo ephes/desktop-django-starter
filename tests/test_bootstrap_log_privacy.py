@@ -21,13 +21,17 @@ EARLIER = "synthetic-earlier-credential"
         ("/desktop-auth/%62ootstrap/", f"%74oken={TOKEN}&next=%2F"),
         ("//desktop-auth/bootstrap/", f"token={TOKEN}&next=%2F"),
         ("///desktop-auth/%62ootstrap/", f"%74oken={TOKEN}&next=%2F"),
+        ("/desktop-auth/bootstrap/", f"next=%2F#&token={TOKEN}&next=%2F"),
+        ("/desktop-auth/bootstrap/", f"next=%2F'&token={TOKEN}&next=%2F"),
+        ("/desktop-auth/bootstrap/", f'x="&token={TOKEN}&next=%2F'),
     ],
 )
 def test_formatted_logs_hide_every_canonical_token_member(client, form, path, query):
     url = f"{path}?{query}"
-    # http.server routes a leading "//" as "/"; the request log keeps the raw line.
+    # http.server routes a leading "//" as "/" and passes the raw query (including
+    # "#" and quotes) as QUERY_STRING; the request log keeps the raw line.
     with override_settings(DESKTOP_DJANGO_AUTH_TOKEN=TOKEN):
-        assert client.get("/" + url.lstrip("/")).status_code == 302
+        assert client.get("/" + path.lstrip("/"), QUERY_STRING=query).status_code == 302
     request_line = f"GET {url} HTTP/1.1"
     if form == "message":
         message, args = f'"{request_line}" 302 0', ()
@@ -96,3 +100,12 @@ def test_unformattable_record_neither_raises_nor_leaks(message, args):
     formatted = logging.Formatter("%(message)s").format(record)
     assert TOKEN not in formatted
     assert "token=[redacted]" in formatted
+
+
+def test_quoted_request_line_without_version_keeps_closing_quote():
+    record = logging.LogRecord(
+        "django.server", logging.INFO, __file__, 1, '"GET %s" 302 0',
+        (f"/desktop-auth/bootstrap/?next=%2F&token={TOKEN}",), None,
+    )
+    RedactDesktopAuthToken().filter(record)
+    assert record.getMessage() == '"GET /desktop-auth/bootstrap/?next=%2F&token=[redacted]" 302 0'
