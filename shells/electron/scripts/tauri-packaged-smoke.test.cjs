@@ -74,6 +74,9 @@ test('Cargo configured target output is observed without admitting stale other t
     assert.equal(resolveSmokeBinary(buildOutputRoots(options), before, 'linux').command, current);
     const explicit = { ...options, target: 'old-triple' };
     assert.throws(() => resolveSmokeBinary(buildOutputRoots(explicit), before, 'linux'), /current|changed/i);
+    // A stray non-triple directory in a shared target dir is skipped, not fatal.
+    fs.mkdirSync(path.join(root, 'shared cache+tmp'));
+    assert.ok(buildOutputRoots(options).every(entry => !entry.includes('shared cache+tmp')));
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

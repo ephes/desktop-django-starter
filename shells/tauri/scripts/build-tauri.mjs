@@ -174,10 +174,13 @@ const timeoutMs = smokeTest ? smokeTimeout() : undefined;
 const before = smokeTest ? snapshotArtifacts(bundleRoots) : null;
 
 run(npmCommand, ["run", "stage-backend"], { cwd: tauriRoot });
+// The bundler recreates its outputs; older bundles in other triple/host roots are stale.
+const buildStartedAt = Date.now() - 2000;
 run(tauriBinary, ["build", ...buildArgs], { cwd: tauriRoot, env: process.env });
 // Re-evaluate roots after the build to admit a newly created configured target.
 const currentRoots = buildOutputRoots(layout);
-const builtArtifacts = currentRoots.flatMap(root => resolveBuiltArtifacts(root));
+const builtArtifacts = currentRoots.flatMap(root => resolveBuiltArtifacts(root))
+  .filter(artifactPath => fs.statSync(artifactPath).mtimeMs >= buildStartedAt);
 if (builtArtifacts.length > 0) {
   process.stdout.write("Built Tauri artifacts:\n");
   for (const artifactPath of builtArtifacts) process.stdout.write(`- ${artifactPath}\n`);

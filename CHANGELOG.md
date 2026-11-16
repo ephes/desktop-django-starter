@@ -3,12 +3,15 @@
 ## Unreleased
 
 - Smoke only the uniquely changed Tauri bundle in the current Cargo target output,
-  retaining stale/unrelated artifacts and refusing ambiguous builds.
+  retaining stale/unrelated artifacts and refusing ambiguous builds. Non-triple
+  directories in a shared target dir are skipped, and build output lists only
+  bundles written by the current invocation.
 - Bound packaged smoke execution and diagnostics, retiring its owned process group
   even when the smoke leader exits with surviving descendants.
 
 - Harden Tauri manifest opening against symlink/FIFO substitution and validate the opened descriptor.
-- Always close initialization lock descriptors after unlock failure, preserving primary errors.
+- Always close initialization lock descriptors after unlock failure, preserving primary errors;
+  an exception the caller is merely handling no longer hides an unlock failure.
 
 - Preflight all runtime pruning parents before deletion and refuse symlinked trees.
 - Reject duplicate runtime-manifest members in Node and Tauri before interpreter selection.

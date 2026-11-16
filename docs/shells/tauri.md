@@ -80,7 +80,11 @@ resolves custom target directories (including `CARGO_TARGET_DIR` and Cargo confi
 Cargo `--target-dir` arguments override that directory and resolve relative to
 `src-tauri`; `--debug`/`-d` and forwarded `--profile` select the output profile. With an implicit
 Cargo `build.target`, host and target subdirectories are observed and only the
-single changed bundle is admitted. Existing unrelated bundles remain untouched.
+single changed bundle is admitted. Existing unrelated bundles remain untouched;
+directories whose names are not target triples (for example in a shared target
+directory) are skipped. Every build, smoked or not, lists only bundles the
+bundler wrote during that invocation, so stale bundles from other triples are
+not reported.
 No changed bundle, multiple changed bundles or multiple executable files in a
 macOS app fail before launch. Run builds exclusively in that target directory;
 concurrent builds cannot provide trustworthy smoke evidence. Windows installers

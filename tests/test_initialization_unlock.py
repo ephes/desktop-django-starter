@@ -68,3 +68,24 @@ def test_unlock_failure_always_closes_owned_descriptor(
             real_flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
         finally:
             real_close(descriptor)
+
+
+@pytest.mark.skipif(os.name == "nt", reason="exercises the POSIX flock path")
+def test_unlock_failure_is_reported_when_called_from_an_exception_handler(monkeypatch, tmp_path):
+    """A caller's handled exception is not the body's error and must not hide unlock failure."""
+    import fcntl
+
+    real_flock = fcntl.flock
+
+    def flock(descriptor, mode):
+        if mode == fcntl.LOCK_UN:
+            raise OSError("injected unlock failure")
+        return real_flock(descriptor, mode)
+
+    monkeypatch.setattr(fcntl, "flock", flock)
+    try:
+        raise KeyError("caller context")
+    except KeyError:
+        with pytest.raises(OSError, match="unlock failure"):
+            with state_staging.initialization_lock(tmp_path):
+                pass

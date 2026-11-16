@@ -15,8 +15,9 @@ export function buildOutputRoot({ tauriRoot, targetDirectory, target, profile = 
 export function buildOutputRoots(options) {
   if (options.target) return [buildOutputRoot(options)];
   const directory = options.targetDirectory || path.join(options.tauriRoot, 'src-tauri', 'target');
+  // Unrelated directories (for example in a shared target dir) are not triples; skip them.
   const names = fs.existsSync(directory) ? fs.readdirSync(directory, { withFileTypes: true })
-    .filter(entry => entry.isDirectory()).map(entry => entry.name) : [];
+    .filter(entry => entry.isDirectory() && /^[A-Za-z0-9_.-]+$/.test(entry.name)).map(entry => entry.name) : [];
   return [buildOutputRoot(options), ...names.map(target => buildOutputRoot({ ...options, target }))];
 }
 
