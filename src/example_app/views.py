@@ -8,7 +8,13 @@ from django.views.generic import CreateView, DeleteView, ListView, UpdateView
 
 from .forms import ItemForm
 from .models import Item
-from .revisions import CONFLICT_MESSAGE, displayed_revision, matches_displayed_revision
+from .revisions import (
+    CONFLICT_MESSAGE,
+    displayed_inventory_revision,
+    displayed_revision,
+    matches_displayed_revision,
+    matches_inventory_revision,
+)
 
 PAGE_SIZE = 20
 
@@ -34,10 +40,16 @@ class ItemListView(ListView):
     paginate_by = PAGE_SIZE
     ordering = ["-updated_at", "-created_at", "-pk"]
 
+    def get(self, request, *args, **kwargs):
+        # Page count, displayed rows and whole-stable digest share one snapshot.
+        with transaction.atomic():
+            return super().get(request, *args, **kwargs)
+
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
         for item in context["items"]:
             item.displayed_revision = displayed_revision(item)
+        context["inventory_revision"] = displayed_inventory_revision()
         return context
 
 
@@ -107,5 +119,12 @@ class ItemDeleteView(ItemReturnNavigation, DeleteView):
 
 @require_POST
 def item_clear(request):
-    Item.objects.all().delete()
+    with transaction.atomic():
+        # Even an empty match acquires SQLite's writer before the inventory read.
+        Item.objects.filter(pk=0).update(title=F("title"))
+        if not matches_inventory_revision(request.POST.get("revision", "")):
+            return JsonResponse(
+                {"error": "The stable changed. Reload before releasing all."}, status=409
+            )
+        Item.objects.all().delete()
     return JsonResponse({"cleared": True})

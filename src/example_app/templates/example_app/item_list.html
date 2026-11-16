@@ -92,6 +92,7 @@
     var cancelBtn = document.getElementById("delete-cancel");
     var deleteUrl = "";
     var revision = "";
+    var clearAll = false;
     var errorEl = document.getElementById("delete-error");
     var reloadEl = document.getElementById("delete-reload");
     var csrfToken = document.querySelector("[name=csrfmiddlewaretoken]");
@@ -102,10 +103,12 @@
         csrfToken = csrfToken.value;
     }
 
-    function openModal(title, url, displayedRevision) {
+    function openModal(title, url, displayedRevision, wholeStable) {
         titleEl.textContent = title;
         deleteUrl = url;
         revision = displayedRevision;
+        clearAll = Boolean(wholeStable);
+        confirmBtn.textContent = clearAll ? "Release All Ponies" : "Release Pony";
         errorEl.hidden = true;
         reloadEl.hidden = true;
         confirmBtn.disabled = false;
@@ -151,22 +154,29 @@
             if (response.ok) {
                 // Follow the server's clamped redirect: reloading ?page=N
                 // would 404 when the release emptied the last page.
-                if (response.url) {
+                if (clearAll) {
+                    window.location.assign("{% url 'example_app:item-list' %}");
+                } else if (response.url) {
                     window.location.assign(response.url);
                 } else {
                     window.location.reload();
                 }
                 return;
             }
-            errorEl.textContent = response.status === 409
+            errorEl.textContent = clearAll
+                ? "The stable changed or could not be cleared. Reload before releasing all."
+                : response.status === 409
                 ? "This pony changed. Reload it before releasing."
                 : "The pony could not be released. Reload it before retrying.";
             errorEl.hidden = false;
-            reloadEl.href = deleteUrl;
+            reloadEl.href = clearAll ? "{% url 'example_app:item-list' %}" : deleteUrl;
+            reloadEl.textContent = clearAll ? "Reload current stable" : "Reload current pony";
             reloadEl.hidden = false;
             confirmBtn.disabled = true;
         }).catch(function() {
-            errorEl.textContent = "The pony could not be released. Please try again.";
+            errorEl.textContent = clearAll
+                ? "The stable could not be cleared. Please try again."
+                : "The pony could not be released. Please try again.";
             errorEl.hidden = false;
         });
     });
@@ -174,13 +184,8 @@
     var clearBtn = document.getElementById("clear-items-btn");
     if (clearBtn) {
         clearBtn.addEventListener("click", function() {
-            fetch("{% url 'example_app:item-clear' %}", {
-                method: "POST",
-                headers: { "X-CSRFToken": csrfToken }
-            }).then(function() {
-                // Every page after the first disappears once all ponies are gone.
-                window.location.assign("{% url 'example_app:item-list' %}");
-            });
+            openModal("all {{ paginator.count }} ponies in the stable",
+                "{% url 'example_app:item-clear' %}", "{{ inventory_revision|escapejs }}", true);
         });
     }
 })();

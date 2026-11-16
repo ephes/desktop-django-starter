@@ -23,6 +23,8 @@ Runnable starter slices:
 - My Ponies shows 20 rows per page with native navigation. Edit and release
   confirmations detect changes made in another window; reload the current pony
   after a conflict. Edit conflicts keep your submitted input for comparison.
+  Release All Ponies confirms the whole stable count and refuses changes made
+  anywhere in the stable since that page loaded; reload before confirming again.
 - Start Routine admits at most 16 queued/running routines globally; a full queue
   returns a retryable refusal, shown on the page, without creating a routine or
   backend result.

@@ -22,7 +22,8 @@ def test_item_list_pages_equal_timestamps_without_omissions(client, django_asser
     Item.objects.update(created_at=timezone.now(), updated_at=timezone.now())
     seen = []
     for page in range(1, 6):
-        with django_assert_num_queries(2):
+        # Snapshot savepoint + count/page/inventory queries + release.
+        with django_assert_num_queries(5):
             response = client.get(reverse("example_app:item-list"), {"page": page})
         assert response.status_code == 200
         items = list(response.context["items"])
@@ -74,7 +75,8 @@ def test_seed_demo_content_noops_when_pony_rows_exist() -> None:
 def test_seed_demo_content_does_not_reseed_after_clearing_stable(client) -> None:
     call_command("seed_demo_content")
 
-    clear_response = client.post(reverse("example_app:item-clear"))
+    revision = client.get(reverse("example_app:item-list")).context["inventory_revision"]
+    clear_response = client.post(reverse("example_app:item-clear"), {"revision": revision})
 
     assert clear_response.status_code == 200
     assert clear_response.json() == {"cleared": True}

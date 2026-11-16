@@ -247,8 +247,15 @@ Current launcher contract:
   shell authentication still apply independently. No schema migration is needed.
 - The list's release modal submits the row's displayed revision and keeps conflicts
   visible with a link to the current confirmation page. That page shows the full
-  current personality/status before a fresh release. Release All Ponies remains
-  the explicit whole-stable action.
+  current personality/status before a fresh release. Release All Ponies opens an
+  explicit confirmation for the total stable count, including other pages. Its
+  signed inventory digest and page rows come from one SQLite read snapshot; the
+  digest streams all IDs, content and update timestamps in primary-key order.
+  Confirmation acquires SQLite's writer before verifying the digest and deleting.
+  Any addition, edit or release since the displayed snapshot returns HTTP 409;
+  the modal preserves the conflict and links to a fresh stable view. A successful
+  clear cannot be replayed against the now-empty inventory. No migration is needed;
+  reading a list adds one streaming inventory query across the whole stable.
 - Start Routine admits at most 16 pending/running demo rows globally. A no-op
   UPDATE on the existing routine table takes SQLite's writer lock before the
   count; admission and both demo/backend inserts share that transaction, including
