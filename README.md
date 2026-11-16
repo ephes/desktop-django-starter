@@ -358,7 +358,7 @@ Packaged mode still sets a small runtime environment at launch time:
 - `DESKTOP_DJANGO_AUTH_TOKEN` for the per-session shell-to-Django token; packaged settings refuse every request when it is missing, so a shell that forgets to pass it fails closed
 - `PYTHONUNBUFFERED=1`
 
-Packaged settings create the app-data directory owner-only (`0700` on macOS and Linux), because it holds the SQLite database and the secret key. Django's request log redacts the token in `/desktop-auth/bootstrap/?token=...` lines, so the Tauri and Positron bootstrap URL does not end up in terminal or system logs.
+Packaged settings create the app-data directory owner-only (`0700` on macOS and Linux), because it holds the SQLite database and the secret key. Django's request log redacts every token member in `/desktop-auth/bootstrap/?token=...` lines, including percent-encoded names and duplicate keys, so the Tauri and Positron bootstrap URL does not end up in terminal or system logs.
 
 Shells do not inject a `DJANGO_SECRET_KEY`. Packaged settings generate one per install in the app-data directory (owner-only `secret_key` file) on first start and reuse it; an explicit `DJANGO_SECRET_KEY` environment variable still wins. See [`docs/release.md`](docs/release.md#django-secret-key-handling).
 

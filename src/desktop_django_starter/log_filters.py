@@ -4,14 +4,28 @@ from __future__ import annotations
 
 import logging
 import re
+from urllib.parse import unquote, unquote_plus, urlsplit
 
-_BOOTSTRAP_TOKEN = re.compile(r"(/desktop-auth/bootstrap/\?(?:[^\s\"]*&)?token=)[^&\s\"]*")
+_QUERY_URL = re.compile(r"(/[^\s\"'?#]*\?)([^\s\"'#]*)")
 
 
-def _redact(value: object) -> object:
-    if isinstance(value, str):
-        return _BOOTSTRAP_TOKEN.sub(r"\1[redacted]", value)
-    return value
+def _redact_query(match: re.Match[str]) -> str:
+    prefix, query = match.groups()
+    try:
+        path = unquote(urlsplit(prefix).path)
+    except ValueError:
+        return match.group()
+    if path != "/desktop-auth/bootstrap/":
+        return match.group()
+    members = []
+    for member in query.split("&"):
+        key = member.partition("=")[0]
+        # Match Django's QueryDict decoding and redact all duplicates, including
+        # those ignored by GET.get(), without re-encoding safe URL structure.
+        if unquote_plus(key) == "token":
+            member = key + "=[redacted]"
+        members.append(member)
+    return prefix + "&".join(members)
 
 
 class RedactDesktopAuthToken(logging.Filter):
@@ -23,7 +37,8 @@ class RedactDesktopAuthToken(logging.Filter):
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
-        record.msg = _redact(record.msg)
-        if isinstance(record.args, tuple):
-            record.args = tuple(_redact(arg) for arg in record.args)
+        # Format first so tuple/mapping placeholders inside the URL cannot
+        # reintroduce a credential after redaction or lose their placeholder.
+        record.msg = _QUERY_URL.sub(_redact_query, record.getMessage())
+        record.args = ()
         return True

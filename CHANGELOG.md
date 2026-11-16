@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redact every decoded bootstrap token query member from formatted request logs,
+  including encoded names/paths, duplicate keys and mapping-style log arguments.
+
 - Confirm Release All Ponies against a signed whole-stable snapshot under SQLite's
   writer lock. Stale, missing or forged confirmations return 409 and preserve all
   current rows; the modal offers a reload before a fresh confirmation.

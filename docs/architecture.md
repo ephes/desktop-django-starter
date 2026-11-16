@@ -51,6 +51,12 @@ launch token is configured. Safe relative redirects and the HttpOnly,
 `SameSite=Strict` cookie still apply. These headers govern response storage and
 referrer forwarding; they do not promise to erase web view navigation history.
 
+Django's request-log filter redacts every bootstrap query member whose decoded
+name is `token`, including percent-encoded aliases and duplicate members. It
+formats positional or mapping-style arguments before redaction, preserves safe
+URL structure and also recognizes percent-encoded bootstrap paths. Credentials
+must stay out of terminal/system logs even when Django accepts a nonliteral key.
+
 Current shell split note:
 
 - Electron remains the baseline shell and the most complete release-oriented packaging lane
