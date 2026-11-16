@@ -262,7 +262,9 @@ Current launcher contract:
   visible with a link to the current confirmation page. That page shows the full
   current personality/status before a fresh release. Release All Ponies opens an
   explicit confirmation for the total stable count, including other pages. Its
-  signed inventory digest and page rows come from one SQLite read snapshot; the
+  signed inventory digest and page rows come from one deferred SQLite read
+  snapshot. Even under packaged `IMMEDIATE` transactions the list read never
+  takes the writer lock, so it does not wait for or block other writers. The
   digest streams all IDs, content and update timestamps in primary-key order.
   Confirmation acquires SQLite's writer before verifying the digest and deleting.
   Any addition, edit or release since the displayed snapshot returns HTTP 409;

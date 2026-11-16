@@ -11,7 +11,9 @@
 
 - Confirm Release All Ponies against a signed whole-stable snapshot under SQLite's
   writer lock. Stale, missing or forged confirmations return 409 and preserve all
-  current rows; the modal offers a reload before a fresh confirmation.
+  current rows; the modal offers a reload before a fresh confirmation. The list
+  page reads its count, rows and digest in one deferred read snapshot that never
+  takes SQLite's writer lock.
 
 - Persist the first-run decision when existing content suppresses demo seeding,
   so clearing a legacy stable stays empty after reopening. Failed seed batches

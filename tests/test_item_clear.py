@@ -60,7 +60,7 @@ os.environ['DESKTOP_DJANGO_APP_DATA_DIR'] = str(directory / 'app-data')
 settings.DATABASES['default']['NAME'] = directory / 'clear.sqlite3'
 django.setup()
 from django.core.management import call_command
-from django.db import connection, connections
+from django.db import connection, connections, transaction
 from django.test import RequestFactory
 from example_app.models import Item
 from example_app.views import ItemListView, item_clear
@@ -105,6 +105,24 @@ elif role == 'fence':
     finally:
         peer.close()
     print(0)
+elif role == 'reader':
+    # Another window holds SQLite's writer lock with an uncommitted insert.
+    peer = connection.copy(alias='peer')
+    connections['peer'] = peer
+    with connection.cursor() as cursor:
+        cursor.execute('PRAGMA busy_timeout=0')
+    try:
+        with transaction.atomic(using='peer'):
+            Item.objects.using('peer').create(title='Uncommitted arrival')
+            response = ItemListView.as_view()(factory.get('/'))
+            assert response.context_data['paginator'].count == 1
+            assert response.context_data['inventory_revision']
+        old = response.context_data['inventory_revision']
+        assert clear(old) == 409
+        assert Item.objects.count() == 2
+    finally:
+        peer.close()
+    print(0)
 elif role in ('add', 'edit'):
     old = displayed()
     # Another window commits through a separate SQLite connection.
@@ -135,7 +153,7 @@ else:
 
 
 @pytest.mark.parametrize("mode", ["local", "packaged"])
-@pytest.mark.parametrize("scenario", ["add", "edit", "fence", "race"])
+@pytest.mark.parametrize("scenario", ["add", "edit", "fence", "race", "reader"])
 def test_clear_across_sqlite_connections(tmp_path, mode, scenario):
     env = {**os.environ, "PYTHONPATH": str(Path(__file__).resolve().parents[1] / "src")}
 

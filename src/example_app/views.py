@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import F
@@ -17,6 +19,31 @@ from .revisions import (
 )
 
 PAGE_SIZE = 20
+
+
+@contextmanager
+def read_snapshot():
+    """Hold one SQLite read snapshot without taking the writer lock.
+
+    Packaged settings begin every transaction IMMEDIATE, which would serialize
+    plain list reads with all writers. A deferred transaction under WAL gives
+    the same consistent snapshot while writers keep committing.
+    """
+    connection = transaction.get_connection()
+    if connection.vendor != "sqlite" or connection.in_atomic_block:
+        with transaction.atomic():
+            yield
+        return
+    # Connecting reloads transaction_mode from settings; do that first.
+    connection.ensure_connection()
+    mode = connection.transaction_mode
+    connection.transaction_mode = "DEFERRED"
+    try:
+        with transaction.atomic():
+            connection.transaction_mode = mode
+            yield
+    finally:
+        connection.transaction_mode = mode
 
 
 class ItemReturnNavigation:
@@ -42,7 +69,7 @@ class ItemListView(ListView):
 
     def get(self, request, *args, **kwargs):
         # Page count, displayed rows and whole-stable digest share one snapshot.
-        with transaction.atomic():
+        with read_snapshot():
             return super().get(request, *args, **kwargs)
 
     def get_context_data(self, **kwargs):
