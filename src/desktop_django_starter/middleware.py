@@ -26,8 +26,12 @@ class DesktopAuthTokenMiddleware:
 
     def __call__(self, request: HttpRequest) -> HttpResponse:
         response = self._authenticate(request)
-        if request.path == DESKTOP_AUTH_BOOTSTRAP_PATH:
+        shell_auth = bool(getattr(settings, "DESKTOP_DJANGO_AUTH_TOKEN", "")) or getattr(
+            settings, "DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN", False
+        )
+        if shell_auth or request.path == DESKTOP_AUTH_BOOTSTRAP_PATH:
             patch_cache_control(response, private=True, no_store=True)
+        if request.path == DESKTOP_AUTH_BOOTSTRAP_PATH:
             response["Referrer-Policy"] = "no-referrer"
         return response
 

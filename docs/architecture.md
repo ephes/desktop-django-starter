@@ -50,6 +50,13 @@ and `Referrer-Policy: no-referrer` on success and failure, including when no
 launch token is configured. Safe relative redirects and the HttpOnly,
 `SameSite=Strict` cookie still apply. These headers govern response storage and
 referrer forwarding; they do not promise to erase web view navigation history.
+When a shell token is configured or required, the middleware applies
+`Cache-Control: private, no-store` to every response (including GET/HEAD, forms,
+task JSON, static assets, CSRF refusals, retired-token refusals and a missing
+required-token configuration). It overrides downstream `public` caching. Local
+development without shell authentication keeps its existing cache behavior,
+except for the always-private bootstrap route. Token and CSRF admission rules
+are unchanged; these headers do not erase copies cached by older app versions.
 
 Django's request-log filter redacts every bootstrap query member whose decoded
 name is `token`, including percent-encoded aliases and duplicate members. It

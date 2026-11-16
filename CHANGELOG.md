@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Send private/no-store cache policy on every shell-authenticated response and
+  refusal, including HTML forms, task JSON and GET/HEAD errors. Development
+  without shell authentication retains its existing non-bootstrap behavior.
+
 - Redact every decoded bootstrap token query member from formatted request logs,
   including encoded names/paths, duplicate keys and mapping-style log arguments.
 

@@ -4,6 +4,11 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 
 ## Unreleased
 
+- Shell responses now use `Cache-Control: private, no-store` for application
+  content and refusals as well as bootstrap. The updated distribution also
+  redacts encoded/duplicate bootstrap credentials in request logs; older cached
+  responses and navigation history are not retroactively removed.
+
 - Bundled interpreter admission now validates schema-v1 manifests, portable
   runtime-relative paths, regular executable files and resolved containment in
   Electron/shared helpers and Tauri. Corrupt or future manifests fail closed;
