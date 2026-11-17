@@ -115,10 +115,11 @@ and sender-validated app-data IPC continue to apply.
 
 `npm --prefix shells/electron run test:frames` also drives actual remote iframe
 popups (ordinary and noreferrer) through the installed handler and verifies zero
-native dispatch, no child windows, and exactly one dispatch for a trusted app
-link served with the starter's referrer policy; a trusted page served with
-`Referrer-Policy: same-origin` reports an empty referrer and dispatches nothing. The fixture records native dispatch in memory instead of launching the OS
-browser. Node tests exercise foreign ports, missing evidence, unsafe schemes,
-stale/destroyed windows and the callback registered by `main.js`.
+native dispatch, no child windows, and exactly one dispatch each for a trusted
+app HTTPS link and `mailto:` link served with the starter's referrer policy. A
+trusted page served with `Referrer-Policy: same-origin` reports an empty referrer
+and dispatches nothing. The fixture records native dispatch in memory instead of
+launching the OS browser. Node tests exercise foreign ports, missing evidence,
+unsafe schemes, stale/destroyed windows and the callback registered by `main.js`.
 See Electron's [public popup callback](https://www.electronjs.org/docs/latest/api/web-contents#contentssetwindowopenhandlerhandler)
 for the available evidence; it does not expose an initiator frame.

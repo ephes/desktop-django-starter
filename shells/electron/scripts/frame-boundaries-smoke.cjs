@@ -90,16 +90,17 @@ app.whenReady().then(async () => {
     window.open('https://popup.invalid/no-referrer', '_blank', 'noreferrer'); undefined;`, true);
   assert.equal(attempts.length, 2, 'real remote frame reached installed popup handler');
   assert.deepEqual(dispatched, []);
-  await contents.executeJavaScript("window.open('https://popup.invalid/trusted'); undefined;", true);
-  assert.equal(attempts.length, 3, 'trusted app reached the same installed handler');
-  assert.deepEqual(dispatched, ['https://popup.invalid/trusted']);
+  await contents.executeJavaScript("window.open('https://popup.invalid/trusted'); window.open('mailto:fixture@popup.invalid'); undefined;", true);
+  assert.equal(attempts.length, 4, 'trusted app reached the same installed handler');
+  const trustedDispatches = ['https://popup.invalid/trusted', 'mailto:fixture@popup.invalid'];
+  assert.deepEqual(dispatched, trustedDispatches);
   await win.loadURL(`${trusted}/same-origin/`);
   await contents.executeJavaScript("window.open('https://popup.invalid/same-origin-policy'); undefined;", true);
-  assert.equal(attempts.length, 4, 'same-origin policy page reached the installed handler');
-  assert.equal(attempts[3].referrer.url, '', 'same-origin policy strips the cross-origin referrer');
-  assert.deepEqual(dispatched, ['https://popup.invalid/trusted'], 'stripped referrer fails closed');
+  assert.equal(attempts.length, 5, 'same-origin policy page reached the installed handler');
+  assert.equal(attempts[4].referrer.url, '', 'same-origin policy strips the cross-origin referrer');
+  assert.deepEqual(dispatched, trustedDispatches, 'stripped referrer fails closed');
   assert.equal(BrowserWindow.getAllWindows().length, 1, 'no popup window created');
-  console.log('PASS: remote iframe capabilities and popup dispatch denied; trusted outbound link dispatches once under the starter referrer policy; same-origin referrer policy fails closed; embed and exact-origin auth headers preserved');
+  console.log('PASS: remote iframe capabilities and popup dispatch denied; trusted HTTPS and mailto outbound links dispatch once under the starter referrer policy; same-origin referrer policy fails closed; embed and exact-origin auth headers preserved');
 }).then(() => finish(0), (error) => { console.error(error); finish(1); });
 
 function finish(code) {
