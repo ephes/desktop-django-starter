@@ -153,7 +153,7 @@ The current implementation follows this sequence:
 Every backend process (`migrate`, `seed_demo_content`, `runserver`, `db_worker`) is started through `desktop_process_guard.py`, a small standard-library launcher staged next to `manage.py`. It runs `manage.py` in the same process and adds two safety nets for the case where the shell dies without cleaning up:
 
 - the shell keeps an open pipe on the child's stdin; when the shell process ends for any reason, the operating system closes it and the guard exits the backend process
-- on Windows the guard puts the backend into a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so anything the backend starts dies with it
+- on Windows the guard puts the backend into a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so anything the backend starts dies with it. Creation, configuration or assignment failure closes any newly created handle and refuses startup before Django runs, using a fixed diagnostic without host details
 
 Single-instance expectation:
 

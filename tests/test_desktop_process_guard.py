@@ -5,6 +5,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
@@ -17,6 +19,51 @@ def load_guard():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+@pytest.mark.parametrize("failure", ["create", "configure", "assign", None])
+def test_windows_job_admission_closes_failed_handles(monkeypatch, failure) -> None:
+    guard = load_guard()
+    kernel = SimpleNamespace(
+        CreateJobObjectW=Mock(return_value=0 if failure == "create" else 123),
+        SetInformationJobObject=Mock(return_value=failure != "configure"),
+        AssignProcessToJobObject=Mock(return_value=failure != "assign"),
+        GetCurrentProcess=Mock(return_value=456),
+        CloseHandle=Mock(return_value=True),
+    )
+    monkeypatch.setattr(ctypes, "WinDLL", Mock(return_value=kernel), raising=False)
+    monkeypatch.setattr(ctypes, "get_last_error", lambda: 5, raising=False)
+    monkeypatch.setattr(ctypes, "WinError", lambda _: OSError("private host detail"), raising=False)
+
+    if failure:
+        with pytest.raises(OSError):
+            guard.join_kill_on_close_job()
+        assert guard._job_handle is None
+    else:
+        guard.join_kill_on_close_job()
+        assert guard._job_handle == 123
+    assert kernel.CloseHandle.call_args_list == (
+        [((123,), {})] if failure in {"configure", "assign"} else []
+    )
+    if failure in {"create", "configure"}:
+        kernel.AssignProcessToJobObject.assert_not_called()
+
+
+def test_windows_job_failure_refuses_manage_command(monkeypatch, capsys) -> None:
+    guard = load_guard()
+    monkeypatch.setattr(guard, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(guard, "join_kill_on_close_job", Mock(side_effect=OSError("secret")))
+    run = Mock()
+    watch = Mock()
+    monkeypatch.setattr(guard, "run_manage_command", run)
+    monkeypatch.setattr(guard, "exit_when_stdin_closes", watch)
+
+    with pytest.raises(SystemExit) as error:
+        guard.main(["--watch-stdin", "--", "manage.py"])
+    assert error.value.code == 1
+    run.assert_not_called()
+    watch.assert_not_called()
+    assert capsys.readouterr().err == "desktop_process_guard: backend job admission failed\n"
 
 
 def test_parse_arguments_splits_guard_options_from_the_command() -> None:

@@ -121,22 +121,28 @@ def join_kill_on_close_job() -> None:
     kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
     kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
     kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.CloseHandle.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
 
     job = kernel32.CreateJobObjectW(None, None)
     if not job:
         raise ctypes.WinError(ctypes.get_last_error())
 
-    information = job_object_structures()()
-    information.BasicLimitInformation.LimitFlags = KILL_ON_JOB_CLOSE
-    if not kernel32.SetInformationJobObject(
-        job,
-        JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
-        ctypes.byref(information),
-        ctypes.sizeof(information),
-    ):
-        raise ctypes.WinError(ctypes.get_last_error())
-    if not kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess()):
-        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        information = job_object_structures()()
+        information.BasicLimitInformation.LimitFlags = KILL_ON_JOB_CLOSE
+        if not kernel32.SetInformationJobObject(
+            job,
+            JOB_OBJECT_EXTENDED_LIMIT_INFORMATION_CLASS,
+            ctypes.byref(information),
+            ctypes.sizeof(information),
+        ):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not kernel32.AssignProcessToJobObject(job, kernel32.GetCurrentProcess()):
+            raise ctypes.WinError(ctypes.get_last_error())
+    except BaseException:
+        kernel32.CloseHandle(job)
+        raise
     _job_handle = job
 
 
@@ -173,8 +179,9 @@ def main(argv: list[str] | None = None) -> None:
     if os.name == "nt":
         try:
             join_kill_on_close_job()
-        except OSError as error:
-            sys.stderr.write(f"desktop_process_guard: could not create job object: {error}\n")
+        except OSError:
+            sys.stderr.write("desktop_process_guard: backend job admission failed\n")
+            raise SystemExit(1) from None
     if options["watch_stdin"]:
         exit_when_stdin_closes()
     run_manage_command(command)

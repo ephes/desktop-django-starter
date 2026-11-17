@@ -404,3 +404,8 @@ ambiguous directories. Payload files and directories are flushed before the
 completion marker and final rename. POSIX adds parent-directory sync; Windows
 has file flushes and process-crash atomicity, with no portable power-loss
 namespace guarantee. See the release guide before manually cleaning stages.
+
+Windows backend startup requires successful admission to a kill-on-close Job
+Object. Restricted hosts that refuse job creation, configuration or assignment
+stop startup with `backend job admission failed`; Django is never run without
+this ownership. Native Windows process-tree acceptance remains required.

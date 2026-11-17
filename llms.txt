@@ -78,3 +78,8 @@ Important constraints:
   cleanup; clean publication requires confirmed child exit. Failed update handoffs
   exit for explicit restart. See `docs/shells/electron.md` and the architecture
   recovery contract for bounds, repair guidance and platform limitations.
+
+Windows backend startup requires successful admission to a kill-on-close Job
+Object. Restricted hosts that refuse job creation, configuration or assignment
+stop startup with `backend job admission failed`; Django is never run without
+this ownership. Native Windows process-tree acceptance remains required.
