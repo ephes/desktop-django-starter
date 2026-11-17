@@ -91,3 +91,13 @@ this ownership. Native Windows process-tree acceptance remains required.
   of a group once its leader exits. The experimental Tauri shell signals only
   the leader. Never signal the caller's shared group. Deliberately detached
   descendants are outside scope.
+
+- Version upgrades read each media file only to its initial size and compare
+  identity, size, mtime and ctime around the copy. Detected changes refuse
+  publication; close writers and retry from the retained predecessor. This is
+  per-file change detection, not a snapshot across the database and media tree.
+
+- Completion and stage-owner JSON markers reject duplicate decoded members at
+  every depth, including escaped names and equal values. Ambiguous owner records
+  retain the entire stage for offline inspection; ambiguous completion records
+  stop reuse/import without rewriting the published generation.

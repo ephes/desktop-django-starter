@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -17,6 +16,7 @@ from pathlib import Path
 from django.core.exceptions import ImproperlyConfigured
 
 from .state_files import admit, directory_guard, identity, regular_reader, state_error
+from .state_markers import read_state_marker
 
 logger = logging.getLogger(__name__)
 LOCK_FILENAME = ".initialize.lock"
@@ -186,16 +186,12 @@ def recover_stages(root: Path) -> None:
     for stage in candidates:
         try:
             with directory_guard(stage):
-                with regular_reader(stage / OWNER_FILENAME) as stream:
-                    raw = stream.read(4097)
-                owner = json.loads(raw)
-                if (
-                    len(raw) > 4096
-                    or not isinstance(owner, dict)
-                    or type(owner.get("schema")) is not int
-                    or owner
-                    != {"schema": 1, "stage": stage.name, "kind": "dds-state-initialization"}
-                ):
+                owner = read_state_marker(stage / OWNER_FILENAME, max_bytes=4096)
+                if type(owner.get("schema")) is not int or owner != {
+                    "schema": 1,
+                    "stage": stage.name,
+                    "kind": "dds-state-initialization",
+                }:
                     raise ValueError("unknown owner")
                 if any(
                     child.name

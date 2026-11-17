@@ -49,3 +49,13 @@ Important constraints:
 - `tests/test_tasks_demo.py`: Backend tests for the real async task demo ("Stable Routines"), including enqueueing, reconciliation, and status transitions.
 - `tests/test_health.py`: Readiness endpoint coverage.
 - `src/tasks_demo/`: Background task visualization demo ("Stable Routines") with animated pulse-ring indicators, polling-based live updates, and a SQLite-backed `django.tasks` plus `django_tasks_db` worker flow (optional post-v1 extension).
+
+- Version upgrades read each media file only to its initial size and compare
+  identity, size, mtime and ctime around the copy. Detected changes refuse
+  publication; close writers and retry from the retained predecessor. This is
+  per-file change detection, not a snapshot across the database and media tree.
+
+- Completion and stage-owner JSON markers reject duplicate decoded members at
+  every depth, including escaped names and equal values. Ambiguous owner records
+  retain the entire stage for offline inspection; ambiguous completion records
+  stop reuse/import without rewriting the published generation.
