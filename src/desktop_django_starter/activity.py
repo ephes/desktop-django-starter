@@ -18,7 +18,9 @@ def background_task_counts() -> dict[str, int]:
     from django.tasks import TaskResultStatus
     from django_tasks_db.models import DBTaskResult
 
-    return DBTaskResult.objects.aggregate(
+    return DBTaskResult.objects.filter(
+        status__in=[TaskResultStatus.READY, TaskResultStatus.RUNNING]
+    ).aggregate(
         running_tasks=Count("pk", filter=Q(status=TaskResultStatus.RUNNING)),
         queued_tasks=Count("pk", filter=Q(status=TaskResultStatus.READY)),
     )

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Add reversible SQLite indexes for active routine polling and bounded terminal
+  history ordering, preserving reconciliation and the 100-row history policy.
+  Match partial-index predicates in bound ORM queries to avoid full-history scans
+  and sorting. Development checkouts need `just migrate`; packaged startup
+  applies the migrations before serving.
+- Filter shell background-work counts to READY/RUNNING before the existing
+  single aggregate snapshot. Add a `tasks_demo`-owned backend status index via
+  Django's public schema editor, pinned to django-tasks-db 0.13.0's schema,
+  with data-preserving reversal and no dependency edits.
+
 - Reject duplicate JSON member claims in bounded completion and stage-owner
   markers, including nested and escaped names. Retain ambiguous recovery stages
   for inspection and refuse ambiguous published state without modifying it.

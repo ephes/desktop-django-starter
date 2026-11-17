@@ -32,7 +32,11 @@ Runnable starter slices:
   stay out of page and JSON output. Shell activity reads both counters together.
 - Routine pages and polls show every queued/running routine plus the 100 most
   recently completed routines. Older history stays in SQLite until Clear Finished
-  Routines removes it; the demo has no history pagination.
+  Routines removes it; the demo has no history pagination. SQLite indexes bound
+  routine polling work to active rows and the history window. Shell activity
+  filters to queued/running backend rows before counting, excluding retained
+  terminal results. Run `just migrate` after updating development checkouts;
+  packaged startup applies the index migrations automatically before serving.
 - Electron 45 shell under `shells/electron/`
 - Tauri 2 shell under `shells/tauri/` for local experiment scope, using the same staged backend contract and child-process worker model
 - Positron shell under `shells/positron/` for local experiment scope, running Django plus the optional task worker in-process inside a Toga web view

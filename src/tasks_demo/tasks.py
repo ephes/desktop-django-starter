@@ -7,6 +7,7 @@ from collections.abc import Callable
 from datetime import datetime
 from uuid import UUID
 
+from django.db.models import Q
 from django.db.models.functions import Right
 from django.tasks import TaskResult, TaskResultStatus, task
 from django.tasks.exceptions import TaskResultDoesNotExist, TaskResultMismatch
@@ -93,9 +94,11 @@ def run_simulated_task(task_id: int) -> dict[str, object]:
 
 
 def visible_tasks() -> list[SimulatedTask]:
+    # Match the partial indexes with OR equality terms. SQLite cannot prove
+    # a parameterized IN predicate implies an index's literal IN condition.
     active = list(
         SimulatedTask.objects.filter(
-            status__in=[SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING]
+            Q(status=SimulatedTask.Status.PENDING) | Q(status=SimulatedTask.Status.RUNNING)
         )
     )
     result_ids = set()
@@ -129,7 +132,7 @@ def visible_tasks() -> list[SimulatedTask]:
     # this response, even when the task was queued long ago.
     history = list(
         SimulatedTask.objects.filter(
-            status__in=[SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED]
+            Q(status=SimulatedTask.Status.DONE) | Q(status=SimulatedTask.Status.FAILED)
         ).order_by("-completed_at", "-created_at", "-pk")[:TERMINAL_HISTORY_LIMIT]
     )
     history_ids = {row.pk for row in history}
