@@ -295,10 +295,29 @@ Current launcher contract:
   Fresh completions enter history in the same response. This is a visibility
   limit, not automatic deletion: older terminal rows remain until Clear Finished
   Routines deletes them; history pagination is outside this teaching demo.
+  SQLite partial indexes cover active creation ordering and terminal completion,
+  creation and ID ordering. The ORM uses OR equality predicates matching those
+  indexes: a bound `IN` predicate cannot imply a literal partial-index `IN`
+  condition in SQLite. Routine polling therefore visits active rows and the
+  bounded history window without sorting or scanning all retained history.
 - Shell activity counts queued and running backend tasks in one conditional
   aggregate statement, so a READY-to-RUNNING transition cannot fall between two
-  counter reads and falsely report idle. Apps without the backend still report
+  counter reads and falsely report idle. An outer READY/RUNNING filter excludes
+  terminal backend history before aggregation, using the application's ordinary
+  `dds_backend_status_idx` status index. Apps without the backend still report
   zero without a database query; shell quit confirmation uses the same API.
+- Apply `tasks_demo.0003_routine_poll_indexes` and
+  `tasks_demo.0004_backend_activity_index` with `just migrate` in
+  development; packaged startup applies them before starting the web/worker
+  processes, including to copied version state. Index creation may briefly lock
+  a large local SQLite database. Both migrations reverse without deleting task
+  rows. The backend index uses Django's public schema-editor API and the
+  historical model from the pinned django-tasks-db 0.13.0 migration
+  `django_tasks_database.0021_conditional_partial_index_ordering`; dependency
+  upgrades must recheck that schema. The dependency's model and worker index
+  remain unchanged. The backend index migration belongs to the optional
+  `tasks_demo` extension, so the core `desktop_django_starter` app has no
+  migrations and no migration dependency on `django_tasks_db`.
 - Polling selects at most the final 1024 characters of each backend traceback in
   SQL before constructing a task result or splitting lines. Full diagnostics stay
   in the backend table. Unexpected exceptions display only the fixed category

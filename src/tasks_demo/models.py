@@ -22,6 +22,18 @@ class SimulatedTask(models.Model):
 
     class Meta:
         ordering = ["-created_at"]
+        indexes = [
+            models.Index(
+                fields=["-created_at"],
+                condition=models.Q(status="PENDING") | models.Q(status="RUNNING"),
+                name="routine_active_created_idx",
+            ),
+            models.Index(
+                fields=["-completed_at", "-created_at", "-id"],
+                condition=models.Q(status="DONE") | models.Q(status="FAILED"),
+                name="routine_history_order_idx",
+            ),
+        ]
 
     def __str__(self) -> str:
         return f"{self.label} ({self.status})"

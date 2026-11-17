@@ -101,3 +101,8 @@ this ownership. Native Windows process-tree acceptance remains required.
   every depth, including escaped names and equal values. Ambiguous owner records
   retain the entire stage for offline inspection; ambiguous completion records
   stop reuse/import without rewriting the published generation.
+
+- Task polling uses partial active/history indexes and matching OR predicates.
+  Shell counts filter READY/RUNNING before one aggregate and use an app-owned
+  ordinary backend status index. Apply migrations after updating; packaged
+  startup migrates automatically. See architecture.md for schema pins/reversal.
