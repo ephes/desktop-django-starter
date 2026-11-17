@@ -6,7 +6,7 @@ small launcher instead of running manage.py directly:
     python desktop_process_guard.py --app-key KEY --instance ID --watch-stdin \
         -- manage.py runserver 127.0.0.1:PORT --noreload
 
-It adds three things to the process and then runs manage.py in-process, so
+It adds process ownership to the process and then runs manage.py in-process, so
 the process ID the shell sees is the Django process itself:
 
 - On Windows it puts itself into a Job Object with KILL_ON_JOB_CLOSE. Every
@@ -14,8 +14,10 @@ the process ID the shell sees is the Django process itself:
   the job's last handle closes and Windows terminates the whole tree.
 - With --watch-stdin it watches the pipe the shell holds open on its stdin.
   When the shell exits or crashes, the operating system closes that pipe, the
-  read returns end-of-file, and this process exits instead of living on as an
-  orphan.
+  read returns end-of-file, and the owned backend tree is forcibly retired.
+- On POSIX the guard leads a dedicated process group before running Django.
+  Pipe loss, SIGTERM and SIGINT kill that group, including descendants that
+  ignore SIGTERM. A caller group is never signalled.
 - --app-key and --instance are not interpreted here. They stay visible in the
   command line, so the shell can find and stop leftovers from a previous
   crashed run of the same app (see shells/electron/scripts/orphan-processes.cjs).
@@ -28,6 +30,7 @@ from __future__ import annotations
 
 import os
 import runpy
+import signal
 import sys
 import threading
 
@@ -146,6 +149,21 @@ def join_kill_on_close_job() -> None:
     _job_handle = job
 
 
+def retire_owned_processes() -> None:
+    """Force retirement only of the group this guard leads, never its caller's."""
+    if os.name == "posix" and os.getpgrp() == os.getpid():
+        os.killpg(os.getpid(), signal.SIGKILL)
+    os._exit(0)
+
+
+def own_posix_process_group() -> None:
+    """Isolate direct/shared-group invocations before any backend code runs."""
+    if os.getpgrp() != os.getpid():
+        os.setpgid(0, 0)
+    signal.signal(signal.SIGTERM, lambda *_: retire_owned_processes())
+    signal.signal(signal.SIGINT, lambda *_: retire_owned_processes())
+
+
 def exit_when_stdin_closes(fd: int | None = None) -> threading.Thread:
     """Exit the process once the shell's end of the stdin pipe goes away."""
     source_fd = sys.stdin.fileno() if fd is None else fd
@@ -160,7 +178,7 @@ def exit_when_stdin_closes(fd: int | None = None) -> threading.Thread:
             pass
         # The shell is gone: skip interpreter cleanup that could block on
         # running threads, and let the OS (and the job object) take the rest.
-        os._exit(0)
+        retire_owned_processes()
 
     thread = threading.Thread(target=watch, name="desktop-shell-watchdog", daemon=True)
     thread.start()
@@ -181,6 +199,12 @@ def main(argv: list[str] | None = None) -> None:
             join_kill_on_close_job()
         except OSError:
             sys.stderr.write("desktop_process_guard: backend job admission failed\n")
+            raise SystemExit(1) from None
+    elif os.name == "posix":
+        try:
+            own_posix_process_group()
+        except OSError:
+            sys.stderr.write("desktop_process_guard: backend process group admission failed\n")
             raise SystemExit(1) from None
     if options["watch_stdin"]:
         exit_when_stdin_closes()

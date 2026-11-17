@@ -1,6 +1,5 @@
 const { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell } = require("electron");
 const { autoUpdater } = require("electron-updater");
-const { spawn } = require("node:child_process");
 const crypto = require("node:crypto");
 const fs = require("node:fs");
 const http = require("node:http");
@@ -29,7 +28,7 @@ const {
   endSession,
   stopOrphanedBackendProcesses
 } = require("./scripts/orphan-processes.cjs");
-const { stopManagedProcess: stopChildProcess } = require("./scripts/managed-process.cjs");
+const { spawnManagedProcess: spawnBackendProcess, stopManagedProcess: stopChildProcess } = require("./scripts/managed-process.cjs");
 const { createQuitGuard } = require("./scripts/quit-guard.cjs");
 
 const HOST = "127.0.0.1";
@@ -411,21 +410,6 @@ function buildManageInvocation(runtimeMode, backendRoot, manageArgs) {
     cwd: backendRoot,
     args: [...prefixArgs, ...guardArgs, "manage.py", ...manageArgs]
   };
-}
-
-function spawnBackendProcess(invocation, environment) {
-  const child = spawn(invocation.command, invocation.args, {
-    cwd: invocation.cwd,
-    env: environment,
-    // stdin stays an open pipe that we never write to: when this process
-    // dies, the OS closes it and the guard in the child exits.
-    stdio: ["pipe", "pipe", "pipe"],
-    // python.exe is a console program; without this, a packaged Windows
-    // app opens a console window for every backend process.
-    windowsHide: true
-  });
-  child.stdin.on("error", () => {});
-  return child;
 }
 
 function validatePackagedBackendRoot(backendRoot) {

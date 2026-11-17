@@ -40,3 +40,73 @@ test("Windows taskkill success still requires observing the managed child's exit
     platform: "win32", run: async () => "", reapMs: 5
   }), false);
 });
+
+test("owned POSIX group is killed even when its leader exits after TERM", async () => {
+  const signals = [];
+  const target = child(() => assert.fail("must signal the owned group"));
+  target.desktopProcessGroup = true;
+  const killGroup = (pid, signal) => {
+    signals.push([pid, signal]);
+    if (signal === "SIGTERM") {
+      target.signalCode = signal;
+      target.emit("exit", null, signal);
+    }
+  };
+  assert.equal(await stopManagedProcess(target, { platform: "darwin", killGroup }), true);
+  assert.deepEqual(signals, [[-123, "SIGTERM"], [-123, "SIGKILL"]]);
+});
+
+test("backend launch owns a separate POSIX group", { skip: process.platform === "win32" }, async () => {
+  const { spawnManagedProcess } = require("./managed-process.cjs");
+  const target = spawnManagedProcess({
+    command: process.execPath, args: ["-e", "setInterval(() => {}, 1000)"], cwd: process.cwd()
+  }, process.env);
+  try {
+    assert.equal(target.desktopProcessGroup, true);
+    assert.equal(await stopManagedProcess(target), true);
+  } finally {
+    if (target.exitCode == null && target.signalCode == null) target.kill("SIGKILL");
+  }
+});
+
+test("normal POSIX shutdown retires a real TERM-resistant descendant", {
+  skip: process.platform === "win32", timeout: 15000
+}, async () => {
+  const { once } = require("node:events");
+  const fs = require("node:fs");
+  const { spawnManagedProcess } = require("./managed-process.cjs");
+  const target = spawnManagedProcess({
+    command: process.execPath,
+    args: ["-e", `
+      const { spawn } = require("node:child_process");
+      spawn(process.execPath, ["-e", 'process.on("SIGTERM", () => {}); console.log(process.pid); setInterval(() => {}, 1000)'],
+        { stdio: ["ignore", "inherit", "inherit"] });
+      setInterval(() => {}, 1000);
+    `], cwd: process.cwd()
+  }, process.env);
+  let descendant;
+  const running = pid => {
+    try { process.kill(pid, 0); } catch (error) {
+      if (error.code === "ESRCH") return false;
+      throw error;
+    }
+    if (process.platform === "linux") {
+      try { return !fs.readFileSync(`/proc/${pid}/stat`, "utf8").split(") ")[1].startsWith("Z"); }
+      catch (error) { if (error.code === "ENOENT") return false; throw error; }
+    }
+    return true;
+  };
+  try {
+    const [output] = await once(target.stdout, "data");
+    descendant = Number(String(output).trim());
+    assert.ok(descendant > 0);
+    assert.equal(await stopManagedProcess(target), true);
+    const deadline = Date.now() + 5000;
+    while (running(descendant) && Date.now() < deadline) {
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    assert.equal(running(descendant), false);
+  } finally {
+    try { process.kill(-target.pid, "SIGKILL"); } catch (error) { if (error.code !== "ESRCH") throw error; }
+  }
+});

@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Isolate POSIX backends in owned process groups and forcibly retire descendants
+  on shell pipe loss or termination. Electron closes stdin and signals the
+  launch group on normal shutdown, including after its leader exits. Add real
+  POSIX descendant cleanup and native Windows Job Object acceptance tests.
+
 - Refuse Windows backend startup when required Job Object admission fails,
   and close newly created job handles on configuration or assignment failure.
 

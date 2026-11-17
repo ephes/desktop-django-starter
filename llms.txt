@@ -83,3 +83,8 @@ Windows backend startup requires successful admission to a kill-on-close Job
 Object. Restricted hosts that refuse job creation, configuration or assignment
 stop startup with `backend job admission failed`; Django is never run without
 this ownership. Native Windows process-tree acceptance remains required.
+
+- POSIX backend guards own dedicated process groups before Django starts.
+  Stdin loss, SIGTERM and SIGINT retire the group forcibly; Electron also closes
+  stdin and signals its launch group on normal shutdown. Never signal the
+  caller's shared group. Deliberately detached descendants are outside scope.
