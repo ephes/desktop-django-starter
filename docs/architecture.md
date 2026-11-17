@@ -153,7 +153,7 @@ The current implementation follows this sequence:
 Every backend process (`migrate`, `seed_demo_content`, `runserver`, `db_worker`) is started through `desktop_process_guard.py`, a small standard-library launcher staged next to `manage.py`. It runs `manage.py` in the same process and adds ownership safety nets for the case where the shell dies without cleaning up:
 
 - the shell keeps an open pipe on the child's stdin; when the shell process ends for any reason, the operating system closes it and the guard forcibly retires its owned backend tree
-- on POSIX the guard establishes a dedicated group before Django runs, including when invoked from a shared caller group. Stdin loss, SIGTERM and SIGINT kill only that owned group with SIGKILL. Group admission failure refuses startup before Django runs
+- on POSIX the guard establishes a dedicated group before Django runs, including when invoked from a shared caller group. Stdin loss kills only that owned group with SIGKILL. SIGTERM and SIGINT do the same only until the managed command installs its own handlers: `db_worker` replaces them with its graceful shutdown, so a shell that only signals the leader cannot rely on them. Group admission failure refuses startup before Django runs
 - on Windows the guard puts the backend into a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so anything the backend starts dies with it. Creation, configuration or assignment failure closes any newly created handle and refuses startup before Django runs, using a fixed diagnostic without host details
 
 Single-instance expectation:
@@ -351,7 +351,8 @@ The desktop integration should stay narrow:
 
 Shutdown handling must be treated as a cross-platform lifecycle concern, not as a best-effort cleanup step.
 
-- on macOS and Linux Electron launches each backend in a dedicated process group, closes its stdin on stop and sends group SIGTERM followed by group SIGKILL even if the leader has exited. The guard retires its own group on pipe loss or SIGTERM/SIGINT; this also covers Python behind a development `uv` launcher
+- on macOS and Linux Electron launches each backend in a dedicated process group, closes its stdin on stop and sends group SIGTERM followed by group SIGKILL even if the leader has exited. When a leader exits on its own (crash or end of a one-shot command), Electron SIGKILLs the rest of its group as soon as it observes the exit. The guard retires its own group on pipe loss; this also covers Python behind a development `uv` launcher
+- the experimental Tauri shell still stops POSIX backends by signalling only the leader (`kill -TERM`, then a leader kill), so descendants of `db_worker`, whose own SIGTERM handler replaces the guard's, can outlive a normal Tauri stop until the next start's leftover cleanup
 - Windows needs explicit handling because process-tree shutdown is less predictable
 - the current Electron implementation on Windows uses explicit forced child-process tree termination via `taskkill /t /f` (from `%SystemRoot%\System32`, falling back to a plain kill if it fails)
 - that forced tree kill is not a graceful drain: a running task is interrupted, which is why the shells ask before quitting while tasks are running; queued tasks stay in the database and run on the next start

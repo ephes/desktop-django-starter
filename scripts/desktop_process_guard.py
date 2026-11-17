@@ -16,8 +16,10 @@ the process ID the shell sees is the Django process itself:
   When the shell exits or crashes, the operating system closes that pipe, the
   read returns end-of-file, and the owned backend tree is forcibly retired.
 - On POSIX the guard leads a dedicated process group before running Django.
-  Pipe loss, SIGTERM and SIGINT kill that group, including descendants that
-  ignore SIGTERM. A caller group is never signalled.
+  Pipe loss kills that group, including descendants that ignore SIGTERM.
+  SIGTERM and SIGINT do the same only until the managed command installs its
+  own handlers (db_worker does, for a graceful stop), so shells must close
+  stdin or signal the group themselves. A caller group is never signalled.
 - --app-key and --instance are not interpreted here. They stay visible in the
   command line, so the shell can find and stop leftovers from a previous
   crashed run of the same app (see shells/electron/scripts/orphan-processes.cjs).

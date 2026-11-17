@@ -43,7 +43,8 @@ def test_electron_starts_backend_processes_through_the_process_guard() -> None:
     managed = (ROOT / "shells/electron/scripts/managed-process.cjs").read_text()
     assert "spawnManagedProcess: spawnBackendProcess" in runtime
     assert 'stdio: ["pipe", "pipe", "pipe"]' in managed
-    assert 'detached: process.platform !== "win32"' in managed
+    assert 'detached: platform !== "win32"' in managed
+    assert 'child.once("exit"' in managed
     assert "stopOrphanedBackendProcesses(session.app_key)" in runtime
     assert "endSession(app.getPath(\"userData\"), shellSession)" in runtime
     # A second instance must never reach bootstrap (and the orphan cleanup).

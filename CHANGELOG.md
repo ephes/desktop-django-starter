@@ -3,8 +3,10 @@
 ## Unreleased
 
 - Isolate POSIX backends in owned process groups and forcibly retire descendants
-  on shell pipe loss or termination. Electron closes stdin and signals the
-  launch group on normal shutdown, including after its leader exits. Add real
+  on shell pipe loss. Electron closes stdin and signals the launch group on
+  normal shutdown, and kills the rest of a group as soon as its leader exits
+  (crash or one-shot end). Guard SIGTERM/SIGINT retirement lasts only until
+  the Django command installs its own handlers, as db_worker does. Add real
   POSIX descendant cleanup and native Windows Job Object acceptance tests.
 
 - Refuse Windows backend startup when required Job Object admission fails,

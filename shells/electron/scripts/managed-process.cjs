@@ -2,18 +2,44 @@ const { spawn } = require("node:child_process");
 const path = require("node:path");
 const { execFileText } = require("./orphan-processes.cjs");
 
-function spawnManagedProcess(invocation, environment) {
+function signalOwnedGroup(child, name, killGroup) {
+  try {
+    killGroup(-child.pid, name);
+  } catch (error) {
+    // ESRCH: the group is empty. EPERM: Darwin reports it for a group whose
+    // remaining members are unreaped zombies, and elsewhere it means no member
+    // is ours to signal. Neither leaves a live owned process we could reach.
+    if (error.code !== "ESRCH" && error.code !== "EPERM") throw error;
+  }
+}
+
+function spawnManagedProcess(invocation, environment, {
+  platform = process.platform, killGroup = process.kill.bind(process)
+} = {}) {
   const child = spawn(invocation.command, invocation.args, {
     cwd: invocation.cwd,
     env: environment,
     // A separate POSIX group lets shutdown reach descendants even if the
     // leader exits first. Keep the pipe open to cover abrupt shell loss.
-    detached: process.platform !== "win32",
+    detached: platform !== "win32",
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true
   });
-  child.desktopProcessGroup = process.platform !== "win32";
+  child.desktopProcessGroup = platform !== "win32";
   child.stdin.on("error", () => {});
+  if (child.desktopProcessGroup) {
+    // When the leader exits (crash or normal end), its watchdog is gone with
+    // it. Retire the rest of the owned group right away, while surviving
+    // members still pin the group ID against reuse.
+    child.once("exit", () => {
+      if (!child.pid) return;
+      try {
+        signalOwnedGroup(child, "SIGKILL", killGroup);
+      } catch (error) {
+        console.warn(`Could not retire backend process group ${child.pid}: ${error.code || error.message}`);
+      }
+    });
+  }
   return child;
 }
 
@@ -40,11 +66,7 @@ async function stopManagedProcess(child, {
     }
     const signal = name => {
       if (!child.desktopProcessGroup) return child.kill(name);
-      try {
-        killGroup(-child.pid, name);
-      } catch (error) {
-        if (error.code !== "ESRCH") throw error;
-      }
+      signalOwnedGroup(child, name, killGroup);
     };
     // Closing stdin also reaches a guard behind a development uv launcher,
     // whose Python process can own a different group from uv itself.
