@@ -29,7 +29,10 @@ Recommended order:
   starter has no renderer capability grants. Any reviewed opt-in must stay bound
   to the live exact-origin main frame (see {ref}`frame permissions <frame-permissions>`).
 - preserve popup requester admission as well as target-scheme checks; foreign or
-  missing/suppressed referrers must never trigger native external dispatch.
+  missing/suppressed referrers must never trigger native external dispatch. Set
+  `SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"` in the wrapped
+  app's desktop settings; Django's default `same-origin` refuses every
+  target-blank outbound link.
 - keep the preload bridge narrow
 - do not assume `DEBUG=True` behavior in packaged mode
 - do not assume online-only update flows; account for air-gapped environments

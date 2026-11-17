@@ -115,3 +115,6 @@ this ownership. Native Windows process-tree acceptance remains required.
 - Electron popup native dispatch requires an exact Django referrer plus a live
   trusted app window. Foreign/missing/suppressed referrers deny; all child windows
   deny. Preserve scheme checks and never treat popup disposition as a user gesture.
+  The starter sets `SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"`
+  because Django's default `same-origin` strips that referrer; wrapped apps need
+  the same desktop setting for target-blank outbound links.

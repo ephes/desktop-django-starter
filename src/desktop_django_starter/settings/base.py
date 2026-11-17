@@ -35,6 +35,12 @@ MIDDLEWARE = [
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
+# Django's default ``same-origin`` strips the referrer from cross-origin popups.
+# Electron's popup guard needs the exact local origin as dispatch evidence, so
+# send the origin (never path or query) cross-origin. The token bootstrap path
+# still overrides this with ``no-referrer`` in DesktopAuthTokenMiddleware.
+SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"
+
 ROOT_URLCONF = "desktop_django_starter.urls"
 
 TEMPLATES = [

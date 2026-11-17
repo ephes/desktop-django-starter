@@ -37,6 +37,9 @@ app.whenReady().then(async () => {
   });
   const trusted = await serve((req, res) => {
     assert.equal(req.headers['x-desktop-django-token'], token);
+    // Mirror the starter's Django SECURE_REFERRER_POLICY; Django's default
+    // same-origin is exercised separately on /same-origin/.
+    res.setHeader('Referrer-Policy', req.url === '/same-origin/' ? 'same-origin' : 'strict-origin-when-cross-origin');
     res.setHeader('Content-Type', 'text/html');
     res.end(`<!doctype html><title>Trusted fixture</title><iframe src="${remote}/" allow="camera *; microphone *; geolocation *"></iframe>`);
   });
@@ -90,8 +93,13 @@ app.whenReady().then(async () => {
   await contents.executeJavaScript("window.open('https://popup.invalid/trusted'); undefined;", true);
   assert.equal(attempts.length, 3, 'trusted app reached the same installed handler');
   assert.deepEqual(dispatched, ['https://popup.invalid/trusted']);
+  await win.loadURL(`${trusted}/same-origin/`);
+  await contents.executeJavaScript("window.open('https://popup.invalid/same-origin-policy'); undefined;", true);
+  assert.equal(attempts.length, 4, 'same-origin policy page reached the installed handler');
+  assert.equal(attempts[3].referrer.url, '', 'same-origin policy strips the cross-origin referrer');
+  assert.deepEqual(dispatched, ['https://popup.invalid/trusted'], 'stripped referrer fails closed');
   assert.equal(BrowserWindow.getAllWindows().length, 1, 'no popup window created');
-  console.log('PASS: remote iframe capabilities and popup dispatch denied; trusted outbound link dispatches once; embed and exact-origin auth headers preserved');
+  console.log('PASS: remote iframe capabilities and popup dispatch denied; trusted outbound link dispatches once under the starter referrer policy; same-origin referrer policy fails closed; embed and exact-origin auth headers preserved');
 }).then(() => finish(0), (error) => { console.error(error); finish(1); });
 
 function finish(code) {

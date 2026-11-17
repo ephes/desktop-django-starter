@@ -97,16 +97,27 @@ return `action: "deny"`, including same-origin targets and refused schemes.
 Referrer evidence does not prove a user gesture, and `disposition` does not grant
 one. No new preload bridge is exposed.
 
+Electron reports the referrer after the page's referrer policy is applied.
+Django's default `SECURE_REFERRER_POLICY = "same-origin"` therefore strips it
+from every cross-origin popup, so the starter's base settings set
+`SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"`: cross-origin requests
+see only the local origin (never path or query), and the token bootstrap path
+still sends `no-referrer`. A wrapped app that keeps `same-origin`, `no-referrer`
+or another policy without a cross-origin origin gets its target-blank outbound
+links refused (fail closed, no OS browser); set the same policy in its desktop
+settings or use same-window links.
+
 For deliberate trusted-app outbound links, keep the normal same-window link path
-or a target-blank link with the default referrer policy. A target-blank link that
-suppresses its referrer is refused; use a same-window link when referrer
-suppression is required. Existing main-frame navigation/redirect scheme checks
+or a target-blank link under that referrer policy. A target-blank link that
+suppresses its referrer (`rel="noreferrer"`) is refused; use a same-window link
+when referrer suppression is required. Existing main-frame navigation/redirect scheme checks
 and sender-validated app-data IPC continue to apply.
 
 `npm --prefix shells/electron run test:frames` also drives actual remote iframe
 popups (ordinary and noreferrer) through the installed handler and verifies zero
 native dispatch, no child windows, and exactly one dispatch for a trusted app
-link. The fixture records native dispatch in memory instead of launching the OS
+link served with the starter's referrer policy; a trusted page served with
+`Referrer-Policy: same-origin` reports an empty referrer and dispatches nothing. The fixture records native dispatch in memory instead of launching the OS
 browser. Node tests exercise foreign ports, missing evidence, unsafe schemes,
 stale/destroyed windows and the callback registered by `main.js`.
 See Electron's [public popup callback](https://www.electronjs.org/docs/latest/api/web-contents#contentssetwindowopenhandlerhandler)

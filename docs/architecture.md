@@ -381,7 +381,11 @@ HTTP(S)/mailto target opens externally only when the referrer is on the exact
 Django origin and the owning WebContents is alive and still displaying that
 origin. Foreign, missing, malformed and suppressed referrers deny native dispatch.
 The referrer is origin evidence, not proof of a user gesture; disposition alone
-never authorizes dispatch. Ordinary main-frame navigation and redirect guards
+never authorizes dispatch. Electron reports the referrer after the page's policy
+is applied, so the starter sets `SECURE_REFERRER_POLICY =
+"strict-origin-when-cross-origin"` instead of Django's default `same-origin`,
+which would refuse every trusted target-blank outbound link; the token bootstrap
+path keeps `no-referrer`. Ordinary main-frame navigation and redirect guards
 retain their existing behavior, as does the sender-checked app-data bridge.
 
 ## Native Surface Area

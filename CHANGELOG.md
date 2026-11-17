@@ -6,7 +6,10 @@
   evidence from a live trusted app window. Foreign/unknown/suppressed requesters
   cannot open the OS browser; every child window remains denied. Preserve the
   existing navigation, auth-header and IPC boundaries; extend the real iframe
-  fixture to cover popup requester admission and trusted outbound links.
+  fixture to cover popup requester admission and trusted outbound links. Set
+  `SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"` in base settings
+  because Django's default `same-origin` empties the popup referrer Electron
+  reports, which would refuse every trusted target-blank outbound link.
 
 - Install both Electron session permission handlers before loading the app. Deny
   renderer capabilities by default, including remote/unknown frames; document a

@@ -55,6 +55,19 @@ def test_without_configured_token_health_remains_available(client) -> None:
     assert response.json() == {"status": "ok"}
 
 
+@pytest.mark.django_db
+def test_app_pages_expose_only_the_origin_cross_origin_for_popup_evidence(client) -> None:
+    # Electron's popup guard requires the exact local origin as referrer
+    # evidence; Django's default ``same-origin`` would strip it cross-origin.
+    with override_settings(DESKTOP_DJANGO_AUTH_TOKEN=TOKEN):
+        app_page = client.get("/", **HEADER)
+        bootstrap = client.get(BOOTSTRAP_PATH, {"token": TOKEN, "next": "/"})
+
+    assert app_page.status_code == 200
+    assert app_page["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert bootstrap["Referrer-Policy"] == "no-referrer"
+
+
 def test_configured_token_rejects_missing_header(client) -> None:
     with override_settings(DESKTOP_DJANGO_AUTH_TOKEN=TOKEN):
         response = client.get("/health/")
