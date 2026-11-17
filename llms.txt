@@ -111,3 +111,7 @@ this ownership. Native Windows process-tree acceptance remains required.
   renderer capabilities are enabled by default. Preserve this policy when
   wrapping; any reviewed opt-in is limited to the live exact-origin main frame.
   See `docs/shells/electron.md#frame-permissions`.
+
+- Electron popup native dispatch requires an exact Django referrer plus a live
+  trusted app window. Foreign/missing/suppressed referrers deny; all child windows
+  deny. Preserve scheme checks and never treat popup disposition as a user gesture.

@@ -28,6 +28,8 @@ Recommended order:
 - preserve both Electron session permission handlers before loading the app; the
   starter has no renderer capability grants. Any reviewed opt-in must stay bound
   to the live exact-origin main frame (see {ref}`frame permissions <frame-permissions>`).
+- preserve popup requester admission as well as target-scheme checks; foreign or
+  missing/suppressed referrers must never trigger native external dispatch.
 - keep the preload bridge narrow
 - do not assume `DEBUG=True` behavior in packaged mode
 - do not assume online-only update flows; account for air-gapped environments

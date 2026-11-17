@@ -79,13 +79,28 @@ function registerSessionPermissionPolicy(owner, djangoOrigin, trustedPermissions
   ));
 }
 
-function getWindowOpenGuardResponse(targetUrl, djangoOrigin) {
-  const navigationAction = getNavigationGuardAction(targetUrl, djangoOrigin);
+// WindowOpenDetails has no initiator frame. Require its public referrer origin;
+// missing/suppressed referrers deny. A disposition is not proof of a gesture.
+function getWindowOpenGuardResponse(details, djangoOrigin) {
+  const navigationAction = getNavigationGuardAction(details?.url, djangoOrigin);
 
   return {
     action: "deny",
     openExternal: navigationAction.openExternal
+      && details?.referrer?.policy !== "no-referrer"
+      && requestUrlMatchesOrigin(details?.referrer?.url, djangoOrigin)
   };
+}
+
+function registerWindowOpenGuard(contents, djangoOrigin, openExternal) {
+  contents.setWindowOpenHandler((details) => {
+    const response = getWindowOpenGuardResponse(details, djangoOrigin);
+    if (response.openExternal && !contents.isDestroyed()
+        && requestUrlMatchesOrigin(contents.getURL(), djangoOrigin)) {
+      openExternal(details.url).catch(() => {});
+    }
+    return { action: "deny" };
+  });
 }
 
 module.exports = {
@@ -94,5 +109,6 @@ module.exports = {
   getWindowOpenGuardResponse,
   isExternalOpenableUrl,
   isTrustedIpcSender,
-  registerSessionPermissionPolicy
+  registerSessionPermissionPolicy,
+  registerWindowOpenGuard
 };

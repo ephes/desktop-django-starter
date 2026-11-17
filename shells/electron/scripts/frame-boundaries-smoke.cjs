@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
-const { registerSessionPermissionPolicy } = require('./window-guards.cjs');
+const { registerSessionPermissionPolicy, registerWindowOpenGuard } = require('./window-guards.cjs');
 const { desktopAuthHeadersForRequest, getDesktopAuthWebRequestFilter } = require('./auth-token.cjs');
 
 const fixtureData = fs.mkdtempSync(path.join(os.tmpdir(), 'dds-frame-fixture-'));
@@ -46,6 +46,18 @@ app.whenReady().then(async () => {
   contents.session.webRequest.onBeforeSendHeaders(getDesktopAuthWebRequestFilter(trusted), (details, callback) => {
     callback({ requestHeaders: desktopAuthHeadersForRequest(details, trusted, token) });
   });
+  const dispatched = [];
+  const attempts = [];
+  registerWindowOpenGuard({
+    getURL: () => contents.getURL(),
+    isDestroyed: () => contents.isDestroyed(),
+    setWindowOpenHandler: (handler) => contents.setWindowOpenHandler((details) => {
+      attempts.push(details);
+      const response = handler(details);
+      assert.deepEqual(response, { action: 'deny' });
+      return response;
+    })
+  }, trusted, async (url) => { dispatched.push(url); });
   await win.loadURL(trusted);
   const frame = contents.mainFrame.frames.find((candidate) => candidate.url === `${remote}/`);
   assert.ok(frame, 'remote embed loaded normally');
@@ -71,7 +83,15 @@ app.whenReady().then(async () => {
   assert.deepEqual(results.media, ['NotAllowedError', 'NotAllowedError']);
   assert.equal(results.geolocation, 1);
   assert.equal(results.notifications, 'denied');
-  console.log('PASS: remote iframe capabilities denied; embed and exact-origin auth headers preserved');
+  await frame.executeJavaScript(`window.open('https://popup.invalid/remote');
+    window.open('https://popup.invalid/no-referrer', '_blank', 'noreferrer'); undefined;`, true);
+  assert.equal(attempts.length, 2, 'real remote frame reached installed popup handler');
+  assert.deepEqual(dispatched, []);
+  await contents.executeJavaScript("window.open('https://popup.invalid/trusted'); undefined;", true);
+  assert.equal(attempts.length, 3, 'trusted app reached the same installed handler');
+  assert.deepEqual(dispatched, ['https://popup.invalid/trusted']);
+  assert.equal(BrowserWindow.getAllWindows().length, 1, 'no popup window created');
+  console.log('PASS: remote iframe capabilities and popup dispatch denied; trusted outbound link dispatches once; embed and exact-origin auth headers preserved');
 }).then(() => finish(0), (error) => { console.error(error); finish(1); });
 
 function finish(code) {

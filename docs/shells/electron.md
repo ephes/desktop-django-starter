@@ -10,7 +10,8 @@ Current responsibilities:
 - generate a fresh per-session shell-to-Django auth token and pass it to Django as `DESKTOP_DJANGO_AUTH_TOKEN`
 - inject `X-Desktop-Django-Token` only for the exact local Django origin, including the Electron health poll, without exposing the token through preload
 - keep using hidden exact-origin header injection rather than the bootstrap cookie flow used by the experimental Tauri and Positron shells
-- deny child-window creation from the renderer by default and block top-level navigation away from the local Django origin, opening safe external URLs through the OS shell instead
+- deny child-window creation for every popup; dispatch safe external popup targets only with exact Django-referrer evidence from a live trusted app window
+- block top-level navigation away from the local Django origin, opening safe external URLs through the OS shell instead
 - apply the same origin rule to server-side redirects (`will-redirect`), so an off-origin redirect from Django, such as an OAuth or social-login hand-off, opens in the system browser instead of inside the app window; subframes may still navigate because they never receive the preload bridge
 - answer the `window.desktop` preload bridge only for pages on the exact local Django origin, refusing IPC calls from any other sender frame
 - start every backend process through `desktop_process_guard.py` with an open stdin pipe, so `runserver`, `db_worker` and their owned descendants terminate when Electron crashes or is killed; POSIX guards lead dedicated groups and retire them on pipe loss (SIGTERM/SIGINT only until the Django command installs its own handlers, as `db_worker` does); Electron signals the group on stop and SIGKILLs the rest of it as soon as a leader exits; on Windows the guard also holds a kill-on-close Job Object for the backend's process tree (`scripts/desktop_process_guard.py`)
@@ -84,3 +85,29 @@ microphone, geolocation and notification refusals, normal embed loading and
 exact-origin auth-header isolation. It uses fake media devices and requests no
 OS grants. `npm --prefix shells/electron test` separately covers installed
 handler callbacks and main-window installation before `loadURL`.
+
+## Popup requester admission
+
+The popup callback retains the complete public Electron details. Safe target
+schemes alone do not authorize `shell.openExternal`: the referrer's URL must
+match the exact local Django origin, and the owning window must still be alive
+on that origin. Foreign embeds, missing/malformed referrers and suppressed
+(`noreferrer`/`no-referrer`) requests get no native side effect. All popup windows
+return `action: "deny"`, including same-origin targets and refused schemes.
+Referrer evidence does not prove a user gesture, and `disposition` does not grant
+one. No new preload bridge is exposed.
+
+For deliberate trusted-app outbound links, keep the normal same-window link path
+or a target-blank link with the default referrer policy. A target-blank link that
+suppresses its referrer is refused; use a same-window link when referrer
+suppression is required. Existing main-frame navigation/redirect scheme checks
+and sender-validated app-data IPC continue to apply.
+
+`npm --prefix shells/electron run test:frames` also drives actual remote iframe
+popups (ordinary and noreferrer) through the installed handler and verifies zero
+native dispatch, no child windows, and exactly one dispatch for a trusted app
+link. The fixture records native dispatch in memory instead of launching the OS
+browser. Node tests exercise foreign ports, missing evidence, unsafe schemes,
+stale/destroyed windows and the callback registered by `main.js`.
+See Electron's [public popup callback](https://www.electronjs.org/docs/latest/api/web-contents#contentssetwindowopenhandlerhandler)
+for the available evidence; it does not expose an initiator frame.

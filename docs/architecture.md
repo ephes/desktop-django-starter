@@ -375,6 +375,15 @@ reinstalled for a recreated main window. Keep the exact-origin auth-header hook
 and IPC sender checks independent. See {ref}`the shell guide <frame-permissions>`
 for the opt-in seam and real-browser verification command.
 
+Popup dispatch uses the complete public `WindowOpenDetails` through
+`registerWindowOpenGuard`. It always denies creating a child window. A safe
+HTTP(S)/mailto target opens externally only when the referrer is on the exact
+Django origin and the owning WebContents is alive and still displaying that
+origin. Foreign, missing, malformed and suppressed referrers deny native dispatch.
+The referrer is origin evidence, not proof of a user gesture; disposition alone
+never authorizes dispatch. Ordinary main-frame navigation and redirect guards
+retain their existing behavior, as does the sender-checked app-data bridge.
+
 ## Native Surface Area
 
 The desktop integration should stay narrow:

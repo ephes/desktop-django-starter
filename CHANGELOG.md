@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Admit native popup dispatch only for safe targets with exact Django-referrer
+  evidence from a live trusted app window. Foreign/unknown/suppressed requesters
+  cannot open the OS browser; every child window remains denied. Preserve the
+  existing navigation, auth-header and IPC boundaries; extend the real iframe
+  fixture to cover popup requester admission and trusted outbound links.
+
 - Install both Electron session permission handlers before loading the app. Deny
   renderer capabilities by default, including remote/unknown frames; document a
   narrow opt-in for reviewed capabilities of the live Django main frame. Add a

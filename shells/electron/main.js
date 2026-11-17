@@ -18,9 +18,9 @@ const {
 const {
   getNavigationGuardAction,
   getRedirectGuardAction,
-  getWindowOpenGuardResponse,
   isTrustedIpcSender,
-  registerSessionPermissionPolicy
+  registerSessionPermissionPolicy,
+  registerWindowOpenGuard
 } = require("./scripts/window-guards.cjs");
 const { shouldShowManagedProcessExitDialog } = require("./scripts/process-exit-policy.cjs");
 const { createElectronUpdateController } = require("./scripts/updates.cjs");
@@ -652,13 +652,7 @@ function registerDesktopAuthHeaderInjection(win, url, authToken) {
 }
 
 function registerWindowNavigationGuards(win, url) {
-  win.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
-    const guardResponse = getWindowOpenGuardResponse(targetUrl, url);
-    if (guardResponse.openExternal) {
-      shell.openExternal(targetUrl).catch(() => {});
-    }
-    return { action: guardResponse.action };
-  });
+  registerWindowOpenGuard(win.webContents, url, (targetUrl) => shell.openExternal(targetUrl));
 
   win.webContents.on("will-navigate", (event, targetUrl) => {
     applyNavigationGuardAction(event, targetUrl, getNavigationGuardAction(targetUrl, url));
