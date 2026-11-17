@@ -173,6 +173,10 @@ Check for:
 - writable database and app-data paths
 - static files that still work with `DEBUG=False`
 - host validation and CSRF assumptions
+- referrer policy: set `SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"`
+  in the desktop settings. The Electron popup guard opens target-blank outbound
+  links only with the exact local origin as referrer, and Django's default
+  `same-origin` strips it (links are then refused, not opened).
 - **existing auth and data**: preserve existing user accounts, seed data, login URLs,
   and root redirects. Do not create new user accounts.
 - **desktop auto-auth**: if the target app's useful UI is gated by auth and the desktop

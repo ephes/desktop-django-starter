@@ -25,6 +25,14 @@ Recommended order:
 
 - keep the app generic and minimal unless the target repo already has domain complexity
 - prefer server-rendered templates over a SPA rewrite
+- preserve both Electron session permission handlers before loading the app; the
+  starter has no renderer capability grants. Any reviewed opt-in must stay bound
+  to the live exact-origin main frame (see {ref}`frame permissions <frame-permissions>`).
+- preserve popup requester admission as well as target-scheme checks; foreign or
+  missing/suppressed referrers must never trigger native external dispatch. Set
+  `SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"` in the wrapped
+  app's desktop settings; Django's default `same-origin` refuses every
+  target-blank outbound link.
 - keep the preload bridge narrow
 - do not assume `DEBUG=True` behavior in packaged mode
 - do not assume online-only update flows; account for air-gapped environments

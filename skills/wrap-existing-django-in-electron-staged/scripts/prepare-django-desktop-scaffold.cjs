@@ -186,6 +186,16 @@ function updateSettings(targetRoot, metadata) {
       + "DESKTOP_PACKAGED_RUNTIME = False\n",
     "DESKTOP_ALLOWED_HOSTS"
   );
+  // Separate marker so targets scaffolded before this setting existed get it on
+  // a rerun; an explicit target policy (here or inherited) is kept.
+  source = appendBlockIfMissing(
+    source,
+    "# Electron opens target-blank outbound links only with the exact local origin\n"
+      + "# as popup referrer; Django's default same-origin policy strips it.\n"
+      + 'if "SECURE_REFERRER_POLICY" not in globals():\n'
+      + '    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"\n',
+    "SECURE_REFERRER_POLICY"
+  );
 
   writeIfChanged(settingsPath, source);
 }

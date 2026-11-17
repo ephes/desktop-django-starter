@@ -358,6 +358,36 @@ cannot start work. Downloaded events and menu checks share one install prompt an
 preparation task; Later or failed preparation releases it for retry. After
 `quitAndInstall` succeeds, later events cannot prepare or install again.
 
+## Electron frame permissions
+
+Before `loadURL`, the main window installs both public Electron session permission
+handlers through `registerSessionPermissionPolicy`. The starter needs no renderer
+capabilities, so the default allowlist is empty. Remote embeds can still load;
+camera, microphone, location, notifications and other capability requests/checks
+are denied. Unknown permissions and requests without document evidence deny too.
+
+A reviewed adaptation can pass individual permission names to the installer.
+Admission requires the owned live WebContents, an explicit main-frame flag,
+the requesting document URL and current main document on the exact Django origin;
+checks also require the requesting origin to match. Subframes and non-document
+checks (including null WebContents) remain denied. This shared-session policy is
+reinstalled for a recreated main window. Keep the exact-origin auth-header hook
+and IPC sender checks independent. See {ref}`the shell guide <frame-permissions>`
+for the opt-in seam and real-browser verification command.
+
+Popup dispatch uses the complete public `WindowOpenDetails` through
+`registerWindowOpenGuard`. It always denies creating a child window. A safe
+HTTP(S)/mailto target opens externally only when the referrer is on the exact
+Django origin and the owning WebContents is alive and still displaying that
+origin. Foreign, missing, malformed and suppressed referrers deny native dispatch.
+The referrer is origin evidence, not proof of a user gesture; disposition alone
+never authorizes dispatch. Electron reports the referrer after the page's policy
+is applied, so the starter sets `SECURE_REFERRER_POLICY =
+"strict-origin-when-cross-origin"` instead of Django's default `same-origin`,
+which would refuse every trusted target-blank outbound link; the token bootstrap
+path keeps `no-referrer`. Ordinary main-frame navigation and redirect guards
+retain their existing behavior, as does the sender-checked app-data bridge.
+
 ## Native Surface Area
 
 The desktop integration should stay narrow:

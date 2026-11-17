@@ -106,3 +106,15 @@ this ownership. Native Windows process-tree acceptance remains required.
   Shell counts filter READY/RUNNING before one aggregate and use an app-owned
   ordinary backend status index. Apply migrations after updating; packaged
   startup migrates automatically. See architecture.md for schema pins/reversal.
+
+- Electron installs both session permission handlers before loading Django. No
+  renderer capabilities are enabled by default. Preserve this policy when
+  wrapping; any reviewed opt-in is limited to the live exact-origin main frame.
+  See `docs/shells/electron.md#frame-permissions`.
+
+- Electron popup native dispatch requires an exact Django referrer plus a live
+  trusted app window. Foreign/missing/suppressed referrers deny; all child windows
+  deny. Preserve scheme checks and never treat popup disposition as a user gesture.
+  The starter sets `SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"`
+  because Django's default `same-origin` strips that referrer; wrapped apps need
+  the same desktop setting for target-blank outbound links.

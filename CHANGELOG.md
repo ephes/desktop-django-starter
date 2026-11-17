@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+- Admit native popup dispatch only for safe targets with exact Django-referrer
+  evidence from a live trusted app window. Foreign/unknown/suppressed requesters
+  cannot open the OS browser; every child window remains denied. Preserve the
+  existing navigation, auth-header and IPC boundaries; extend the real iframe
+  fixture to cover popup requester admission and trusted outbound links. Set
+  `SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"` in base settings
+  because Django's default `same-origin` empties the popup referrer Electron
+  reports, which would refuse every trusted target-blank outbound link; the
+  staged wrap scaffold adds the same setting when the wrapped settings define no
+  referrer policy of their own.
+
+- Install both Electron session permission handlers before loading the app. Deny
+  renderer capabilities by default, including remote/unknown frames; document a
+  narrow opt-in for reviewed capabilities of the live Django main frame. Add a
+  real remote-iframe capability and auth-header fixture (`npm --prefix
+  shells/electron run test:frames`).
+
 - Add reversible SQLite indexes for active routine polling and bounded terminal
   history ordering, preserving reconciliation and the 100-row history policy.
   Match partial-index predicates in bound ORM queries to avoid full-history scans
