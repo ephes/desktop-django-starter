@@ -25,6 +25,9 @@ Recommended order:
 
 - keep the app generic and minimal unless the target repo already has domain complexity
 - prefer server-rendered templates over a SPA rewrite
+- preserve both Electron session permission handlers before loading the app; the
+  starter has no renderer capability grants. Any reviewed opt-in must stay bound
+  to the live exact-origin main frame (see {ref}`frame permissions <frame-permissions>`).
 - keep the preload bridge narrow
 - do not assume `DEBUG=True` behavior in packaged mode
 - do not assume online-only update flows; account for air-gapped environments

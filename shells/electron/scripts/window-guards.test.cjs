@@ -164,3 +164,95 @@ test("main.js wires the redirect guard and the IPC sender check", () => {
     assert.ok(mainSource.includes(snippet), `main.js should contain ${snippet}`);
   }
 });
+
+function permissionFixture(permissions) {
+  const handlers = {};
+  const owner = {
+    isDestroyed: () => false,
+    getURL: () => `${DJANGO_ORIGIN}/`,
+    session: {
+      setPermissionRequestHandler: (handler) => { handlers.request = handler; },
+      setPermissionCheckHandler: (handler) => { handlers.check = handler; }
+    }
+  };
+  require('./window-guards.cjs').registerSessionPermissionPolicy(owner, DJANGO_ORIGIN, permissions);
+  const request = (permission, details, contents = owner) => {
+    const answers = [];
+    handlers.request(contents, permission, (answer) => answers.push(answer), details);
+    assert.equal(answers.length, 1);
+    return answers[0];
+  };
+  return { owner, handlers, request };
+}
+
+test('session permission handlers deny every capability without explicit app policy', () => {
+  const { owner, handlers, request } = permissionFixture();
+  for (const permission of ['media', 'geolocation', 'notifications', 'clipboard-read', 'unknown']) {
+    for (const requestingUrl of [DJANGO_ORIGIN, 'https://remote.invalid/', undefined]) {
+      const details = { requestingUrl, isMainFrame: true };
+      assert.equal(request(permission, details), false);
+      assert.equal(handlers.check(owner, permission, requestingUrl, details), false);
+    }
+  }
+});
+
+test('explicit capabilities require the live owned Django main frame in both handlers', () => {
+  const { owner, handlers, request } = permissionFixture(['geolocation']);
+  const trusted = { requestingUrl: `${DJANGO_ORIGIN}/tasks/`, isMainFrame: true };
+  assert.equal(request('geolocation', trusted), true);
+  assert.equal(handlers.check(owner, 'geolocation', DJANGO_ORIGIN, trusted), true);
+  assert.equal(request('media', trusted), false);
+  assert.equal(handlers.check(owner, 'media', DJANGO_ORIGIN, trusted), false);
+  for (const details of [undefined, {}, { ...trusted, isMainFrame: false },
+    { ...trusted, requestingUrl: 'https://remote.invalid/' },
+    { ...trusted, requestingUrl: 'http://127.0.0.1:9999/' },
+    { ...trusted, requestingUrl: 'about:blank' }, { isMainFrame: true }]) {
+    assert.equal(request('geolocation', details), false);
+    assert.equal(handlers.check(owner, 'geolocation', DJANGO_ORIGIN, details), false);
+  }
+  for (const contents of [null, { ...owner }, { ...owner, isDestroyed: () => true }]) {
+    assert.equal(request('geolocation', trusted, contents), false);
+    assert.equal(handlers.check(contents, 'geolocation', DJANGO_ORIGIN, trusted), false);
+  }
+  for (const origin of [undefined, 'null', 'https://remote.invalid/', 'http://127.0.0.1:9999/']) {
+    assert.equal(handlers.check(owner, 'geolocation', origin, trusted), false);
+  }
+  owner.getURL = () => 'https://remote.invalid/';
+  assert.equal(request('geolocation', trusted), false);
+  assert.equal(handlers.check(owner, 'geolocation', DJANGO_ORIGIN, trusted), false);
+});
+
+test('main window installs both permission handlers before loading any app content', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const vm = require('node:vm');
+  const source = fs.readFileSync(path.join(__dirname, '..', 'main.js'), 'utf8');
+  const createWindowSource = source.slice(source.indexOf('function createWindow('), source.indexOf('\nasync function stopDjango('));
+  const installed = {};
+  const contents = {
+    session: {
+      setPermissionRequestHandler: (handler) => { installed.request = handler; },
+      setPermissionCheckHandler: (handler) => { installed.check = handler; }
+    },
+    once() {}
+  };
+  let loads = 0;
+  class BrowserWindow {
+    constructor() { this.webContents = contents; }
+    on() {}
+    once() {}
+    loadURL(url) {
+      assert.equal(url, DJANGO_ORIGIN);
+      assert.equal(typeof installed.request, 'function');
+      assert.equal(typeof installed.check, 'function');
+      loads += 1;
+    }
+  }
+  vm.runInNewContext(`${createWindowSource}\ncreateWindow(origin, 'test-token');`, {
+    BrowserWindow, origin: DJANGO_ORIGIN, path, __dirname,
+    getWindowIconOptions: () => ({}),
+    registerDesktopAuthHeaderInjection() {}, registerWindowNavigationGuards() {},
+    registerSessionPermissionPolicy: require('./window-guards.cjs').registerSessionPermissionPolicy
+  });
+  assert.equal(loads, 1);
+});

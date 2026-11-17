@@ -45,9 +45,42 @@ backend command. Recovery tools have finite command deadlines. If inventory or
 termination is unknown, close the app, repair the process tool or marker access,
 then explicitly relaunch. Do not remove a dirty marker to bypass orphan recovery.
 The app marks a session clean only after confirmed child exit; see the
-[architecture recovery contract](../architecture.md#electron-orphan-command-and-signal-limits)
+{ref}`architecture recovery contract <electron-orphan-command-and-signal-limits>`
 for descriptor limits, process identity checks and platform limitations.
 
 An update handoff failure (including an installer error event) hides the unusable
 window, attempts to stop both children, explains that a restart is required and
 exits. The next explicit launch uses the retained dirty marker to recover.
+
+(frame-permissions)=
+## Frame permissions
+
+The starter uses no renderer capability grants. Before loading Django, the shell
+installs `setPermissionRequestHandler` and `setPermissionCheckHandler`, both with
+an empty capability allowlist. This denies camera/microphone (`media`), location,
+notifications, clipboard reads and unknown capabilities without OS prompts.
+Ordinary remote embeds still load; the containing window's trusted URL does not
+authorize an embedded frame. Existing auth-header injection and IPC checks remain
+separate boundaries.
+
+When adapting an app that actually needs a capability, review that feature and
+pass only its permission name at the main-process call site, for example:
+
+```javascript
+registerSessionPermissionPolicy(win.webContents, url, ["geolocation"]);
+```
+
+This opt-in admits only the live owned main frame on the exact Django origin,
+including its random port. Both the requesting URL and (for checks) requesting
+origin must match. Missing details, destroyed/foreign WebContents, subframes,
+service-worker/non-document checks and capabilities absent from the list deny.
+Do not use a wildcard, replace either handler with `null`, or grant permission
+based only on `webContents.getURL()`. Media features also need a deliberate
+camera-versus-microphone policy before enabling the shared `media` capability.
+
+Run `npm --prefix shells/electron run test:frames` on a host that can launch
+Electron. This synthetic two-origin iframe fixture checks real Chromium camera,
+microphone, geolocation and notification refusals, normal embed loading and
+exact-origin auth-header isolation. It uses fake media devices and requests no
+OS grants. `npm --prefix shells/electron test` separately covers installed
+handler callbacks and main-window installation before `loadURL`.

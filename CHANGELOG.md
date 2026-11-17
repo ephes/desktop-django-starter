@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Install both Electron session permission handlers before loading the app. Deny
+  renderer capabilities by default, including remote/unknown frames; document a
+  narrow opt-in for reviewed capabilities of the live Django main frame. Add a
+  real remote-iframe capability and auth-header fixture (`npm --prefix
+  shells/electron run test:frames`).
+
 - Add reversible SQLite indexes for active routine polling and bounded terminal
   history ordering, preserving reconciliation and the 100-row history policy.
   Match partial-index predicates in bound ORM queries to avoid full-history scans

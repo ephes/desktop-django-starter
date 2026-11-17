@@ -12,7 +12,8 @@
     "start:packaged": "npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged",
     "smoke:packaged": "npm run stage-backend && node ./scripts/launch-electron.cjs --runtime=packaged --smoke-test",
     "dist": "npm run stage-backend && electron-builder --publish never --config ./electron-builder.config.cjs",
-    "dist:dir": "npm run stage-backend && electron-builder --dir --config ./electron-builder.config.cjs"
+    "dist:dir": "npm run stage-backend && electron-builder --dir --config ./electron-builder.config.cjs",
+    "test:frames": "electron ./scripts/frame-boundaries-smoke.cjs"
   },
   "devDependencies": {
     "electron": "45.2.1",

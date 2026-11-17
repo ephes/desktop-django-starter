@@ -57,6 +57,28 @@ function isTrustedIpcSender(event, djangoOrigin) {
   return requestUrlMatchesOrigin(senderFrame.url, djangoOrigin);
 }
 
+// No renderer capability is needed by the starter. Adaptations may opt in to
+// individual permissions for this live main frame; never infer a subframe's
+// origin from the containing WebContents. Missing document evidence denies.
+function registerSessionPermissionPolicy(owner, djangoOrigin, trustedPermissions = []) {
+  const allowed = new Set(trustedPermissions);
+  const admits = (contents, permission, details) => (
+    allowed.has(permission)
+    && contents === owner
+    && !owner.isDestroyed()
+    && details?.isMainFrame === true
+    && requestUrlMatchesOrigin(details.requestingUrl, djangoOrigin)
+    && requestUrlMatchesOrigin(owner.getURL(), djangoOrigin)
+  );
+  owner.session.setPermissionRequestHandler((contents, permission, callback, details) => {
+    callback(admits(contents, permission, details));
+  });
+  owner.session.setPermissionCheckHandler((contents, permission, requestingOrigin, details) => (
+    admits(contents, permission, details)
+    && requestUrlMatchesOrigin(requestingOrigin, djangoOrigin)
+  ));
+}
+
 function getWindowOpenGuardResponse(targetUrl, djangoOrigin) {
   const navigationAction = getNavigationGuardAction(targetUrl, djangoOrigin);
 
@@ -71,5 +93,6 @@ module.exports = {
   getRedirectGuardAction,
   getWindowOpenGuardResponse,
   isExternalOpenableUrl,
-  isTrustedIpcSender
+  isTrustedIpcSender,
+  registerSessionPermissionPolicy
 };

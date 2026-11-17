@@ -201,6 +201,7 @@ Minimum expectation:
 - keep host validation tight
 - keep CSRF protections enabled unless a specific implementation detail proves otherwise
 - document that the shell token is not a CSRF replacement
+- install both Electron session permission handlers before loading the app; deny all renderer capabilities by default, including those requested by remote embeds
 - keep the preload bridge narrow and explicit
 
 ### Renderer model

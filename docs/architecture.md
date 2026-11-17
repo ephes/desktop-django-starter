@@ -358,6 +358,23 @@ cannot start work. Downloaded events and menu checks share one install prompt an
 preparation task; Later or failed preparation releases it for retry. After
 `quitAndInstall` succeeds, later events cannot prepare or install again.
 
+## Electron frame permissions
+
+Before `loadURL`, the main window installs both public Electron session permission
+handlers through `registerSessionPermissionPolicy`. The starter needs no renderer
+capabilities, so the default allowlist is empty. Remote embeds can still load;
+camera, microphone, location, notifications and other capability requests/checks
+are denied. Unknown permissions and requests without document evidence deny too.
+
+A reviewed adaptation can pass individual permission names to the installer.
+Admission requires the owned live WebContents, an explicit main-frame flag,
+the requesting document URL and current main document on the exact Django origin;
+checks also require the requesting origin to match. Subframes and non-document
+checks (including null WebContents) remain denied. This shared-session policy is
+reinstalled for a recreated main window. Keep the exact-origin auth-header hook
+and IPC sender checks independent. See {ref}`the shell guide <frame-permissions>`
+for the opt-in seam and real-browser verification command.
+
 ## Native Surface Area
 
 The desktop integration should stay narrow:

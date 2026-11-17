@@ -19,7 +19,8 @@ const {
   getNavigationGuardAction,
   getRedirectGuardAction,
   getWindowOpenGuardResponse,
-  isTrustedIpcSender
+  isTrustedIpcSender,
+  registerSessionPermissionPolicy
 } = require("./scripts/window-guards.cjs");
 const { shouldShowManagedProcessExitDialog } = require("./scripts/process-exit-policy.cjs");
 const { createElectronUpdateController } = require("./scripts/updates.cjs");
@@ -737,6 +738,7 @@ function createWindow(url, authToken) {
     }
   });
 
+  registerSessionPermissionPolicy(win.webContents, url);
   registerDesktopAuthHeaderInjection(win, url, authToken);
   registerWindowNavigationGuards(win, url);
   win.loadURL(url);

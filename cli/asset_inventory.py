@@ -26,6 +26,7 @@ CANONICAL_ASSETS: list[str] = [
     "shells/electron/scripts/auth-token.test.cjs",
     "shells/electron/scripts/materialize-symlinks.test.cjs",
     "shells/electron/scripts/window-guards.test.cjs",
+    "shells/electron/scripts/frame-boundaries-smoke.cjs",
     "shells/electron/scripts/process-exit-policy.test.cjs",
     "shells/electron/scripts/updates.test.cjs",
     # Signing entitlements

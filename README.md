@@ -43,6 +43,7 @@ Runnable starter slices:
 - localhost startup on `127.0.0.1` with a random port and `/health/` readiness polling
 - Electron per-session shell-to-Django auth token support, passed to Django through the child-process environment and injected only for the exact local Django origin
 - Tauri and Positron per-session shell-to-Django auth token support through a Django bootstrap URL that sets an HttpOnly same-origin cookie before redirecting to the app
+- Electron session capability requests and checks deny by default, including remote embeds; trusted-app opt-in stays explicit in the main process (see [frame permissions](docs/shells/electron.md#frame-permissions))
 - minimal preload bridge for opening the app-data folder
 - staged packaged-backend flow under `.stage/backend/` with a bundled Python runtime, installed app dependencies, collected static assets, and `desktop_django_starter.settings.packaged`
 - packaged-like Electron launcher that exercises the staged bundled-runtime contract locally, including the supervised task worker
