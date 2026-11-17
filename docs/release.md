@@ -785,7 +785,12 @@ Operators can increase positive integer environment values before launching:
 `DESKTOP_DJANGO_MEDIA_MAX_DEPTH`. Limits apply per attempt. All media symlinks,
 including internal links, are refused. A refusal retains the predecessor and
 removes unpublished staging; repair the synthetic/imported tree or adjust the
-budget with enough free disk space, then retry. Cache is never imported.
+budget with enough free disk space, then retry. Each file is read only to its
+initial size. Detected identity, size, mtime or ctime changes during copying
+refuse publication, including same-size in-place edits. Close media writers
+before retrying from the retained predecessor. This is per-file change
+detection using available filesystem metadata, not a snapshot across media
+files and SQLite. Cache is never imported.
 
 ### Interrupted upgrade recovery and durability
 
@@ -800,7 +805,13 @@ startup, under the same OS lock, reclaims only stages with an exact valid
 is limited to 1024 root entries and 16 candidate stages; each cleanup is limited
 to 100,016 entries and 65 levels. Larger trees (including stages produced using
 raised media budgets), unknown contents, links or missing/invalid owner records
-remain for inspection. Warnings report bounded categories/counts. Old hidden
+remain for inspection. Duplicate JSON members in owner or completion markers
+are invalid, even if their values agree or names use JSON escapes; nested
+objects are checked too. Ambiguous owner claims retain the entire stage.
+Ambiguous completion markers stop reuse or import and leave the published
+generation untouched. Back up and inspect these records with all app processes
+closed; do not discard an earlier claim merely because a later claim looks valid.
+Warnings report bounded categories/counts. Old hidden
 stage names are preserved because their ownership cannot be proven. A kill
 before the owner record is complete can likewise leave an ambiguous stage.
 

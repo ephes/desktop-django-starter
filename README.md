@@ -392,11 +392,17 @@ CLI package maintainers: wheel and sdist builds require every file in
 `just cli-test` includes offline synthetic build and relocated-install probes.
 
 Packaged state startup validates `state.json` and the direct database/media/cache
-layout before reuse. Incomplete restores stop with repair guidance and remain
+layout before reuse. Completion and stage-owner markers reject duplicate JSON
+members at every depth, including escaped spellings of the same name. Ambiguous
+stage ownership retains the whole stage for inspection with the app closed.
+Incomplete restores stop with repair guidance and remain
 untouched; only a marker with `copied_from: null` permits an absent first-use DB.
 Symlink/reparse-point state roots and database leaves are refused. Media upgrades
 copy only regular files/directories, with defaults of 100,000 entries, 2 GiB and
-64 levels; see [state recovery and limits](docs/release.md#upgrades-and-rollbacks).
+64 levels. Each file is bounded by its initial size; detected identity, size,
+mtime or ctime changes stop publication. Close media writers and retry from the
+retained predecessor; this does not provide a snapshot across files and SQLite.
+See [state recovery and limits](docs/release.md#upgrades-and-rollbacks).
 
 State initialization holds a persistent OS lock across recovery and publication.
 Next startup reclaims bounded, provably owned abandoned stages, preserving

@@ -25,6 +25,10 @@ def identity(info: os.stat_result) -> tuple[int, int]:
     return info.st_dev, info.st_ino
 
 
+def _generation(info: os.stat_result) -> tuple[int, ...]:
+    return (*identity(info), info.st_size, info.st_mtime_ns, info.st_ctime_ns)
+
+
 def admit(path: Path, *, directory: bool = False) -> os.stat_result:
     info = path.lstat()
     expected = stat.S_ISDIR if directory else stat.S_ISREG
@@ -65,8 +69,11 @@ def directory_guard(path: Path, *, parent_fd: int | None = None) -> Iterator[int
 
 
 @contextmanager
-def regular_reader(path: Path, *, parent_fd: int | None = None) -> Iterator[BinaryIO]:
+def regular_reader(
+    path: Path, *, parent_fd: int | None = None, stable: bool = False
+) -> Iterator[BinaryIO]:
     before = admit(path)
+    signature = _generation if stable else identity
     descriptor = (
         _open_key_windows(path)
         if os.name == "nt"
@@ -77,10 +84,12 @@ def regular_reader(path: Path, *, parent_fd: int | None = None) -> Iterator[Bina
         )
     )
     with os.fdopen(descriptor, "rb") as stream:
-        if identity(os.fstat(stream.fileno())) != identity(before):
+        if signature(os.fstat(stream.fileno())) != signature(before):
             raise state_error("file changed while opening")
         yield stream
-        if identity(admit(path)) != identity(before):
+        if signature(os.fstat(stream.fileno())) != signature(before) or signature(
+            admit(path)
+        ) != signature(before):
             raise state_error("file changed during initialization")
 
 
@@ -127,15 +136,18 @@ def copy_media(source: Path, destination: Path) -> None:
                         copy_directory(child, target, depth + 1, source_fd)
                     else:
                         with (
-                            regular_reader(child, parent_fd=source_fd) as reader,
+                            regular_reader(child, parent_fd=source_fd, stable=True) as reader,
                             target.open("xb") as writer,
                         ):
-                            while chunk := reader.read(
-                                min(1024 * 1024, max_bytes - copied_bytes + 1)
-                            ):
+                            remaining = os.fstat(reader.fileno()).st_size
+                            if remaining > max_bytes - copied_bytes:
+                                raise state_error("media byte budget exceeded")
+                            while remaining:
+                                chunk = reader.read(min(1024 * 1024, remaining))
+                                if not chunk:
+                                    raise state_error("media file truncated during copy")
+                                remaining -= len(chunk)
                                 copied_bytes += len(chunk)
-                                if copied_bytes > max_bytes:
-                                    raise state_error("media byte budget exceeded")
                                 writer.write(chunk)
 
     try:

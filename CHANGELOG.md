@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Reject duplicate JSON member claims in bounded completion and stage-owner
+  markers, including nested and escaped names. Retain ambiguous recovery stages
+  for inspection and refuse ambiguous published state without modifying it.
+
+- Refuse version-state publication when media file identity, size, mtime or ctime
+  changes during copying. Bound reads by each initial file size and preserve the
+  predecessor for a stable retry.
+
 - Isolate POSIX backends in owned process groups and forcibly retire descendants
   on shell pipe loss. Electron closes stdin and signals the launch group on
   normal shutdown, and kills the rest of a group as soon as its leader exits

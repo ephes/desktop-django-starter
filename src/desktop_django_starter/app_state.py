@@ -43,6 +43,7 @@ from .state_files import (
     regular_reader,
     state_error,
 )
+from .state_markers import read_state_marker
 from .state_staging import (
     OWNER_FILENAME,
     STAGE_PREFIX,
@@ -104,12 +105,8 @@ def _validate_state(state_dir: Path, version: str) -> None:
     """Admit the existing marker format, including deliberately empty first use."""
     try:
         with directory_guard(state_dir):
-            with regular_reader(state_dir / STATE_METADATA_FILENAME) as stream:
-                raw = stream.read(16_385)
-            if len(raw) > 16_384:
-                raise ValueError("marker exceeds 16 KiB")
-            metadata = json.loads(raw)
-            if not isinstance(metadata, dict) or metadata.get("version") != version:
+            metadata = read_state_marker(state_dir / STATE_METADATA_FILENAME, max_bytes=16_384)
+            if metadata.get("version") != version:
                 raise ValueError("marker version mismatch")
             created = datetime.fromisoformat(metadata["created_at"])
             if created.tzinfo is None or "copied_from" not in metadata:
@@ -249,9 +246,7 @@ def _find_previous_state(
         admit(entry, directory=True)
         if current_key is None:
             continue
-        if version_sort_key(entry.name) < current_key and optional_file(
-            entry / DATABASE_FILENAME
-        ):
+        if version_sort_key(entry.name) < current_key and optional_file(entry / DATABASE_FILENAME):
             older.append(entry)
 
     if older:

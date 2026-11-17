@@ -173,3 +173,88 @@ def test_media_special_entries_are_refused(tmp_path, kind):
     with pytest.raises(ImproperlyConfigured, match="media"):
         app_state.prepare_versioned_state(tmp_path, "2.0.0")
     assert not (tmp_path / "state" / "2.0.0").exists()
+
+
+@pytest.mark.parametrize("mutation", ["rewrite", "restore-mtime", "truncate", "grow", "replace"])
+def test_changed_media_generation_never_publishes_and_stable_retry_succeeds(
+    monkeypatch, tmp_path, mutation
+):
+    import os
+    from concurrent.futures import ThreadPoolExecutor
+    from contextlib import contextmanager
+    from threading import Event
+
+    from desktop_django_starter import state_files
+
+    if mutation == "restore-mtime" and os.name == "nt":
+        pytest.skip("Windows stat ctime can report creation time rather than change time")
+
+    old = previous(tmp_path)
+    media = old / "media" / "upload"
+    initial = b"A" * (2 * 1024**2)
+    media.write_bytes(initial)
+    before = media.stat()
+    database_before = (old / "app.sqlite3").read_bytes()
+    marker_before = (old / "state.json").read_bytes()
+    first_read, changed = Event(), Event()
+    read_sizes = []
+    real_reader = state_files.regular_reader
+
+    def mutate():
+        assert first_read.wait(5), "copy did not reach the first-read barrier"
+        try:
+            if mutation == "replace":
+                replacement = media.with_name("replacement")
+                replacement.write_bytes(b"B" * len(initial))
+                replacement.replace(media)
+            else:
+                with media.open("r+b") as writer:
+                    if mutation == "truncate":
+                        writer.truncate(1024**2)
+                    elif mutation == "grow":
+                        writer.seek(0, os.SEEK_END)
+                        writer.write(b"B" * 1024**2)
+                    else:
+                        writer.write(b"B" * len(initial))
+                if mutation == "restore-mtime":
+                    os.utime(media, ns=(before.st_atime_ns, before.st_mtime_ns))
+        finally:
+            changed.set()
+
+    class BarrierReader:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def fileno(self):
+            return self.stream.fileno()
+
+        def read(self, size):
+            read_sizes.append(size)
+            chunk = self.stream.read(size)
+            if not first_read.is_set():
+                first_read.set()
+                assert changed.wait(5), "mutation did not finish"
+            return chunk
+
+    @contextmanager
+    def hooked_reader(path, **kwargs):
+        with real_reader(path, **kwargs) as stream:
+            yield BarrierReader(stream) if path == media else stream
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(mutate)
+        with monkeypatch.context() as patch:
+            patch.setattr(state_files, "regular_reader", hooked_reader)
+            with pytest.raises(ImproperlyConfigured, match="media"):
+                app_state.prepare_versioned_state(tmp_path, "2.0.0")
+        future.result(timeout=5)
+
+    assert not (tmp_path / "state" / "2.0.0").exists()
+    assert list((tmp_path / "state").glob(".dds-stage-*")) == []
+    assert (old / "app.sqlite3").read_bytes() == database_before
+    assert (old / "state.json").read_bytes() == marker_before
+    assert sum(read_sizes) <= len(initial), "copy must stop at the initial size"
+    stable_bytes = media.read_bytes()
+    state = app_state.prepare_versioned_state(tmp_path, "2.0.0")
+    assert (state / "media" / "upload").read_bytes() == stable_bytes
+    assert media.read_bytes() == stable_bytes
