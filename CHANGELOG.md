@@ -10,7 +10,8 @@
   `SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"` in base settings
   because Django's default `same-origin` empties the popup referrer Electron
   reports, which would refuse every trusted target-blank outbound link; the
-  staged wrap scaffold adds the same setting to wrapped desktop settings.
+  staged wrap scaffold adds the same setting when the wrapped settings define no
+  referrer policy of their own.
 
 - Install both Electron session permission handlers before loading the app. Deny
   renderer capabilities by default, including remote/unknown frames; document a

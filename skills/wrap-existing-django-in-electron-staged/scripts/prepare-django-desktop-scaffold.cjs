@@ -183,11 +183,18 @@ function updateSettings(targetRoot, metadata) {
       + 'DESKTOP_DJANGO_AUTH_TOKEN = os.environ.get("DESKTOP_DJANGO_AUTH_TOKEN", "")\n'
       + 'DESKTOP_AUTO_LOGIN_ENABLED = os.environ.get("DESKTOP_AUTO_LOGIN_ENABLED") == "1"\n'
       + 'DESKTOP_AUTO_LOGIN_USERNAME = os.environ.get("DESKTOP_AUTO_LOGIN_USERNAME", "")\n'
-      + "DESKTOP_PACKAGED_RUNTIME = False\n"
-      + "# Electron opens target-blank outbound links only with the exact local origin\n"
-      + "# as popup referrer; Django's default same-origin policy strips it.\n"
-      + 'SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"\n',
+      + "DESKTOP_PACKAGED_RUNTIME = False\n",
     "DESKTOP_ALLOWED_HOSTS"
+  );
+  // Separate marker so targets scaffolded before this setting existed get it on
+  // a rerun; an explicit target policy (here or inherited) is kept.
+  source = appendBlockIfMissing(
+    source,
+    "# Electron opens target-blank outbound links only with the exact local origin\n"
+      + "# as popup referrer; Django's default same-origin policy strips it.\n"
+      + 'if "SECURE_REFERRER_POLICY" not in globals():\n'
+      + '    SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"\n',
+    "SECURE_REFERRER_POLICY"
   );
 
   writeIfChanged(settingsPath, source);
