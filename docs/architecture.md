@@ -150,10 +150,11 @@ The current implementation follows this sequence:
 9. Electron loads the main app window, then closes the splash window once the main window is ready to show.
 10. When the user closes the window or quits while background tasks are running or queued (`/desktop/activity/`), Electron asks first. Quitting then stops both child processes; on Windows with explicit forced process-tree termination (`taskkill /t /f`) rather than a graceful drain. Electron marks the session finished only after confirmed child exit and confirmed orphan recovery; uncertainty retains dirty evidence.
 
-Every backend process (`migrate`, `seed_demo_content`, `runserver`, `db_worker`) is started through `desktop_process_guard.py`, a small standard-library launcher staged next to `manage.py`. It runs `manage.py` in the same process and adds two safety nets for the case where the shell dies without cleaning up:
+Every backend process (`migrate`, `seed_demo_content`, `runserver`, `db_worker`) is started through `desktop_process_guard.py`, a small standard-library launcher staged next to `manage.py`. It runs `manage.py` in the same process and adds ownership safety nets for the case where the shell dies without cleaning up:
 
-- the shell keeps an open pipe on the child's stdin; when the shell process ends for any reason, the operating system closes it and the guard exits the backend process
-- on Windows the guard puts the backend into a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so anything the backend starts dies with it
+- the shell keeps an open pipe on the child's stdin; when the shell process ends for any reason, the operating system closes it and the guard forcibly retires its owned backend tree
+- on POSIX the guard establishes a dedicated group before Django runs, including when invoked from a shared caller group. Stdin loss kills only that owned group with SIGKILL. SIGTERM and SIGINT do the same only until the managed command installs its own handlers: `db_worker` replaces them with its graceful shutdown, so a shell that only signals the leader cannot rely on them. Group admission failure refuses startup before Django runs
+- on Windows the guard puts the backend into a Job Object with `JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE`, so anything the backend starts dies with it. Creation, configuration or assignment failure closes any newly created handle and refuses startup before Django runs, using a fixed diagnostic without host details
 
 Single-instance expectation:
 
@@ -350,11 +351,12 @@ The desktop integration should stay narrow:
 
 Shutdown handling must be treated as a cross-platform lifecycle concern, not as a best-effort cleanup step.
 
-- macOS and Linux can usually terminate the Django and task worker child processes with normal process signals
+- on macOS and Linux Electron launches each backend in a dedicated process group, closes its stdin on stop and sends group SIGTERM followed by group SIGKILL even if the leader has exited. When a leader exits on its own (crash or end of a one-shot command), Electron SIGKILLs the rest of its group as soon as it observes the exit. The guard retires its own group on pipe loss; this also covers Python behind a development `uv` launcher
+- the experimental Tauri shell still stops POSIX backends by signalling only the leader (`kill -TERM`, then a leader kill), so descendants of `db_worker`, whose own SIGTERM handler replaces the guard's, can outlive a normal Tauri stop until the next start's leftover cleanup
 - Windows needs explicit handling because process-tree shutdown is less predictable
 - the current Electron implementation on Windows uses explicit forced child-process tree termination via `taskkill /t /f` (from `%SystemRoot%\System32`, falling back to a plain kill if it fails)
 - that forced tree kill is not a graceful drain: a running task is interrupted, which is why the shells ask before quitting while tasks are running; queued tasks stay in the database and run on the next start
-- for the cases normal shutdown cannot cover, every backend process runs under `desktop_process_guard.py`: it exits when the shell's stdin pipe closes, and on Windows it holds a kill-on-close Job Object for its process tree; a later start also stops leftovers it finds by app key
+- for the cases normal shutdown cannot cover, every backend process runs under `desktop_process_guard.py`: it kills its owned group on POSIX when the shell's stdin pipe closes, and on Windows it holds a kill-on-close Job Object for its process tree; a later start also stops leftovers it finds by app key
 - the Job Object is created by the backend process for itself and its descendants, not by Electron for its children (Node.js has no Job Object API); the stdin pipe is what ties the backend to the shell
 - verified on macOS: `kill -9` of the Electron main process ends `runserver` and `db_worker` within three seconds, and a planted leftover is stopped on the next start. The Windows paths (Job Object, `taskkill`, PowerShell process listing) are implemented but not yet validated on a live Windows machine
 
@@ -497,3 +499,23 @@ Even subsequent shell shutdown leaves the marker dirty. Repair the process tool
 or permissions with the app closed, then explicitly relaunch to retry. A proven
 empty inventory or confirmed retirement permits normal startup. This stricter
 startup refusal supersedes the earlier nonfatal cleanup-failure behavior.
+
+### Backend descendant acceptance
+
+Run `uv run pytest tests/test_desktop_process_guard.py -v` for real POSIX guard
+cleanup on stdin loss and SIGTERM, starting in the caller's shared group. The
+synthetic backend spawns a sleeping descendant that ignores SIGTERM. Run
+`npm --prefix shells/electron test` for normal shutdown, including real owned
+groups with a leader that exits before a SIGTERM-resistant descendant.
+
+On native Windows, run
+`uv run pytest tests/test_desktop_process_guard.py -k windows_owned_child_cleanup -v`.
+This holds real process handles and verifies both the guard and child terminate
+on pipe loss and abrupt guard termination. These tests skip on POSIX; mocked
+Job Object API tests do not substitute for that acceptance. Also run
+`just packaged-smoke` for the staged runtime and shell integration.
+
+Cleanup is forced and may interrupt active tasks. Ordinary descendants remain
+in their inherited process group/job; code that deliberately escapes that
+ownership is outside the starter contract. A one-shot command can still return
+normally with its original status; stdin loss and shell stop own group cleanup.

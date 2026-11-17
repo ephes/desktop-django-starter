@@ -826,3 +826,19 @@ for process-crash recovery, but no portable parent-directory sync in this code;
 power-loss persistence of the rename is not promised. Filesystems/devices may
 also weaken POSIX guarantees. Runtime SQLite `synchronous=NORMAL` remains
 unchanged: these barriers cover initialization, not subsequent application writes.
+
+### Required Windows backend ownership
+
+A host that refuses the backend kill-on-close Job Object cannot start the
+backend. `backend job admission failed` means creation, configuration or
+assignment was denied; check host job restrictions before retrying. There is no
+unowned fallback. Fault-injection tests are portable, but a real Windows
+process-tree cleanup test is still required before accepting a packaged build.
+
+POSIX packaged acceptance must also verify descendant cleanup, not just the
+backend leader: `uv run pytest tests/test_desktop_process_guard.py -v` and
+`npm --prefix shells/electron test` exercise real owned processes with synthetic
+data. `just packaged-smoke` exercises the bundled runtime. On native Windows run
+`uv run pytest tests/test_desktop_process_guard.py -k windows_owned_child_cleanup -v`
+for real Job Object pipe-loss and crash cleanup; POSIX skips are not acceptance.
+Descendants that explicitly escape their inherited group/job are outside scope.

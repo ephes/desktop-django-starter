@@ -404,3 +404,16 @@ ambiguous directories. Payload files and directories are flushed before the
 completion marker and final rename. POSIX adds parent-directory sync; Windows
 has file flushes and process-crash atomicity, with no portable power-loss
 namespace guarantee. See the release guide before manually cleaning stages.
+
+Windows backend startup requires successful admission to a kill-on-close Job
+Object. Restricted hosts that refuse job creation, configuration or assignment
+stop startup with `backend job admission failed`; Django is never run without
+this ownership. Native Windows process-tree acceptance remains required.
+
+On POSIX, Electron starts backends in dedicated process groups. The guard also
+isolates direct invocations before Django runs. Normal shell shutdown closes the
+stdin pipe and signals the owned group, and a leader that exits on its own has
+the rest of its group killed at once; pipe loss after a shell crash kills the
+guard's entire group, including descendants that ignore SIGTERM. This is forced
+cleanup, not a task drain. Descendants that deliberately leave the group/session
+are outside this contract. See the runtime architecture for acceptance commands.

@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Isolate POSIX backends in owned process groups and forcibly retire descendants
+  on shell pipe loss. Electron closes stdin and signals the launch group on
+  normal shutdown, and kills the rest of a group as soon as its leader exits
+  (crash or one-shot end). Guard SIGTERM/SIGINT retirement lasts only until
+  the Django command installs its own handlers, as db_worker does. Add real
+  POSIX descendant cleanup and native Windows Job Object acceptance tests.
+
+- Refuse Windows backend startup when required Job Object admission fails,
+  and close newly created job handles on configuration or assignment failure.
+
 - Send private/no-store cache policy on every shell-authenticated response and
   refusal, including HTML forms, task JSON and GET/HEAD errors. Development
   without shell authentication retains its existing non-bootstrap behavior.
