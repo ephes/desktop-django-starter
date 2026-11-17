@@ -9,7 +9,8 @@
   fixture to cover popup requester admission and trusted outbound links. Set
   `SECURE_REFERRER_POLICY = "strict-origin-when-cross-origin"` in base settings
   because Django's default `same-origin` empties the popup referrer Electron
-  reports, which would refuse every trusted target-blank outbound link.
+  reports, which would refuse every trusted target-blank outbound link; the
+  staged wrap scaffold adds the same setting to wrapped desktop settings.
 
 - Install both Electron session permission handlers before loading the app. Deny
   renderer capabilities by default, including remote/unknown frames; document a

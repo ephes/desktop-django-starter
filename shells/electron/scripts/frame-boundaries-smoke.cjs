@@ -30,13 +30,17 @@ async function serve(handler) {
 
 app.whenReady().then(async () => {
   const token = 'synthetic-frame-fixture-token';
+  // Record auth headers and assert after the loads, so an isolation regression
+  // fails through finish(1) instead of an uncaught exception in a handler.
+  const remoteTokens = [];
+  const trustedTokens = [];
   const remote = await serve((req, res) => {
-    assert.equal(req.headers['x-desktop-django-token'], undefined);
+    remoteTokens.push(req.headers['x-desktop-django-token']);
     res.setHeader('Content-Type', 'text/html');
     res.end('<!doctype html><title>Remote fixture</title>Ordinary remote embed');
   });
   const trusted = await serve((req, res) => {
-    assert.equal(req.headers['x-desktop-django-token'], token);
+    trustedTokens.push(req.headers['x-desktop-django-token']);
     // Mirror the starter's Django SECURE_REFERRER_POLICY; Django's default
     // same-origin is exercised separately on /same-origin/.
     res.setHeader('Referrer-Policy', req.url === '/same-origin/' ? 'same-origin' : 'strict-origin-when-cross-origin');
@@ -100,6 +104,10 @@ app.whenReady().then(async () => {
   assert.equal(attempts[4].referrer.url, '', 'same-origin policy strips the cross-origin referrer');
   assert.deepEqual(dispatched, trustedDispatches, 'stripped referrer fails closed');
   assert.equal(BrowserWindow.getAllWindows().length, 1, 'no popup window created');
+  assert.ok(remoteTokens.length > 0, 'remote embed was requested');
+  assert.deepEqual(remoteTokens.filter((value) => value !== undefined), [], 'no auth header reaches the remote embed');
+  assert.ok(trustedTokens.length > 0, 'trusted app was requested');
+  assert.deepEqual(trustedTokens.filter((value) => value !== token), [], 'every trusted request carries the auth header');
   console.log('PASS: remote iframe capabilities and popup dispatch denied; trusted HTTPS and mailto outbound links dispatch once under the starter referrer policy; same-origin referrer policy fails closed; embed and exact-origin auth headers preserved');
 }).then(() => finish(0), (error) => { console.error(error); finish(1); });
 
