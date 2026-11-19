@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Serialize CLI asset publication and placeholder capture across concurrent syncs
+  with a persistent sibling lock.
+- Keep the original CLI asset publication error when rollback or cleanup fails,
+  with diagnostics for secondary failures and the retained recovery path.
+
 - Bound local Tauri bundle discovery and report scans, and fingerprint runnable
   bundles incrementally from sorted metadata.
 
