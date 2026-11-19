@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import tarfile
+import traceback
 import zipfile
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from pathlib import Path
@@ -197,28 +198,68 @@ def test_first_sync_creates_assets(asset_tree: tuple[Path, Path]) -> None:
     assert set(assets.parent.iterdir()) == {assets, assets.parent / ".assets-sync-lock"}
 
 
+@pytest.mark.parametrize("cleanup_fails", [False, True])
 def test_rollback_failure_retains_previous_tree(
-    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+    asset_tree: tuple[Path, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture,
+    cleanup_fails: bool,
 ) -> None:
     _, assets = asset_tree
     before = tree_bytes(assets)
     rename = Path.rename
+    remove = sync_assets.shutil.rmtree
     calls = []
+    publish_error = OSError("promotion failed")
 
     def fail_restore(src: Path, dst: Path) -> Path:
         calls.append(src.name)
-        if src.name in {"staged", "previous"}:
-            raise OSError("rename failed")
+        if src.name == "staged":
+            raise publish_error
+        if src.name == "previous":
+            raise OSError("restore failed")
         return rename(src, dst)
 
+    def fail_cleanup(path: Path, **kwargs) -> None:
+        if path.name == "staged" and cleanup_fails:
+            raise OSError("staging cleanup failed")
+        remove(path, **kwargs)
+
     monkeypatch.setattr(Path, "rename", fail_restore)
-    with pytest.raises(OSError, match="rename failed"):
+    monkeypatch.setattr(sync_assets.shutil, "rmtree", fail_cleanup)
+    with pytest.raises(OSError, match="promotion failed") as caught:
         sync_assets.sync()
+    assert caught.value is publish_error
     assert calls == ["_assets", "staged", "previous"]
     (work,) = [path for path in assets.parent.iterdir() if path.is_dir()]
     assert tree_bytes(work / "previous") == before
-    assert not (work / "staged").exists()
+    assert (work / "staged").exists() == cleanup_fails
+
+    diagnostics = "".join(traceback.format_exception(caught.value))
+    assert "restore failed" in diagnostics
+    assert str(work / "previous") in diagnostics
+    assert ("staging cleanup failed" in diagnostics) == cleanup_fails
     assert str(work / "previous") in capsys.readouterr().out
+
+
+def test_cleanup_failure_does_not_replace_primary_error(
+    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _, assets = asset_tree
+    before = tree_bytes(assets)
+
+    def fail_copy(src: Path, dst: Path) -> None:
+        raise OSError("copy failed")
+
+    def fail_cleanup(path: Path) -> None:
+        raise OSError("cleanup failed")
+
+    monkeypatch.setattr(sync_assets.shutil, "copy2", fail_copy)
+    monkeypatch.setattr(sync_assets.shutil, "rmtree", fail_cleanup)
+    with pytest.raises(OSError, match="copy failed") as caught:
+        sync_assets.sync()
+    assert "cleanup failed" in "".join(traceback.format_exception(caught.value))
+    assert tree_bytes(assets) == before
 
 
 def test_old_tree_cleanup_failure_keeps_new_assets(
@@ -228,7 +269,7 @@ def test_old_tree_cleanup_failure_keeps_new_assets(
     remove = sync_assets.shutil.rmtree
 
     def fail_cleanup(path: Path, **kwargs) -> None:
-        if path.name == "previous":
+        if (path / "previous").is_dir():
             raise OSError("cleanup failed")
         remove(path, **kwargs)
 

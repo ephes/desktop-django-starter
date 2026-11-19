@@ -49,9 +49,8 @@ def sync() -> None:
     work = Path(tempfile.mkdtemp(prefix=".assets-sync-", dir=ASSETS_DIR.parent))
     staged = work / "staged"
     backup = work / "previous"
-    staged.mkdir()
-    published = False
     try:
+        staged.mkdir()
         for rel in CANONICAL_ASSETS:
             dst = staged / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
@@ -66,22 +65,34 @@ def sync() -> None:
                 ASSETS_DIR.rename(backup)
             try:
                 staged.rename(ASSETS_DIR)
-            except BaseException:
-                if backup.exists():
-                    backup.rename(ASSETS_DIR)
+            except BaseException as publish_error:
+                try:
+                    if backup.exists():
+                        backup.rename(ASSETS_DIR)
+                except BaseException as restore_error:
+                    recovery = RuntimeError(f"Previous assets retained at {backup}")
+                    recovery.__cause__ = restore_error
+                    raise publish_error from recovery
                 raise
-            published = True
-        if backup.exists():
-            shutil.rmtree(backup)
-    finally:
-        # Retain recovery data if restoration or old-tree cleanup failed.
-        if backup.exists():
-            label = "Old asset cleanup incomplete" if published else "Previous assets retained"
-            print(f"{label} at {backup}")
-            if staged.exists():
-                shutil.rmtree(staged, ignore_errors=True)
-        else:
-            shutil.rmtree(work)
+    except BaseException as primary:
+        try:
+            if backup.exists():
+                print(f"Previous assets retained at {backup}")
+                if staged.exists():
+                    shutil.rmtree(staged)
+            else:
+                shutil.rmtree(work)
+        except BaseException as cleanup_error:
+            # Keep any rollback diagnostics in the chain under the primary error.
+            cleanup_error.__cause__ = primary.__cause__
+            raise primary from cleanup_error
+        raise
+
+    try:
+        shutil.rmtree(work)
+    except OSError:
+        print(f"Old asset cleanup incomplete at {work}")
+        raise
 
     print(f"Synced {len(CANONICAL_ASSETS)} assets to {ASSETS_DIR}")
 

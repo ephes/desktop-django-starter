@@ -136,8 +136,10 @@ the old bundle. Leave the lock file in place. On Windows, retry the sync if the
 OS times out acquiring the lock. A complete tree replaces the old bundle,
 removing stale files while preserving an existing `.gitkeep` and its contents.
 Copy failures leave the old bundle intact. Publication failures restore it.
-If restoration itself fails, the error is propagated and the previous tree is
-retained at the printed recovery path under `cli/src/dds/.assets-sync-*/`.
+If restoration fails, sync raises the original publication error. Its traceback
+includes the restoration error and the retained previous tree's recovery path
+under `cli/src/dds/.assets-sync-*/`. Cleanup errors during a failed sync are
+also included in the traceback.
 Git ignores the lock file and recovery directories, and `cli/pyproject.toml`
 excludes them from wheel and sdist builds. Restore or remove recovery
 directories manually. If old-tree cleanup fails after publication, sync reports
