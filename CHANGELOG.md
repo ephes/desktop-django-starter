@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Serialize CLI asset publication and placeholder capture across concurrent syncs
+  with a persistent sibling lock.
+
 - Bound local Tauri bundle discovery and report scans, and fingerprint runnable
   bundles incrementally from sorted metadata.
 

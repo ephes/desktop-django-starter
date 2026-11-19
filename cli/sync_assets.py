@@ -7,8 +7,11 @@ Or via just:             just cli-sync-assets
 
 from __future__ import annotations
 
+import os
 import shutil
 import tempfile
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 from asset_inventory import CANONICAL_ASSETS
@@ -16,6 +19,22 @@ from asset_inventory import CANONICAL_ASSETS
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = Path(__file__).resolve().parent / "src" / "dds" / "_assets"
 
+
+@contextmanager
+def publication_lock() -> Iterator[None]:
+    # Keep the same lock file across runs, including while a publisher waits.
+    # Closing the handle releases the operating system lock.
+    with (ASSETS_DIR.parent / ".assets-sync-lock").open("a+b") as lock:
+        if os.name == "nt":
+            import msvcrt
+
+            lock.seek(0)
+            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+        else:
+            import fcntl
+
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        yield
 
 
 def sync() -> None:
@@ -37,20 +56,21 @@ def sync() -> None:
             dst = staged / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO_ROOT / rel, dst)
-        # Preserve the repository placeholder, including its bytes, if present.
-        placeholder = ASSETS_DIR / ".gitkeep"
-        if placeholder.is_file():
-            shutil.copy2(placeholder, staged / ".gitkeep")
+        with publication_lock():
+            # Preserve the repository placeholder, including its bytes, if present.
+            placeholder = ASSETS_DIR / ".gitkeep"
+            if placeholder.is_file():
+                shutil.copy2(placeholder, staged / ".gitkeep")
 
-        if ASSETS_DIR.exists():
-            ASSETS_DIR.rename(backup)
-        try:
-            staged.rename(ASSETS_DIR)
-        except BaseException:
-            if backup.exists():
-                backup.rename(ASSETS_DIR)
-            raise
-        published = True
+            if ASSETS_DIR.exists():
+                ASSETS_DIR.rename(backup)
+            try:
+                staged.rename(ASSETS_DIR)
+            except BaseException:
+                if backup.exists():
+                    backup.rename(ASSETS_DIR)
+                raise
+            published = True
         if backup.exists():
             shutil.rmtree(backup)
     finally:
