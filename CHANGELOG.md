@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound local Tauri bundle discovery and report scans, and fingerprint runnable
+  bundles incrementally from sorted metadata.
+
 - Give Tauri build smoke execution and process cleanup separate deadlines so a
   timely exit can succeed after bounded cleanup.
 

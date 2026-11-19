@@ -34,6 +34,72 @@ for (const platform of ['darwin', 'linux']) {
   });
 }
 
+test('smoke snapshots share a walk limit across discovery and bundle fingerprints', async t => {
+  const { snapshotArtifacts, resolveSmokeBinary, buildOutputRoots } = await helpers;
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  artifact(root, 'a-stale', 'darwin');
+  const current = artifact(root, 'nested/z-current', 'darwin');
+  const wide = path.join(root, 'wide');
+  fs.mkdirSync(wide);
+
+  // Five discovery visits and eight fingerprint visits use the rest of the budget.
+  const entryLimit = 100000;
+  let extraEntries = entryLimit - 13;
+  let reads = 0;
+  let closes = 0;
+  const open = fs.opendirSync;
+  t.mock.method(fs, 'opendirSync', (name, options) => {
+    if (name !== wide) return open(name, options);
+    let remaining = extraEntries;
+    return {
+      readSync() {
+        reads++;
+        return remaining-- > 0 ? { name: 'ignored', isDirectory: () => false } : null;
+      },
+      closeSync() { closes++; },
+    };
+  });
+  const stat = t.mock.method(fs, 'lstatSync');
+
+  const before = snapshotArtifacts(root, 'darwin');
+  assert.deepEqual([...before.keys()], [path.join(root, 'a-stale.app'), path.join(root, 'nested/z-current.app')]);
+  assert.equal(reads, extraEntries + 1);
+  assert.equal(stat.mock.callCount(), 8);
+  assert.throws(() => resolveSmokeBinary(root, before, 'darwin'), /no current changed/i);
+  fs.appendFileSync(current, 'rebuilt');
+  assert.equal(resolveSmokeBinary(root, before, 'darwin').command, current);
+
+  extraEntries++;
+  stat.mock.resetCalls();
+  assert.throws(() => snapshotArtifacts(root, 'darwin'), /entry limit.*100000/i);
+  assert.ok(stat.mock.callCount() < 8);
+
+  extraEntries = entryLimit + 1000;
+  reads = 0;
+  closes = 0;
+  assert.throws(() => buildOutputRoots({ targetDirectory: wide }), /entry limit.*100000/i);
+  assert.equal(reads, entryLimit + 1);
+  assert.equal(closes, 1);
+});
+
+test('smoke rejects too many candidates across roots before fingerprinting', async t => {
+  const { snapshotArtifacts } = await helpers;
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const roots = [path.join(root, 'b'), path.join(root, 'a')];
+  for (const dir of roots) {
+    for (let index = 0; index < 64; index++) artifact(dir, String(index), 'linux');
+  }
+  const stat = t.mock.method(fs, 'lstatSync');
+  assert.equal(snapshotArtifacts(roots, 'linux').size, 128);
+  assert.equal(stat.mock.callCount(), 128);
+  artifact(roots[1], 'extra', 'linux');
+  stat.mock.resetCalls();
+  assert.throws(() => snapshotArtifacts(roots, 'linux'), /candidate limit.*128/i);
+  assert.equal(stat.mock.callCount(), 0);
+});
+
 test('target directory and explicit target triple determine artifact root', async () => {
   const { buildOutputRoot } = await helpers;
   assert.equal(buildOutputRoot({ tauriRoot: '/repo/shells/tauri', targetDirectory: '/custom/target', target: 'aarch64-apple-darwin', profile: 'debug' }), '/custom/target/aarch64-apple-darwin/debug/bundle');
