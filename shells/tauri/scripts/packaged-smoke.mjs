@@ -91,40 +91,33 @@ export async function runPackagedSmoke(command, args, { timeoutMs = smokeTimeout
   };
   child.stdout.on('data', collect);
   child.stderr.on('data', collect);
-  let timedOut = false;
+  // Settle execution on the first terminal event, before starting cleanup.
+  // Do not wait for close: descendants can keep inherited pipes open.
+  const result = await new Promise(resolve => {
+    const finish = result => {
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish({ timedOut: true }), timeoutMs);
+    child.once('error', error => finish({ error }));
+    child.once('exit', (status, signal) => finish({ status, signal }));
+  });
   let cleanupError;
-  let cleanup;
-  const retire = () => {
-    if (cleanup) return cleanup;
-    cleanup = (async () => {
-      if (!child.pid) return;
+  try {
+    if (child.pid) {
       if (windows) {
         const result = spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { timeout: 3000, maxBuffer: 8192, windowsHide: true });
         if (result.error || result.status !== 0) throw new Error('Owned smoke Windows tree retirement is uncertain');
       } else await retireGroup(child.pid);
-    })().catch(error => { cleanupError = error; });
-    return cleanup;
-  };
-  // Start cleanup on exit, not close: inherited pipes must not prolong ownership.
-  const outcome = new Promise(resolve => {
-    child.once('error', error => resolve({ error }));
-    child.once('exit', (status, signal) => { void retire(); resolve({ status, signal }); });
-  });
-  let timer;
-  const deadline = new Promise(resolve => {
-    timer = setTimeout(() => { timedOut = true; void retire(); resolve({}); }, timeoutMs);
-  });
-  let result;
-  try {
-    result = await Promise.race([outcome, deadline]);
-    await retire();
+    }
+  } catch (error) {
+    cleanupError = error;
   } finally {
-    clearTimeout(timer);
     child.stdout.destroy();
     child.stderr.destroy();
   }
-  if (timedOut || cleanupError || result.error || result.status !== 0) {
-    const reason = [timedOut ? 'deadline exceeded' : result.error?.message
+  if (result.timedOut || cleanupError || result.error || result.status !== 0) {
+    const reason = [result.timedOut ? 'deadline exceeded' : result.error?.message
       || (result.status !== 0 ? `exit ${result.status} (${result.signal || 'no signal'})` : ''),
       cleanupError?.message].filter(Boolean).join('; ');
     throw new Error(`Packaged smoke failed: ${reason}\n${diagnostics.toString('utf8')}`);

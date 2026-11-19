@@ -193,6 +193,7 @@ database. It still assumes conventional Django settings and a recognizable
 - `just tauri-smoke`: start the Tauri shell and auto-exit after the first page load
 - `just tauri-packaged-start`: rebuild the shared staged backend and launch the Tauri shell against the packaged runtime contract
 - `just tauri-packaged-smoke`: rebuild the shared staged backend, launch the Tauri shell against the packaged runtime contract, and auto-exit after the first page load
+- `npm --prefix shells/tauri run smoke:build` builds and launches the current runnable Tauri bundle with separate execution and process cleanup deadlines. See [Tauri smoke validation](docs/shells/tauri.md#current-build-packaged-smoke).
 - `just tauri-build`: build a local Tauri host bundle, defaulting to `dmg` on macOS, `nsis` on Windows, and `appimage` on Linux
 - `just positron-install`: install the Positron shell environment with `uv`
 - `just positron-check`: run Django's system checks from the Positron shell environment

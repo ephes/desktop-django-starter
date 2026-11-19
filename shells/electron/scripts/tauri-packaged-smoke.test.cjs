@@ -46,6 +46,50 @@ test('packaged smoke has a deadline and bounded diagnostics', async () => {
   assert.ok(Date.now() - started < 3000);
 });
 
+test('smoke execution and process group cleanup have independent deadlines', { skip: process.platform === 'win32' }, async t => {
+  const childProcess = require('node:child_process');
+  const { EventEmitter } = require('node:events');
+  const { PassThrough } = require('node:stream');
+  const { syncBuiltinESMExports } = require('node:module');
+  const { runPackagedSmoke } = await helpers;
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const spawn = t.mock.method(childProcess, 'spawn', () => {
+    const child = new EventEmitter();
+    Object.assign(child, { pid: 12345, stdout: new PassThrough(), stderr: new PassThrough() });
+    return child;
+  });
+  t.after(() => { spawn.mock.restore(); syncBuiltinESMExports(); });
+  syncBuiltinESMExports();
+
+  let groupAlive = true;
+  let cleanupRefused = false;
+  const kill = t.mock.method(process, 'kill', (pid, signal) => {
+    assert.equal(pid, -12345);
+    if (cleanupRefused) throw Object.assign(new Error('cleanup refused'), { code: 'EPERM' });
+    if (signal === 0 && !groupAlive) throw Object.assign(new Error('group gone'), { code: 'ESRCH' });
+  });
+  const lastChild = () => spawn.mock.calls.at(-1).result;
+
+  const timely = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
+  t.mock.timers.tick(99);
+  lastChild().emit('exit', 0, null);
+  await Promise.resolve();
+  assert.equal(kill.mock.callCount(), 2);
+  groupAlive = false;
+  t.mock.timers.tick(25);
+  await timely;
+
+  const late = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
+  t.mock.timers.tick(100);
+  lastChild().emit('exit', 0, null);
+  await assert.rejects(late, /deadline exceeded/);
+
+  cleanupRefused = true;
+  const uncertain = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
+  lastChild().emit('exit', 0, null);
+  await assert.rejects(uncertain, /cleanup refused/);
+});
+
 test('successful smoke leader cannot leave its owned child running', { skip: process.platform === 'win32' }, async () => {
   const { runPackagedSmoke } = await helpers;
   const root = fixture();

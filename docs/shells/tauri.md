@@ -95,8 +95,9 @@ Smoke execution defaults to 120 seconds. Set
 for a different finite deadline. This applies only to the packaged executable,
 not staging or compilation. The wrapper retains at most 8 KiB of diagnostic
 output and retires the owned Unix process group with SIGKILL on timeout and
-leader exit, including leftover descendants. Cleanup has a separate 3-second
-confirmation limit. Timeout, failed launch, nonzero exit or uncertain cleanup
-fails the smoke. Processes that deliberately escape the group are outside this
+leader exit, including leftover descendants. The execution deadline ends at
+exit or launch failure. Cleanup has its own 3-second confirmation limit, so a
+timely exit can succeed even if cleanup finishes after the execution deadline.
+Timeout, failed launch, nonzero exit or uncertain cleanup fails the smoke. Processes that deliberately escape the group are outside this
 build-helper ownership contract. This wrapper validates only the locally built
 platform; it does not provide Windows install/run or cross-platform proof.
