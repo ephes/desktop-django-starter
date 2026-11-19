@@ -27,10 +27,10 @@ dev = ["hatchling"]
 dds = "dds.cli:main"
 desktop-django-starter = "dds.cli:main"
 
-# Asset sync locks and recovery directories must never ship.
-# Hatch matches these patterns relative to this directory, not the repo root.
+# The hook explicitly includes an asset snapshot. Keep the live tree, sync
+# lock and recovery directories out of automatic file discovery.
 [tool.hatch.build]
-exclude = ["/src/dds/.assets-sync-*"]
+exclude = ["/src/dds/_assets", "/src/dds/.assets-sync-*"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/dds"]

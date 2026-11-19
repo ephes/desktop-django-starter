@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Build CLI wheels and sdists from a snapshot of one validated asset
+  generation, even when a concurrent sync publishes during archiving.
+
 - Check the complete bundled asset inventory in `dds doctor` and report up to
   eight missing paths with the total count.
 

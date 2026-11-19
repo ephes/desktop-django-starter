@@ -132,10 +132,13 @@ pytest and Hatchling; synthetic build/install probes run offline and require
 no agents, Node runtime or package downloads during the tests.
 
 Asset staging validates every canonical input before touching the existing bundle,
-then copies into a unique sibling staging directory. Concurrent syncs share the
-persistent `cli/src/dds/.assets-sync-lock` when capturing `.gitkeep` and replacing
-the old bundle. Leave the lock file in place. On Windows, retry the sync if the
-OS times out acquiring the lock. A complete tree replaces the old bundle,
+then copies into a unique sibling staging directory. Syncs hold the persistent
+`cli/src/dds/.assets-sync-lock` while capturing `.gitkeep` and replacing the old
+bundle. Wheel and sdist builds hold that same lock while validating and copying
+one generation to a private snapshot. Hatch discovers and reads the archive
+payload from that snapshot, so a sync can publish during archive creation.
+Leave the lock file in place. On Windows, retry the sync or build if the OS
+times out acquiring the lock. A complete tree replaces the old bundle,
 removing stale files while preserving an existing `.gitkeep` and its contents.
 Copy failures leave the old bundle intact. Publication failures restore it.
 If restoration fails, sync raises the original publication error. Its traceback
@@ -145,9 +148,9 @@ also included in the traceback.
 Git ignores the lock file and recovery directories, and `cli/pyproject.toml`
 excludes them from wheel and sdist builds. Restore or remove recovery
 directories manually. If old-tree cleanup fails after publication, sync reports
-that cleanup failure while keeping the complete new bundle live. Run wheel and
-sdist builds after syncs have finished. The two publication renames briefly
-vacate the bundle path and provide rollback for ordinary filesystem errors.
+that cleanup failure while keeping the complete new bundle live. The two
+publication renames briefly vacate the bundle path and provide rollback for
+ordinary filesystem errors.
 
 ## Wrapper config format and saves
 

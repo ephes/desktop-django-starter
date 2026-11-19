@@ -286,7 +286,13 @@ def test_recovery_directories_are_excluded_from_built_packages(
     cli_root = CLI_DIR
     project = tmp_path / "cli"
     project.mkdir()
-    for name in ("pyproject.toml", "hatch_build.py", "asset_inventory.py", "README.md"):
+    for name in (
+        "pyproject.toml",
+        "hatch_build.py",
+        "asset_inventory.py",
+        "asset_lock.py",
+        "README.md",
+    ):
         shutil.copy2(cli_root / name, project / name)
     shutil.copytree(
         cli_root / "src",

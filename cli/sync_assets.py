@@ -7,40 +7,15 @@ Or via just:             just cli-sync-assets
 
 from __future__ import annotations
 
-import os
 import shutil
 import tempfile
-from collections.abc import Iterator
-from contextlib import contextmanager
 from pathlib import Path
 
 from asset_inventory import CANONICAL_ASSETS
+from asset_lock import asset_lock
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = Path(__file__).resolve().parent / "src" / "dds" / "_assets"
-
-
-@contextmanager
-def publication_lock() -> Iterator[None]:
-    # Keep the same lock file across runs, including while a publisher waits.
-    # On POSIX, closing the handle releases the lock. Windows unlocks explicitly
-    # because the CRT may release leftover locks only after a delay.
-    with (ASSETS_DIR.parent / ".assets-sync-lock").open("a+b") as lock:
-        if os.name == "nt":
-            import msvcrt
-
-            lock.seek(0)
-            msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
-            try:
-                yield
-            finally:
-                lock.seek(0)
-                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
-        else:
-            import fcntl
-
-            fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-            yield
 
 
 def sync() -> None:
@@ -61,7 +36,7 @@ def sync() -> None:
             dst = staged / rel
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(REPO_ROOT / rel, dst)
-        with publication_lock():
+        with asset_lock(ASSETS_DIR.parent):
             # Preserve the repository placeholder, including its bytes, if present.
             placeholder = ASSETS_DIR / ".gitkeep"
             if placeholder.is_file():
