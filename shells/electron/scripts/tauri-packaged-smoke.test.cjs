@@ -34,6 +34,72 @@ for (const platform of ['darwin', 'linux']) {
   });
 }
 
+test('smoke snapshots share a walk limit across discovery and bundle fingerprints', async t => {
+  const { snapshotArtifacts, resolveSmokeBinary, buildOutputRoots } = await helpers;
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  artifact(root, 'a-stale', 'darwin');
+  const current = artifact(root, 'nested/z-current', 'darwin');
+  const wide = path.join(root, 'wide');
+  fs.mkdirSync(wide);
+
+  // Five discovery visits and eight fingerprint visits use the rest of the budget.
+  const entryLimit = 100000;
+  let extraEntries = entryLimit - 13;
+  let reads = 0;
+  let closes = 0;
+  const open = fs.opendirSync;
+  t.mock.method(fs, 'opendirSync', (name, options) => {
+    if (name !== wide) return open(name, options);
+    let remaining = extraEntries;
+    return {
+      readSync() {
+        reads++;
+        return remaining-- > 0 ? { name: 'ignored', isDirectory: () => false } : null;
+      },
+      closeSync() { closes++; },
+    };
+  });
+  const stat = t.mock.method(fs, 'lstatSync');
+
+  const before = snapshotArtifacts(root, 'darwin');
+  assert.deepEqual([...before.keys()], [path.join(root, 'a-stale.app'), path.join(root, 'nested/z-current.app')]);
+  assert.equal(reads, extraEntries + 1);
+  assert.equal(stat.mock.callCount(), 8);
+  assert.throws(() => resolveSmokeBinary(root, before, 'darwin'), /no current changed/i);
+  fs.appendFileSync(current, 'rebuilt');
+  assert.equal(resolveSmokeBinary(root, before, 'darwin').command, current);
+
+  extraEntries++;
+  stat.mock.resetCalls();
+  assert.throws(() => snapshotArtifacts(root, 'darwin'), /entry limit.*100000/i);
+  assert.ok(stat.mock.callCount() < 8);
+
+  extraEntries = entryLimit + 1000;
+  reads = 0;
+  closes = 0;
+  assert.throws(() => buildOutputRoots({ targetDirectory: wide }), /entry limit.*100000/i);
+  assert.equal(reads, entryLimit + 1);
+  assert.equal(closes, 1);
+});
+
+test('smoke rejects too many candidates across roots before fingerprinting', async t => {
+  const { snapshotArtifacts } = await helpers;
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const roots = [path.join(root, 'b'), path.join(root, 'a')];
+  for (const dir of roots) {
+    for (let index = 0; index < 64; index++) artifact(dir, String(index), 'linux');
+  }
+  const stat = t.mock.method(fs, 'lstatSync');
+  assert.equal(snapshotArtifacts(roots, 'linux').size, 128);
+  assert.equal(stat.mock.callCount(), 128);
+  artifact(roots[1], 'extra', 'linux');
+  stat.mock.resetCalls();
+  assert.throws(() => snapshotArtifacts(roots, 'linux'), /candidate limit.*128/i);
+  assert.equal(stat.mock.callCount(), 0);
+});
+
 test('target directory and explicit target triple determine artifact root', async () => {
   const { buildOutputRoot } = await helpers;
   assert.equal(buildOutputRoot({ tauriRoot: '/repo/shells/tauri', targetDirectory: '/custom/target', target: 'aarch64-apple-darwin', profile: 'debug' }), '/custom/target/aarch64-apple-darwin/debug/bundle');
@@ -44,6 +110,50 @@ test('packaged smoke has a deadline and bounded diagnostics', async () => {
   const started = Date.now();
   await assert.rejects(runPackagedSmoke(process.execPath, ['-e', "process.stdout.write('x'.repeat(100000));setTimeout(()=>{},5000)"], { timeoutMs: 100 }), /deadline|timed out/i);
   assert.ok(Date.now() - started < 3000);
+});
+
+test('smoke execution and process group cleanup have independent deadlines', { skip: process.platform === 'win32' }, async t => {
+  const childProcess = require('node:child_process');
+  const { EventEmitter } = require('node:events');
+  const { PassThrough } = require('node:stream');
+  const { syncBuiltinESMExports } = require('node:module');
+  const { runPackagedSmoke } = await helpers;
+  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  const spawn = t.mock.method(childProcess, 'spawn', () => {
+    const child = new EventEmitter();
+    Object.assign(child, { pid: 12345, stdout: new PassThrough(), stderr: new PassThrough() });
+    return child;
+  });
+  t.after(() => { spawn.mock.restore(); syncBuiltinESMExports(); });
+  syncBuiltinESMExports();
+
+  let groupAlive = true;
+  let cleanupRefused = false;
+  const kill = t.mock.method(process, 'kill', (pid, signal) => {
+    assert.equal(pid, -12345);
+    if (cleanupRefused) throw Object.assign(new Error('cleanup refused'), { code: 'EPERM' });
+    if (signal === 0 && !groupAlive) throw Object.assign(new Error('group gone'), { code: 'ESRCH' });
+  });
+  const lastChild = () => spawn.mock.calls.at(-1).result;
+
+  const timely = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
+  t.mock.timers.tick(99);
+  lastChild().emit('exit', 0, null);
+  await Promise.resolve();
+  assert.equal(kill.mock.callCount(), 2);
+  groupAlive = false;
+  t.mock.timers.tick(25);
+  await timely;
+
+  const late = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
+  t.mock.timers.tick(100);
+  lastChild().emit('exit', 0, null);
+  await assert.rejects(late, /deadline exceeded/);
+
+  cleanupRefused = true;
+  const uncertain = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
+  lastChild().emit('exit', 0, null);
+  await assert.rejects(uncertain, /cleanup refused/);
 });
 
 test('successful smoke leader cannot leave its owned child running', { skip: process.platform === 'win32' }, async () => {

@@ -1,6 +1,32 @@
 import { spawn, spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+
+const ENTRY_LIMIT = 100000;
+const CANDIDATE_LIMIT = 128;
+
+function scanBudget() {
+  let remaining = ENTRY_LIMIT;
+  return () => {
+    if (remaining === 0) {
+      throw new Error(`Tauri bundle scan entry limit (${ENTRY_LIMIT}) exceeded; use a dedicated Cargo target directory`);
+    }
+    remaining--;
+  };
+}
+
+function* directoryEntries(directory, visit) {
+  const handle = fs.opendirSync(directory);
+  try {
+    for (let entry = handle.readSync(); entry; entry = handle.readSync()) {
+      visit();
+      yield entry;
+    }
+  } finally {
+    handle.closeSync();
+  }
+}
 
 export function buildOutputRoot({ tauriRoot, targetDirectory, target, profile = 'release' }) {
   if (target && (!/^[A-Za-z0-9_.-]+$/.test(target) || target === '.' || target === '..')) {
@@ -16,31 +42,69 @@ export function buildOutputRoots(options) {
   if (options.target) return [buildOutputRoot(options)];
   const directory = options.targetDirectory || path.join(options.tauriRoot, 'src-tauri', 'target');
   // Unrelated directories (for example in a shared target dir) are not triples; skip them.
-  const names = fs.existsSync(directory) ? fs.readdirSync(directory, { withFileTypes: true })
-    .filter(entry => entry.isDirectory() && /^[A-Za-z0-9_.-]+$/.test(entry.name)).map(entry => entry.name) : [];
-  return [buildOutputRoot(options), ...names.map(target => buildOutputRoot({ ...options, target }))];
+  const roots = [buildOutputRoot(options)];
+  if (fs.existsSync(directory)) {
+    for (const entry of directoryEntries(directory, scanBudget())) {
+      if (entry.isDirectory() && /^[A-Za-z0-9_.-]+$/.test(entry.name)) {
+        roots.push(buildOutputRoot({ ...options, target: entry.name }));
+      }
+    }
+  }
+  return roots.sort();
 }
 
-function candidates(root, platform) {
-  if (Array.isArray(root)) return root.flatMap(entry => candidates(entry, platform));
-  if (!fs.existsSync(root)) return [];
-  return fs.readdirSync(root, { withFileTypes: true }).flatMap(entry => {
-    const name = path.join(root, entry.name);
-    if ((platform === 'darwin' && entry.isDirectory() && name.endsWith('.app'))
-        || (platform === 'linux' && entry.isFile() && name.endsWith('.AppImage'))) return [name];
-    return entry.isDirectory() ? candidates(name, platform) : [];
-  }).sort();
+export function findBundleArtifacts(roots, matches, visit = scanBudget()) {
+  const found = [];
+  for (const root of roots) {
+    visit();
+    if (!fs.existsSync(root)) continue;
+    const pending = [root];
+    while (pending.length) {
+      const directory = pending.pop();
+      for (const entry of directoryEntries(directory, visit)) {
+        const name = path.join(directory, entry.name);
+        if (matches(name, entry, root)) {
+          if (found.length === CANDIDATE_LIMIT) {
+            throw new Error(`Tauri bundle scan candidate limit (${CANDIDATE_LIMIT}) exceeded; use a dedicated Cargo target directory`);
+          }
+          found.push(name);
+        } else if (entry.isDirectory()) {
+          pending.push(name);
+        }
+      }
+    }
+  }
+  return found.sort();
 }
 
-function fingerprint(name) {
-  const info = fs.lstatSync(name, { bigint: true });
-  if (info.isSymbolicLink()) throw new Error('Symlink in smoke artifact');
-  return [info.ino, info.size, info.mtimeNs, info.ctimeNs].join(':')
-    + (info.isDirectory() ? fs.readdirSync(name).sort().map(entry => entry + ':' + fingerprint(path.join(name, entry))).join('|') : '');
+function fingerprint(name, visit) {
+  const hash = createHash('sha256');
+  const pending = [name];
+  visit();
+  while (pending.length) {
+    const current = pending.pop();
+    const info = fs.lstatSync(current, { bigint: true });
+    if (info.isSymbolicLink()) throw new Error('Symlink in smoke artifact');
+    const directory = info.isDirectory();
+    const metadata = [info.ino, info.size, info.mtimeNs, info.ctimeNs].map(String);
+    hash.update(JSON.stringify([current.slice(name.length), directory, ...metadata]) + '\n');
+    if (directory) {
+      const names = Array.from(directoryEntries(current, visit), entry => entry.name).sort();
+      for (let index = names.length - 1; index >= 0; index--) {
+        pending.push(path.join(current, names[index]));
+      }
+    }
+  }
+  return hash.digest('hex');
 }
 
 export function snapshotArtifacts(root, platform = process.platform) {
-  return new Map(candidates(root, platform).map(name => [name, fingerprint(name)]));
+  const visit = scanBudget();
+  const found = findBundleArtifacts(Array.isArray(root) ? root : [root], (name, entry) => (
+    (platform === 'darwin' && entry.isDirectory() && name.endsWith('.app'))
+    || (platform === 'linux' && entry.isFile() && name.endsWith('.AppImage'))
+  ), visit);
+  return new Map(found.map(name => [name, fingerprint(name, visit)]));
 }
 
 export function resolveSmokeBinary(root, before, platform = process.platform) {
@@ -51,13 +115,16 @@ export function resolveSmokeBinary(root, before, platform = process.platform) {
   if (found.length !== 1) throw new Error(`Ambiguous current smoke artifacts under ${root}`);
   if (platform === 'linux') return { command: found[0], args: [] };
   const bin = path.join(found[0], 'Contents/MacOS');
-  const executables = fs.readdirSync(bin).map(entry => path.join(bin, entry)).filter(name => {
-    const info = fs.lstatSync(name);
-    if (!info.isFile() || info.isSymbolicLink()) return false;
-    try { fs.accessSync(name, fs.constants.X_OK); return true; } catch { return false; }
-  });
-  if (executables.length !== 1) throw new Error('Ambiguous or missing app bundle executable');
-  return { command: executables[0], args: [] };
+  let executable;
+  for (const entry of directoryEntries(bin, scanBudget())) {
+    const name = path.join(bin, entry.name);
+    if (!fs.lstatSync(name).isFile()) continue;
+    try { fs.accessSync(name, fs.constants.X_OK); } catch { continue; }
+    if (executable) throw new Error('Ambiguous or missing app bundle executable');
+    executable = name;
+  }
+  if (!executable) throw new Error('Ambiguous or missing app bundle executable');
+  return { command: executable, args: [] };
 }
 
 export function smokeTimeout(env = process.env) {
@@ -91,40 +158,33 @@ export async function runPackagedSmoke(command, args, { timeoutMs = smokeTimeout
   };
   child.stdout.on('data', collect);
   child.stderr.on('data', collect);
-  let timedOut = false;
+  // Settle execution on the first terminal event, before starting cleanup.
+  // Do not wait for close: descendants can keep inherited pipes open.
+  const result = await new Promise(resolve => {
+    const finish = result => {
+      clearTimeout(timer);
+      resolve(result);
+    };
+    const timer = setTimeout(() => finish({ timedOut: true }), timeoutMs);
+    child.once('error', error => finish({ error }));
+    child.once('exit', (status, signal) => finish({ status, signal }));
+  });
   let cleanupError;
-  let cleanup;
-  const retire = () => {
-    if (cleanup) return cleanup;
-    cleanup = (async () => {
-      if (!child.pid) return;
+  try {
+    if (child.pid) {
       if (windows) {
         const result = spawnSync('taskkill', ['/pid', String(child.pid), '/t', '/f'], { timeout: 3000, maxBuffer: 8192, windowsHide: true });
         if (result.error || result.status !== 0) throw new Error('Owned smoke Windows tree retirement is uncertain');
       } else await retireGroup(child.pid);
-    })().catch(error => { cleanupError = error; });
-    return cleanup;
-  };
-  // Start cleanup on exit, not close: inherited pipes must not prolong ownership.
-  const outcome = new Promise(resolve => {
-    child.once('error', error => resolve({ error }));
-    child.once('exit', (status, signal) => { void retire(); resolve({ status, signal }); });
-  });
-  let timer;
-  const deadline = new Promise(resolve => {
-    timer = setTimeout(() => { timedOut = true; void retire(); resolve({}); }, timeoutMs);
-  });
-  let result;
-  try {
-    result = await Promise.race([outcome, deadline]);
-    await retire();
+    }
+  } catch (error) {
+    cleanupError = error;
   } finally {
-    clearTimeout(timer);
     child.stdout.destroy();
     child.stderr.destroy();
   }
-  if (timedOut || cleanupError || result.error || result.status !== 0) {
-    const reason = [timedOut ? 'deadline exceeded' : result.error?.message
+  if (result.timedOut || cleanupError || result.error || result.status !== 0) {
+    const reason = [result.timedOut ? 'deadline exceeded' : result.error?.message
       || (result.status !== 0 ? `exit ${result.status} (${result.signal || 'no signal'})` : ''),
       cleanupError?.message].filter(Boolean).join('; ');
     throw new Error(`Packaged smoke failed: ${reason}\n${diagnostics.toString('utf8')}`);

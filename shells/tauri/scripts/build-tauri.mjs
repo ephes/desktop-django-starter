@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildOutputRoots, snapshotArtifacts, resolveSmokeBinary, runPackagedSmoke, smokeTimeout } from "./packaged-smoke.mjs";
+import { buildOutputRoots, findBundleArtifacts, snapshotArtifacts, resolveSmokeBinary, runPackagedSmoke, smokeTimeout } from "./packaged-smoke.mjs";
 
 const tauriRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(tauriRoot, "..", "..");
@@ -70,51 +70,25 @@ function run(command, args, options = {}) {
   }
 }
 
-function listPaths(root, predicate) {
-  if (!fs.existsSync(root)) {
-    return [];
-  }
-
-  const matches = [];
-
-  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
-    const entryPath = path.join(root, entry.name);
-    if (predicate(entryPath)) {
-      matches.push(entryPath);
-    }
-
-    if (entry.isDirectory()) {
-      matches.push(...listPaths(entryPath, predicate));
-    }
-  }
-
-  return matches.sort();
-}
-
-function resolveBuiltArtifacts(bundleRoot) {
-  const dmgRoot = path.join(bundleRoot, "dmg");
-  const macosRoot = path.join(bundleRoot, "macos");
-
+function resolveBuiltArtifacts(roots) {
   if (process.platform === "darwin") {
-    return [
-      ...listPaths(dmgRoot, (entryPath) => entryPath.endsWith(".dmg")),
-      ...listPaths(macosRoot, (entryPath) => entryPath.endsWith(".app"))
-    ];
+    const found = findBundleArtifacts(roots, (name, entry, root) => (
+      (name.startsWith(path.join(root, "dmg") + path.sep) && name.endsWith(".dmg"))
+      || (name.startsWith(path.join(root, "macos") + path.sep) && name.endsWith(".app"))
+    ));
+    return [...found.filter(name => name.endsWith(".dmg")), ...found.filter(name => name.endsWith(".app"))];
   }
 
   if (process.platform === "win32") {
-    return [
-      ...listPaths(bundleRoot, (entryPath) => (
-        entryPath.includes(`${path.sep}nsis${path.sep}`) && entryPath.endsWith(".exe")
-      )),
-      ...listPaths(bundleRoot, (entryPath) => (
-        entryPath.includes(`${path.sep}msi${path.sep}`) && entryPath.endsWith(".msi")
-      ))
-    ];
+    const found = findBundleArtifacts(roots, name => (
+      (name.includes(`${path.sep}nsis${path.sep}`) && name.endsWith(".exe"))
+      || (name.includes(`${path.sep}msi${path.sep}`) && name.endsWith(".msi"))
+    ));
+    return [...found.filter(name => name.endsWith(".exe")), ...found.filter(name => name.endsWith(".msi"))];
   }
 
   if (process.platform === "linux") {
-    return listPaths(bundleRoot, (entryPath) => entryPath.endsWith(".AppImage"));
+    return findBundleArtifacts(roots, name => name.endsWith(".AppImage"));
   }
 
   return [];
@@ -179,7 +153,7 @@ const buildStartedAt = Date.now() - 2000;
 run(tauriBinary, ["build", ...buildArgs], { cwd: tauriRoot, env: process.env });
 // Re-evaluate roots after the build to admit a newly created configured target.
 const currentRoots = buildOutputRoots(layout);
-const builtArtifacts = currentRoots.flatMap(root => resolveBuiltArtifacts(root))
+const builtArtifacts = resolveBuiltArtifacts(currentRoots)
   .filter(artifactPath => fs.statSync(artifactPath).mtimeMs >= buildStartedAt);
 if (builtArtifacts.length > 0) {
   process.stdout.write("Built Tauri artifacts:\n");

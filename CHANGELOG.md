@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Bound local Tauri bundle discovery and report scans, and fingerprint runnable
+  bundles incrementally from sorted metadata.
+
+- Give Tauri build smoke execution and process cleanup separate deadlines so a
+  timely exit can succeed after bounded cleanup.
+
 - Admit native popup dispatch only for safe targets with exact Django-referrer
   evidence from a live trusted app window. Foreign/unknown/suppressed requesters
   cannot open the OS browser; every child window remains denied. Preserve the

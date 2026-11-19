@@ -90,13 +90,22 @@ macOS app fail before launch. Run builds exclusively in that target directory;
 concurrent builds cannot provide trustworthy smoke evidence. Windows installers
 still require manual installed-app validation.
 
+Each smoke snapshot shares a 100,000-entry budget across bundle discovery and
+metadata fingerprinting, including root probes and entries revisited during
+fingerprinting. It admits up to 128 runnable candidates. Cargo target-directory
+enumeration and build artifact reporting have independent entry budgets, and
+reporting also caps matching artifacts at 128. An exceeded limit aborts the
+command. Retry with an explicit target where applicable or a dedicated
+`CARGO_TARGET_DIR`.
+
 Smoke execution defaults to 120 seconds. Set
 `DESKTOP_DJANGO_PACKAGED_SMOKE_TIMEOUT_MS` to an integer from 1 through 600000
 for a different finite deadline. This applies only to the packaged executable,
 not staging or compilation. The wrapper retains at most 8 KiB of diagnostic
 output and retires the owned Unix process group with SIGKILL on timeout and
-leader exit, including leftover descendants. Cleanup has a separate 3-second
-confirmation limit. Timeout, failed launch, nonzero exit or uncertain cleanup
-fails the smoke. Processes that deliberately escape the group are outside this
+leader exit, including leftover descendants. The execution deadline ends at
+exit or launch failure. Cleanup has its own 3-second confirmation limit, so a
+timely exit can succeed even if cleanup finishes after the execution deadline.
+Timeout, failed launch, nonzero exit or uncertain cleanup fails the smoke. Processes that deliberately escape the group are outside this
 build-helper ownership contract. This wrapper validates only the locally built
 platform; it does not provide Windows install/run or cross-platform proof.
