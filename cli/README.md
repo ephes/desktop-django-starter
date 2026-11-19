@@ -87,8 +87,10 @@ remain warnings in preflight-only mode and errors with `--run`.
 
 ### `dds doctor`
 
-Check that prerequisites are installed, bundled assets are intact, and the
-current wrapper config plus available harnesses are sufficient for `wrap --run`.
+Check that prerequisites are installed and that wrapper config and available
+harnesses are sufficient for `wrap --run`. Doctor checks every file listed in
+the installed asset manifest. An incomplete bundle reports up to eight missing
+paths and the total count, with instructions to reinstall.
 Doctor is read-only: it never invokes a harness, saves preferences or stages assets.
 Missing required assets or tools exit with status 1; missing optional `uv`,
 invalid wrapper config and harness setup advice remain advisory (status 0
@@ -123,7 +125,7 @@ instead of the root `just build` recipe for `uvx desktop-django-starter ...`
 releases.
 
 Wheel and sdist builds reject an incomplete staged bundle before producing an
-archive, using the same `asset_inventory.py` allowlist as synchronization.
+archive, using the same `src/dds/asset_inventory.txt` manifest as sync and doctor.
 Directories do not satisfy required files; the diagnostic lists up to eight
 missing paths and points to `just cli-sync-assets`. `just cli-test` provisions
 pytest and Hatchling; synthetic build/install probes run offline and require

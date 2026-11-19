@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Check the complete bundled asset inventory in `dds doctor` and report up to
+  eight missing paths with the total count.
+
 - Serialize CLI asset publication and placeholder capture across concurrent syncs
   with a persistent sibling lock.
 - Keep the original CLI asset publication error when rollback or cleanup fails,

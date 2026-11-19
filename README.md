@@ -395,7 +395,8 @@ Shells do not inject a `DJANGO_SECRET_KEY`. Packaged settings generate one per i
 - Positron remains an experimental local shell path with no GitHub Actions artifact lane, no splashscreen-parity claim on macOS, and no Windows packaged parity claim in this slice.
 
 CLI package maintainers: wheel and sdist builds require every file in
-`cli/asset_inventory.py` to be staged by `just cli-sync-assets`.
+`cli/src/dds/asset_inventory.txt` to be staged by `just cli-sync-assets`.
+`dds doctor` checks the same manifest after installation.
 `just cli-test` includes offline synthetic build and relocated-install probes.
 
 Packaged state startup validates `state.json` and the direct database/media/cache

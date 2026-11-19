@@ -5,7 +5,6 @@ from __future__ import annotations
 import shutil
 import sys
 from importlib.resources import files
-from pathlib import Path
 
 from dds import __version__
 from dds.config import (
@@ -31,29 +30,37 @@ OPTIONAL_TOOLS = {
 
 
 def run_doctor() -> None:
-    assets_path = Path(str(files("dds") / "_assets"))
+    package = files("dds")
+    assets = package / "_assets"
     errors = 0
 
     print(f"dds {__version__}")
     print()
 
-    # Check bundled assets
-    skill = assets_path / "skills" / "wrap-existing-django-in-electron" / "SKILL.md"
-    prompt = assets_path / "skills" / "wrap-existing-django-in-electron" / "prompt.md"
-    electron_main = assets_path / "shells" / "electron" / "main.js"
-
-    for label, path in [
-        ("SKILL.md", skill),
-        ("prompt.md", prompt),
-        ("electron/main.js", electron_main),
-    ]:
-        if path.is_file():
-            print(f"  ok asset: {label}")
+    try:
+        required = (package / "asset_inventory.txt").read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError):
+        required = []
+    if not required:
+        print(
+            "  x  bundled asset inventory missing, unreadable or empty. Reinstall dds.",
+            file=sys.stderr,
+        )
+        errors += 1
+    else:
+        missing = [rel for rel in required if not assets.joinpath(*rel.split("/")).is_file()]
+        if missing:
+            listed = ", ".join(missing[:8])
+            remaining = f" (+{len(missing) - 8} more)" if len(missing) > 8 else ""
+            print(
+                f"  x  bundled assets incomplete: {len(missing)} required file(s) missing: "
+                f"{listed}{remaining}. Reinstall dds.",
+                file=sys.stderr,
+            )
+            errors += len(missing)
         else:
-            print(f"  x  asset missing: {label} ({path})", file=sys.stderr)
-            errors += 1
-
-    print(f"  ok assets root: {assets_path}")
+            print(f"  ok bundled assets: {len(required)} required files")
+    print(f"  assets root: {assets}")
     print()
 
     # Check required tools
