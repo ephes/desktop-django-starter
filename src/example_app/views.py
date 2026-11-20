@@ -2,7 +2,6 @@ from contextlib import contextmanager
 
 from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import F
 from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST
@@ -14,6 +13,7 @@ from .revisions import (
     CONFLICT_MESSAGE,
     displayed_inventory_revision,
     displayed_revision,
+    lock_item_writes,
     matches_displayed_revision,
     matches_inventory_revision,
 )
@@ -68,7 +68,7 @@ class ItemListView(ListView):
     ordering = ["-updated_at", "-created_at", "-pk"]
 
     def get(self, request, *args, **kwargs):
-        # Page count, displayed rows and whole-stable digest share one snapshot.
+        # Page count, displayed rows and inventory generation share one snapshot.
         with read_snapshot():
             return super().get(request, *args, **kwargs)
 
@@ -103,7 +103,7 @@ class ItemUpdateView(ItemReturnNavigation, UpdateView):
     def post(self, request, *args, **kwargs):
         with transaction.atomic():
             # Own SQLite's writer before reading, also in local DEFERRED mode.
-            Item.objects.filter(pk=kwargs["pk"]).update(title=F("title"))
+            lock_item_writes()
             self.object = self.get_object()
             conflict = not matches_displayed_revision(self.object, request.POST.get("revision", ""))
             form = self.get_form()
@@ -135,7 +135,7 @@ class ItemDeleteView(ItemReturnNavigation, DeleteView):
 
     def post(self, request, *args, **kwargs):
         with transaction.atomic():
-            Item.objects.filter(pk=kwargs["pk"]).update(title=F("title"))
+            lock_item_writes()
             self.object = self.get_object()
             if not matches_displayed_revision(self.object, request.POST.get("revision", "")):
                 return self.render_to_response(
@@ -147,8 +147,7 @@ class ItemDeleteView(ItemReturnNavigation, DeleteView):
 @require_POST
 def item_clear(request):
     with transaction.atomic():
-        # Even an empty match acquires SQLite's writer before the inventory read.
-        Item.objects.filter(pk=0).update(title=F("title"))
+        lock_item_writes()
         if not matches_inventory_revision(request.POST.get("revision", "")):
             return JsonResponse(
                 {"error": "The stable changed. Reload before releasing all."}, status=409

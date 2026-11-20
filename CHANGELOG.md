@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Use a transactional SQLite inventory generation for Release All Ponies.
+  List pages and clear confirmations no longer read every pony's content.
+
 - Skip excluded directory trees before scanning them in the Python line counter.
 
 - Prevent caches from reusing desktop quit activity responses.

@@ -6,9 +6,47 @@ import sys
 from pathlib import Path
 
 import pytest
+from django.core import signing
+from django.db import connection, transaction
+from django.db.migrations.executor import MigrationExecutor
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 
 from example_app.models import Item
+
+
+@pytest.mark.django_db
+def test_list_hydrates_only_one_page_as_inventory_grows(client, monkeypatch):
+    hydrated = []
+    original = Item.from_db
+
+    def from_db(cls, db, fields, values, **kwargs):
+        item = original(db, fields, values, **kwargs)
+        hydrated.append(item.pk)
+        return item
+
+    monkeypatch.setattr(Item, "from_db", classmethod(from_db))
+    url = reverse("example_app:item-list")
+
+    for total in (21, 121):
+        Item.objects.bulk_create(
+            [
+                Item(title="Synthetic", notes="Personality " * 100)
+                for _ in range(total - Item.objects.count())
+            ]
+        )
+        hydrated.clear()
+        with CaptureQueriesContext(connection) as queries:
+            response = client.get(url)
+        assert response.status_code == 200
+        assert response.context["paginator"].count == total
+        assert response.context["inventory_revision"]
+        assert len(hydrated) == 20
+        content_queries = [
+            query["sql"] for query in queries if '"example_app_item"."notes"' in query["sql"]
+        ]
+        assert len(content_queries) == 1
+        assert "LIMIT 20" in content_queries[0]
 
 
 @pytest.mark.django_db
@@ -30,9 +68,49 @@ def test_clear_rejects_changed_inventory_including_other_pages(client, change):
     assert list(Item.objects.order_by("pk").values()) == before
     assert client.post(reverse("example_app:item-clear"), {"revision": old}).status_code == 409
     current = client.get(reverse("example_app:item-list")).context["inventory_revision"]
-    assert client.post(reverse("example_app:item-clear"), {"revision": current}).status_code == 200
+    with CaptureQueriesContext(connection) as queries:
+        assert (
+            client.post(reverse("example_app:item-clear"), {"revision": current}).status_code == 200
+        )
+    assert all('"example_app_item"."notes"' not in query["sql"] for query in queries)
     assert not Item.objects.exists()
     assert client.post(reverse("example_app:item-clear"), {"revision": current}).status_code == 409
+
+
+@pytest.mark.django_db
+def test_inventory_generation_rolls_back_with_raw_item_write(client):
+    item = Item.objects.create(title="Synthetic")
+    list_url = reverse("example_app:item-list")
+    clear_url = reverse("example_app:item-clear")
+    revision = client.get(list_url).context["inventory_revision"]
+
+    with transaction.atomic(), connection.cursor() as cursor:
+        cursor.execute("UPDATE example_app_item SET notes = %s WHERE id = %s", ["Changed", item.pk])
+        assert client.post(clear_url, {"revision": revision}).status_code == 409
+        transaction.set_rollback(True)
+
+    item.refresh_from_db()
+    assert item.notes == ""
+    assert client.post(clear_url, {"revision": revision}).status_code == 200
+
+
+@pytest.mark.django_db(transaction=True)
+def test_inventory_migration_preserves_items_and_requires_fresh_confirmation(client):
+    executor = MigrationExecutor(connection)
+    latest = executor.loader.graph.leaf_nodes()
+    previous = [("example_app", "0003_alter_item_status")]
+    try:
+        executor.migrate(previous)
+        item = Item.objects.create(title="Synthetic", notes="Retained personality")
+        legacy_revision = signing.dumps("a" * 64, salt="example_app.inventory-revision")
+    finally:
+        MigrationExecutor(connection).migrate(latest)
+
+    clear_url = reverse("example_app:item-clear")
+    assert client.post(clear_url, {"revision": legacy_revision}).status_code == 409
+    assert Item.objects.get(pk=item.pk).notes == "Retained personality"
+    revision = client.get(reverse("example_app:item-list")).context["inventory_revision"]
+    assert client.post(clear_url, {"revision": revision}).status_code == 200
 
 
 @pytest.mark.django_db
