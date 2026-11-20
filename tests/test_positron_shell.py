@@ -140,7 +140,10 @@ def test_positron_configure_django_removes_stale_process_values(
         DESKTOP_DJANGO_SMOKE_TEST="1",
     )
 
+    setup_calls = []
+
     def setup(*, set_prefix):
+        setup_calls.append(set_prefix)
         assert "DESKTOP_DJANGO_PORT" not in os.environ
         assert "DESKTOP_DJANGO_APP_VERSION" not in os.environ
         assert os.environ["DESKTOP_DJANGO_AUTH_TOKEN"] == "current-launch-token"
@@ -153,6 +156,12 @@ def test_positron_configure_django_removes_stale_process_values(
     app.version = None
 
     app.configure_django()
+
+    assert setup_calls == [False]
+    assert "DESKTOP_DJANGO_PORT" not in os.environ
+    assert "DESKTOP_DJANGO_APP_VERSION" not in os.environ
+    assert os.environ["DESKTOP_DJANGO_AUTH_TOKEN"] == "current-launch-token"
+    assert os.environ["DESKTOP_DJANGO_SMOKE_TEST"] == "1"
 
 
 def test_positron_runtime_helpers_resolve_repo_paths(tmp_path, monkeypatch) -> None:
