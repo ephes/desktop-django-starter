@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep routine status polling available when a concurrently completed routine
+  is cleared before reconciliation reloads it.
+
 - Discard inherited Positron port, auth token and app version values so each
   launch uses its own settings and the normal version fallback.
 

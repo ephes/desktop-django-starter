@@ -106,3 +106,42 @@ def test_worker_completion_between_active_and_history_queries_is_not_duplicated(
     monkeypatch.setattr(task_module, "reconcile_task_with_backend", finish_after_reconciliation)
     tasks = client.get(reverse("tasks_demo:task-status")).json()["tasks"]
     assert [(item["id"], item["status"]) for item in tasks] == [(row.pk, "DONE")]
+
+
+@pytest.mark.parametrize("backend_outcome", ["missing", "successful"])
+def test_poll_omits_routine_cleared_during_reconciliation(client, monkeypatch, backend_outcome):
+    cleared = SimulatedTask.objects.create(
+        label="Cleared during poll", status=SimulatedTask.Status.RUNNING
+    )
+    remaining = SimulatedTask.objects.create(label="Still active")
+    backend = run_simulated_task.enqueue(cleared.pk)
+    cleared.backend_task_id = backend.id
+    cleared.save(update_fields=["backend_task_id"])
+    if backend_outcome == "successful":
+        DBTaskResult.objects.filter(pk=backend.id).update(
+            status=TaskResultStatus.SUCCESSFUL,
+            return_value={
+                "status": "DONE",
+                "result": "Backend completion",
+                "duration": 1,
+                "completed_at": timezone.now().isoformat(),
+            },
+        )
+    else:
+        DBTaskResult.objects.filter(pk=backend.id).delete()
+
+    reconcile = task_module.reconcile_task_with_backend
+
+    def clear_before_reconciliation(task_row, **kwargs):
+        if task_row.pk == cleared.pk:
+            SimulatedTask.objects.filter(pk=cleared.pk).update(
+                status=SimulatedTask.Status.DONE, completed_at=timezone.now()
+            )
+            assert client.post(reverse("tasks_demo:task-clear")).status_code == 200
+        return reconcile(task_row, **kwargs)
+
+    monkeypatch.setattr(task_module, "reconcile_task_with_backend", clear_before_reconciliation)
+    response = client.get(reverse("tasks_demo:task-status"))
+    assert response.status_code == 200
+    assert [row["id"] for row in response.json()["tasks"]] == [remaining.pk]
+    assert not SimulatedTask.objects.filter(pk=cleared.pk).exists()

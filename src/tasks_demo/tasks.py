@@ -127,7 +127,8 @@ def visible_tasks() -> list[SimulatedTask]:
             raise TaskResultMismatch("Task does not match")
         return result
 
-    active = [reconcile_task_with_backend(row, result_loader=load_result) for row in active]
+    reconciled = (reconcile_task_with_backend(row, result_loader=load_result) for row in active)
+    active = [row for row in reconciled if row is not None]
     # Query history after reconciliation so fresh completions are visible in
     # this response, even when the task was queued long ago.
     history = list(
@@ -147,7 +148,7 @@ def visible_tasks() -> list[SimulatedTask]:
 
 def reconcile_task_with_backend(
     task_row: SimulatedTask, *, result_loader: Callable[[str], TaskResult] | None = None
-) -> SimulatedTask:
+) -> SimulatedTask | None:
     if task_row.status in {SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED}:
         return task_row
 
@@ -160,24 +161,17 @@ def reconcile_task_with_backend(
         # Missing queue metadata cannot prove that a claimed worker has stopped.
         # Startup reconciliation retires abandoned claims after a restart.
         if task_row.status == SimulatedTask.Status.PENDING:
-            _mark_task_failed(task_row, MISSING_BACKEND_RESULT)
-        else:
-            task_row.refresh_from_db()
-        return task_row
+            return _mark_task_failed(task_row, MISSING_BACKEND_RESULT)
+        return _refresh_reconciled_task(task_row)
 
     if backend_result.status in {TaskResultStatus.READY, TaskResultStatus.RUNNING}:
         # Only the worker may claim the demo row; polling cannot reset a claim.
         return task_row
 
     if backend_result.status == TaskResultStatus.FAILED:
-        if task_row.status != SimulatedTask.Status.FAILED:
-            _mark_task_failed(task_row, _backend_failure_message(backend_result))
-        return task_row
+        return _mark_task_failed(task_row, _backend_failure_message(backend_result))
 
-    if (
-        backend_result.status == TaskResultStatus.SUCCESSFUL
-        and task_row.status != SimulatedTask.Status.DONE
-    ):
+    if backend_result.status == TaskResultStatus.SUCCESSFUL:
         payload = backend_result.return_value
         # A duplicate execution may report the current active claim without work.
         if (
@@ -191,19 +185,14 @@ def reconcile_task_with_backend(
         try:
             status, result, duration, completed_at = _validated_completion(payload)
         except (ValueError, TypeError, OverflowError):
-            _mark_task_failed(task_row, INVALID_BACKEND_PAYLOAD)
-            return task_row
+            return _mark_task_failed(task_row, INVALID_BACKEND_PAYLOAD)
         task_row.status = status
         task_row.result = result
         task_row.duration = duration
         task_row.completed_at = completed_at
-        _save_reconciled_task(task_row, ["status", "result", "duration", "completed_at"])
-        return task_row
+        return _save_reconciled_task(task_row, ["status", "result", "duration", "completed_at"])
 
-    if backend_result.status != TaskResultStatus.SUCCESSFUL:
-        _mark_task_failed(task_row, UNEXPECTED_BACKEND_RESULT)
-
-    return task_row
+    return _mark_task_failed(task_row, UNEXPECTED_BACKEND_RESULT)
 
 
 def _validated_completion(payload: object) -> tuple[str, str, float, datetime]:
@@ -244,21 +233,29 @@ def _serialized_terminal_payload(task_row: SimulatedTask) -> dict[str, object]:
     }
 
 
-def _mark_task_failed(task_row: SimulatedTask, result: str) -> None:
+def _mark_task_failed(task_row: SimulatedTask, result: str) -> SimulatedTask | None:
     task_row.status = SimulatedTask.Status.FAILED
     task_row.result = result
     task_row.completed_at = task_row.completed_at or timezone.now()
-    _save_reconciled_task(task_row, ["status", "result", "completed_at"])
+    return _save_reconciled_task(task_row, ["status", "result", "completed_at"])
 
 
-def _save_reconciled_task(task_row: SimulatedTask, fields: list[str]) -> None:
+def _save_reconciled_task(task_row: SimulatedTask, fields: list[str]) -> SimulatedTask | None:
     updated = SimulatedTask.objects.filter(
         pk=task_row.pk,
         status__in=[SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING],
     ).update(**{field: getattr(task_row, field) for field in fields})
-    if not updated:
-        # The worker finalized the row after polling loaded it; keep its result.
+    if updated:
+        return task_row
+    return _refresh_reconciled_task(task_row)
+
+
+def _refresh_reconciled_task(task_row: SimulatedTask) -> SimulatedTask | None:
+    try:
         task_row.refresh_from_db()
+    except SimulatedTask.DoesNotExist:
+        return None
+    return task_row
 
 
 def _backend_failure_message(backend_result) -> str:

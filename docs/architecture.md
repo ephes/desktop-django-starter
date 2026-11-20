@@ -296,9 +296,10 @@ Current launcher contract:
   and ID). Active queue results are loaded with the backend's public
   `DBTaskResult` model and `task_result` property in parameter-safe bulk batches,
   preserving task-function matching and the existing reconciliation guards.
-  Fresh completions enter history in the same response. This is a visibility
-  limit, not automatic deletion: older terminal rows remain until Clear Finished
-  Routines deletes them; history pagination is outside this teaching demo.
+  Fresh completions enter history in the same response. If a routine completes
+  and is cleared before reconciliation can reload it, the response omits it.
+  Older terminal rows remain until Clear Finished Routines deletes them.
+  History pagination is outside this teaching demo.
   SQLite partial indexes cover active creation ordering and terminal completion,
   creation and ID ordering. The ORM uses OR equality predicates matching those
   indexes: a bound `IN` predicate cannot imply a literal partial-index `IN`
