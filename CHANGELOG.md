@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Prevent caches from reusing desktop quit activity responses.
+
 - Read desktop quit activity from the task writer database when task writes are routed.
 
 - Handle one Positron quit request at a time, starting before the activity check.

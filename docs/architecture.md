@@ -306,7 +306,9 @@ Current launcher contract:
   report idle. An outer READY/RUNNING filter excludes
   terminal backend history before aggregation, using the application's ordinary
   `dds_backend_status_idx` status index. Apps without the backend still report
-  zero without a database query; shell quit confirmation uses the same API.
+  zero without a database query. The HTTP activity endpoint sends
+  `Cache-Control: no-store` even without shell authentication so each quit
+  check reads fresh counts. Positron calls the count function directly.
 - Apply `tasks_demo.0003_routine_poll_indexes` and
   `tasks_demo.0004_backend_activity_index` with `just migrate` in
   development; packaged startup applies them before starting the web/worker

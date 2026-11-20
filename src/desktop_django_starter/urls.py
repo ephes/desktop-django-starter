@@ -6,6 +6,7 @@ from django.conf import settings
 from django.http import Http404, JsonResponse
 from django.shortcuts import render
 from django.urls import include, path, re_path
+from django.views.decorators.cache import never_cache
 from django.views.static import serve as static_serve
 
 from desktop_django_starter.activity import background_task_counts
@@ -15,6 +16,7 @@ def health_view(_request):
     return JsonResponse({"status": "ok"})
 
 
+@never_cache
 def activity_view(_request):
     """Report background work so a desktop shell can ask before quitting."""
     return JsonResponse(background_task_counts())

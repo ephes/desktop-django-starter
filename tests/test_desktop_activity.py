@@ -95,3 +95,29 @@ def test_activity_without_backend_uses_no_database(django_assert_num_queries):
     with patch("desktop_django_starter.activity.apps.is_installed", return_value=False):
         with django_assert_num_queries(0):
             assert background_task_counts() == {"running_tasks": 0, "queued_tasks": 0}
+
+
+@pytest.mark.django_db
+def test_activity_stays_fresh_with_cache_middleware(client, settings, tmp_path) -> None:
+    settings.DESKTOP_DJANGO_AUTH_TOKEN = ""
+    settings.DESKTOP_DJANGO_REQUIRE_AUTH_TOKEN = False
+    settings.CACHES = {
+        "default": {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": str(tmp_path),
+        }
+    }
+    settings.MIDDLEWARE = [
+        "django.middleware.cache.UpdateCacheMiddleware",
+        *settings.MIDDLEWARE,
+        "django.middleware.cache.FetchFromCacheMiddleware",
+    ]
+
+    idle = client.get("/desktop/activity/")
+    assert idle.json() == {"running_tasks": 0, "queued_tasks": 0}
+
+    run_simulated_task.enqueue(1)
+    active = client.get("/desktop/activity/")
+    assert active.json() == {"running_tasks": 0, "queued_tasks": 1}
+    for response in (idle, active):
+        assert "no-store" in response["Cache-Control"].split(", ")
