@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Log a safe startup warning when a database failure prevents abandoned-routine
+  recovery. The missing routine table before migrations remains expected.
+
 - Fence routine polling updates to the backend ID observed during lookup so
   stale outcomes cannot finalize rebound routines.
 

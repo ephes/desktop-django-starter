@@ -1,4 +1,5 @@
 import json
+import sqlite3
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -7,7 +8,7 @@ from unittest import mock
 from uuid import UUID
 
 import pytest
-from django.db import close_old_connections
+from django.db import OperationalError, ProgrammingError, close_old_connections
 from django.db.models import QuerySet
 from django.tasks import TaskResultStatus
 from django.urls import reverse
@@ -573,6 +574,39 @@ setImmediate(() => {
 
 
 class TestStartupReconciliation:
+    @pytest.mark.parametrize(
+        ("django_error", "sqlite_error", "message", "expect_warning"),
+        [
+            (
+                OperationalError,
+                sqlite3.OperationalError,
+                "no such table: tasks_demo_simulatedtask",
+                False,
+            ),
+            (OperationalError, sqlite3.OperationalError, "database is locked", True),
+            (OperationalError, sqlite3.OperationalError, "no such table: other_table", True),
+            (ProgrammingError, sqlite3.ProgrammingError, "synthetic driver detail", True),
+        ],
+    )
+    def test_only_missing_routine_table_is_expected(
+        self, caplog, django_error, sqlite_error, message, expect_warning
+    ):
+        error = django_error(message)
+        error.__cause__ = sqlite_error(message)
+
+        with mock.patch.object(QuerySet, "update", side_effect=error):
+            TasksDemoConfig.reconcile_stale_tasks()
+
+        diagnostics = [
+            record.getMessage() for record in caplog.records if record.name == "tasks_demo.apps"
+        ]
+        expected = (
+            ["Routine startup recovery failed. Abandoned routines may remain active."]
+            if expect_warning
+            else []
+        )
+        assert diagnostics == expected
+
     def test_stale_pending_tasks_marked_failed(self):
         task = SimulatedTask.objects.create(
             label="Stale pending",

@@ -341,6 +341,9 @@ Current launcher contract:
   a retired or deleted row is never overwritten or recreated. Missing queue
   metadata fails pending rows, but leaves running claims alone because a live
   worker may still finish. Startup reconciliation retires abandoned claims.
+  A missing SQLite routine table is expected before migrations. Other
+  operational or programming errors log a fixed warning that abandoned
+  routines may remain active, and startup continues.
 - task polling applies backend outcomes only while the current demo row is
   pending or running and still has the backend ID used for the lookup. If a
   worker finalizes the row or it is rebound to another backend ID, a rejected

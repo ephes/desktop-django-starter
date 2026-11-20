@@ -1,7 +1,11 @@
+import logging
+import sqlite3
 import warnings
 
 from django.apps import AppConfig
 from django.db import OperationalError, ProgrammingError
+
+logger = logging.getLogger(__name__)
 
 
 class TasksDemoConfig(AppConfig):
@@ -16,14 +20,14 @@ class TasksDemoConfig(AppConfig):
         """Mark any non-terminal tasks as failed.
 
         Called on startup to clean up tasks that were interrupted by an
-        app restart.  Fails silently when the database table does not
-        exist yet (before migrations) and is safe to call multiple times.
+        app restart. A missing routine table is expected before migrations.
+        Other database failures are logged without driver details.
         """
+        from django.utils import timezone
+
+        from .models import SimulatedTask
+
         try:
-            from django.utils import timezone
-
-            from .models import SimulatedTask
-
             with warnings.catch_warnings():
                 warnings.filterwarnings(
                     "ignore",
@@ -40,6 +44,12 @@ class TasksDemoConfig(AppConfig):
                     result="Abandoned - app restarted",
                     completed_at=timezone.now(),
                 )
-        except (OperationalError, ProgrammingError):
-            # Table does not exist yet - migrations haven't run.
-            pass
+        except (OperationalError, ProgrammingError) as exc:
+            cause = exc.__cause__
+            if (
+                isinstance(exc, OperationalError)
+                and isinstance(cause, sqlite3.OperationalError)
+                and cause.args == (f"no such table: {SimulatedTask._meta.db_table}",)
+            ):
+                return
+            logger.warning("Routine startup recovery failed. Abandoned routines may remain active.")
