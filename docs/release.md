@@ -4,6 +4,7 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 
 ## Unreleased
 
+- Preserve the retryable routine queue response after rollback if diagnostics fail.
 - Fail restored routines with unencodable results or results over 1024 UTF-8
   bytes. Other routines remain visible when polling.
 - Restrict single-pony removal to the revision-checked POST form.

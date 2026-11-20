@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import random
+from contextlib import suppress
 
 from django.db import transaction
 from django.db.models import F
@@ -48,7 +49,9 @@ def task_create(request):
             task.backend_task_id = backend_task.id
             task.save(update_fields=["backend_task_id"])
     except Exception:
-        logger.exception("Could not queue demo routine")
+        # The transaction has rolled back. Logging is best effort.
+        with suppress(Exception):
+            logger.exception("Could not queue demo routine")
         return JsonResponse({"error": "Routine could not be queued. Please try again."}, status=503)
     return JsonResponse(
         {"id": task.pk, "label": task.label, "status": task.status},
