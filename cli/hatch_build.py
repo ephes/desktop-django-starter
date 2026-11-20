@@ -21,8 +21,9 @@ class AssetGuardHook(BuildHookInterface):
         # Hatch loads hooks by file path. Load the standalone helpers without
         # importing the CLI or relying on the caller's sys.path.
         required = runpy.run_path(str(root / "asset_inventory.py"))["CANONICAL_ASSETS"]
-        asset_lock = runpy.run_path(str(root / "asset_lock.py"))["asset_lock"]
-        with asset_lock(assets_dir.parent):
+        helpers = runpy.run_path(str(root / "asset_lock.py"))
+        with helpers["asset_lock"](assets_dir.parent):
+            helpers["recover_asset_replacement"](assets_dir)
             missing = [rel for rel in required if not (assets_dir / rel).is_file()]
             if missing:
                 listed = ", ".join(missing[:8])

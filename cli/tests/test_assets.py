@@ -107,6 +107,69 @@ def test_late_copy_failure_preserves_assets(
     assert list(assets.parent.iterdir()) == [assets]
 
 
+@pytest.mark.parametrize("change_at", ["before copy", "during copy", "after copy"])
+def test_changed_canonical_input_refuses_publication(
+    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, change_at: str
+) -> None:
+    repo, assets = asset_tree
+    before = tree_bytes(assets)
+    first = repo / "first.txt"
+    last = repo / "nested/last.txt"
+    changed = last if change_at == "before copy" else first
+    copy = sync_assets.shutil.copy2
+    copied = []
+
+    def replace_changed() -> None:
+        # A new inode changes the recorded identity on every platform.
+        replacement = changed.with_suffix(".new")
+        replacement.write_bytes(b"x" * changed.stat().st_size)
+        replacement.replace(changed)
+
+    def copy_with_change(src: Path, dst: Path) -> None:
+        if change_at == "before copy" and src == first:
+            replace_changed()
+        copy(src, dst)
+        copied.append(src)
+        if (change_at == "during copy" and src == first) or (
+            change_at == "after copy" and src == last
+        ):
+            replace_changed()
+
+    monkeypatch.setattr(sync_assets.shutil, "copy2", copy_with_change)
+    relative_path = re.escape(changed.relative_to(repo).as_posix())
+    with pytest.raises(RuntimeError, match=f"Canonical asset changed: {relative_path}"):
+        sync_assets.sync()
+    assert copied == ([first, last] if change_at == "after copy" else [first])
+    assert tree_bytes(assets) == before
+    assert list(assets.parent.iterdir()) == [assets]
+
+
+@pytest.mark.parametrize("edited", ["first.txt", "nested/last.txt"])
+def test_same_metadata_edit_refuses_publication(
+    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, edited: str
+) -> None:
+    """A same-size edit within one timestamp tick keeps the metadata identity."""
+    repo, assets = asset_tree
+    before = tree_bytes(assets)
+    target = repo / edited
+    copy = sync_assets.shutil.copy2
+    copied = []
+
+    def copy_then_edit(src: Path, dst: Path) -> None:
+        copy(src, dst)
+        copied.append(src)
+        if src == target:
+            target.write_bytes(b"x" * target.stat().st_size)
+
+    monkeypatch.setattr(sync_assets, "source_identity", lambda rel: (0,))
+    monkeypatch.setattr(sync_assets.shutil, "copy2", copy_then_edit)
+    with pytest.raises(RuntimeError, match=f"Canonical asset changed: {re.escape(edited)}"):
+        sync_assets.sync()
+    assert copied == [repo / "first.txt", repo / "nested/last.txt"]
+    assert tree_bytes(assets) == before
+    assert list(assets.parent.iterdir()) == [assets]
+
+
 @pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt])
 def test_publication_failure_restores_assets(
     asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, failure: type[BaseException]
@@ -142,16 +205,14 @@ def test_parallel_publications_preserve_placeholder(
 ) -> None:
     repo, assets = asset_tree
     rename = Path.rename
-    copy = sync_assets.shutil.copy2
     first_at_promotion = Event()
-    second_copied = Event()
+    second_started = Event()
     release_first = Event()
     publications = []
 
-    def copy_asset(src: Path, dst: Path) -> None:
-        copy(src, dst)
-        if src == repo / "nested/last.txt" and dst.read_bytes() == b"second last":
-            second_copied.set()
+    def sync_second() -> None:
+        second_started.set()
+        sync_assets.sync()
 
     def pause_first(src: Path, dst: Path) -> Path:
         if src.name != "staged":
@@ -164,7 +225,6 @@ def test_parallel_publications_preserve_placeholder(
         publications.append(generation)
         return result
 
-    monkeypatch.setattr(sync_assets.shutil, "copy2", copy_asset)
     monkeypatch.setattr(Path, "rename", pause_first)
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(sync_assets.sync)
@@ -173,8 +233,8 @@ def test_parallel_publications_preserve_placeholder(
             assert not assets.exists()
             (repo / "first.txt").write_bytes(b"second first")
             (repo / "nested/last.txt").write_bytes(b"second last")
-            second = pool.submit(sync_assets.sync)
-            assert second_copied.wait(10)
+            second = pool.submit(sync_second)
+            assert second_started.wait(10)
             with pytest.raises(TimeoutError):
                 second.result(timeout=1)
         finally:

@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Refuse CLI asset publication when a canonical file changes during staging,
+  including same-size edits detected by comparing staged bytes with the
+  sources, preserving the previous bundle.
+
+- Recover interrupted CLI asset publication during the next sync or package
+  build using the recorded generation under the asset lock.
+
 - Normalize routine completion timestamps to UTC before writing so out-of-range
   payloads fail the affected routine and leave the status poll available.
 

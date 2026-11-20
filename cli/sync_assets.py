@@ -7,19 +7,65 @@ Or via just:             just cli-sync-assets
 
 from __future__ import annotations
 
+import hashlib
 import shutil
+import stat
 import tempfile
+from contextlib import ExitStack
 from pathlib import Path
 
 from asset_inventory import CANONICAL_ASSETS
-from asset_lock import asset_lock
+from asset_lock import ASSET_MARKER, asset_lock, mark_asset_replacement, recover_asset_replacement
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = Path(__file__).resolve().parent / "src" / "dds" / "_assets"
 
 
+def source_identity(rel: str) -> tuple[int, ...] | None:
+    try:
+        info = (REPO_ROOT / rel).stat()
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        return None
+    return info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def check_source(rel: str, expected: tuple[int, ...]) -> None:
+    if source_identity(rel) != expected:
+        raise RuntimeError(f"Canonical asset changed: {rel}. Retry after edits finish.")
+
+
+def file_digest(path: Path) -> bytes:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 16), b""):
+            digest.update(chunk)
+    return digest.digest()
+
+
+def check_source_content(rel: str, expected: tuple[int, ...], staged: Path) -> None:
+    """Compare bytes too: same-size edits can keep coarse timestamps unchanged."""
+    check_source(rel, expected)
+    if file_digest(REPO_ROOT / rel) != file_digest(staged / rel):
+        raise RuntimeError(f"Canonical asset changed: {rel}. Retry after edits finish.")
+    check_source(rel, expected)
+
+
 def sync() -> None:
-    missing = [rel for rel in CANONICAL_ASSETS if not (REPO_ROOT / rel).is_file()]
+    marker = ASSETS_DIR.parent / ASSET_MARKER
+    if marker.exists() or marker.is_symlink():
+        with asset_lock(ASSETS_DIR.parent):
+            recover_asset_replacement(ASSETS_DIR)
+
+    sources = {}
+    missing = []
+    for rel in CANONICAL_ASSETS:
+        identity = source_identity(rel)
+        if identity is None:
+            missing.append(rel)
+        else:
+            sources[rel] = identity
     if missing:
         print(f"warning: {len(missing)} canonical file(s) not found:")
         for rel in missing:
@@ -30,44 +76,63 @@ def sync() -> None:
     work = Path(tempfile.mkdtemp(prefix=".assets-sync-", dir=ASSETS_DIR.parent))
     staged = work / "staged"
     backup = work / "previous"
-    try:
-        staged.mkdir()
-        for rel in CANONICAL_ASSETS:
-            dst = staged / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO_ROOT / rel, dst)
-        with asset_lock(ASSETS_DIR.parent):
+    # Keep the publication lock through rollback and its cleanup. A later
+    # process may take ownership of the work directory as soon as we unlock.
+    with ExitStack() as lock:
+        pending = False
+        try:
+            staged.mkdir()
+            for rel, expected in sources.items():
+                dst = staged / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                check_source(rel, expected)
+                shutil.copy2(REPO_ROOT / rel, dst)
+                check_source(rel, expected)
+            # Catch edits to assets that were copied before later entries,
+            # including same-size edits within one timestamp tick.
+            for rel, expected in sources.items():
+                check_source_content(rel, expected, staged)
+            lock.enter_context(asset_lock(ASSETS_DIR.parent))
+            recover_asset_replacement(ASSETS_DIR)
             # Preserve the repository placeholder, including its bytes, if present.
             placeholder = ASSETS_DIR / ".gitkeep"
             if placeholder.is_file():
                 shutil.copy2(placeholder, staged / ".gitkeep")
 
-            if ASSETS_DIR.exists():
-                ASSETS_DIR.rename(backup)
             try:
+                if ASSETS_DIR.exists() or ASSETS_DIR.is_symlink():
+                    pending = True
+                    mark_asset_replacement(ASSETS_DIR, work)
+                    ASSETS_DIR.rename(backup)
                 staged.rename(ASSETS_DIR)
             except BaseException as publish_error:
                 try:
                     if backup.exists():
                         backup.rename(ASSETS_DIR)
+                    if pending:
+                        marker.unlink(missing_ok=True)
+                        pending = False
                 except BaseException as restore_error:
                     recovery = RuntimeError(f"Previous assets retained at {backup}")
                     recovery.__cause__ = restore_error
                     raise publish_error from recovery
                 raise
-    except BaseException as primary:
-        try:
-            if backup.exists():
-                print(f"Previous assets retained at {backup}")
-                if staged.exists():
-                    shutil.rmtree(staged)
-            else:
-                shutil.rmtree(work)
-        except BaseException as cleanup_error:
-            # Keep any rollback diagnostics in the chain under the primary error.
-            cleanup_error.__cause__ = primary.__cause__
-            raise primary from cleanup_error
-        raise
+            if pending:
+                marker.unlink()
+        except BaseException as primary:
+            try:
+                if pending:
+                    if backup.exists():
+                        print(f"Previous assets retained at {backup}")
+                        if staged.exists():
+                            shutil.rmtree(staged)
+                else:
+                    shutil.rmtree(work)
+            except BaseException as cleanup_error:
+                # Keep any rollback diagnostics in the chain under the primary error.
+                cleanup_error.__cause__ = primary.__cause__
+                raise primary from cleanup_error
+            raise
 
     try:
         shutil.rmtree(work)

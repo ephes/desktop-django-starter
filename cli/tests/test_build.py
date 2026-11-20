@@ -101,6 +101,89 @@ def test_complete_build_is_admitted(project, target):
     assert (root / "dist" / artifact).is_file()
 
 
+@pytest.mark.parametrize(
+    ("stop_after", "retry"),
+    [
+        ("previous", "sync"),
+        ("previous", "wheel"),
+        ("_assets", "sync"),
+        ("_assets", "wheel"),
+        ("previous", "foreign backup"),
+    ],
+)
+def test_interrupted_asset_publication_recovers(project, tmp_path, monkeypatch, retry, stop_after):
+    root, assets = project
+    (assets / ".gitkeep").write_bytes(b"keep")
+    previous = {rel: (assets / rel).read_bytes() for rel in CANONICAL_ASSETS}
+    replacement = tmp_path / "canonical"
+    for rel in CANONICAL_ASSETS:
+        path = replacement / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"replacement")
+    child = """
+import os
+import sys
+from pathlib import Path
+import sync_assets
+
+sync_assets.REPO_ROOT = Path(sys.argv[1])
+sync_assets.ASSETS_DIR = Path(sys.argv[2])
+rename = Path.rename
+
+def stop_after_rename(source, target):
+    result = rename(source, target)
+    if target.name == sys.argv[3]:
+        os._exit(23)
+    return result
+
+Path.rename = stop_after_rename
+sync_assets.sync()
+"""
+    result = subprocess.run(
+        [sys.executable, "-c", child, str(replacement), str(assets), stop_after],
+        env=dict(os.environ, PYTHONPATH=str(CLI_ROOT)),
+        timeout=10,
+    )
+    assert result.returncode == 23
+    assert assets.exists() == (stop_after == "_assets")
+    (abandoned,) = assets.parent.glob(".assets-sync-*/previous")
+    assert all((abandoned / rel).read_bytes() == content for rel, content in previous.items())
+    if retry == "foreign backup":
+        retained = abandoned.rename(abandoned.with_name("retained"))
+        abandoned.mkdir()
+        (abandoned / "foreign.txt").write_bytes(b"foreign")
+        with pytest.raises(RuntimeError, match="Cannot reconcile"):
+            build_wheel(str(root / "dist"))
+        assert not assets.exists()
+        assert (abandoned / "foreign.txt").read_bytes() == b"foreign"
+        assert all((retained / rel).read_bytes() == content for rel, content in previous.items())
+        assert (assets.parent / ".assets-sync-pending").is_file()
+        return
+
+    expected = (
+        previous if stop_after == "previous" else dict.fromkeys(CANONICAL_ASSETS, b"replacement")
+    )
+
+    if retry == "sync":
+        monkeypatch.setattr(sync_assets, "REPO_ROOT", replacement)
+        monkeypatch.setattr(sync_assets, "ASSETS_DIR", assets)
+        missing = replacement / CANONICAL_ASSETS[-1]
+        missing.unlink()
+        with pytest.raises(SystemExit, match="1"):
+            sync_assets.sync()
+        assert all((assets / rel).read_bytes() == content for rel, content in expected.items())
+        missing.write_bytes(b"replacement")
+        sync_assets.sync()
+        assert all((assets / rel).read_bytes() == b"replacement" for rel in expected)
+    else:
+        dist = root / "dist"
+        with zipfile.ZipFile(dist / build_wheel(str(dist))) as archive:
+            for rel, content in expected.items():
+                assert archive.read(f"dds/_assets/{rel}") == content
+    assert (assets / ".gitkeep").read_bytes() == b"keep"
+    assert not abandoned.parent.exists()
+
+
 def test_wheel_reads_one_asset_generation_during_sync(project, tmp_path, monkeypatch):
     root, assets = project
     expected = {rel: (assets / rel).read_bytes() for rel in CANONICAL_ASSETS}
