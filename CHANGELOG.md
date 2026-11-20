@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Abort desktop state upgrades after a short media write and retain the
+  previous generation for retry.
+
 - Close desktop state reader descriptors when stream construction fails and
   preserve the original startup error.
 

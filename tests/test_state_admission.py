@@ -4,6 +4,7 @@ import errno
 import json
 import os
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -167,6 +168,48 @@ def test_media_copy_refuses_uncontained_or_over_budget_tree(monkeypatch, tmp_pat
     ) == ["1.0.0"]
 
 
+def test_short_media_write_does_not_publish_generation(monkeypatch, tmp_path):
+    old = previous(tmp_path)
+    upload = old / "media" / "upload"
+    payload = b"synthetic media"
+    upload.write_bytes(payload)
+    real_open = Path.open
+    write_counts = []
+
+    class ShortWriter:
+        def __init__(self, stream):
+            self.stream = stream
+
+        def write(self, chunk):
+            written = self.stream.write(chunk[:-1])
+            write_counts.append(written)
+            return written
+
+    @contextmanager
+    def open_with_short_media_writer(path, *args, **kwargs):
+        with real_open(path, *args, **kwargs) as stream:
+            yield ShortWriter(stream)
+
+    def open_for_copy(path, mode="r", *args, **kwargs):
+        if mode == "xb" and path.name == upload.name and path.parent.name == "media":
+            return open_with_short_media_writer(path, mode, *args, **kwargs)
+        return real_open(path, mode, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "open", open_for_copy)
+        with pytest.raises(ImproperlyConfigured, match="media.*copy failed") as error:
+            app_state.prepare_versioned_state(tmp_path, "2.0.0")
+
+    assert write_counts == [len(payload) - 1]
+    assert "short write" in str(error.value.__cause__)
+    assert sorted(p.name for p in old.parent.iterdir()) == [".initialize.lock", "1.0.0"]
+    assert upload.read_bytes() == payload
+    assert app_state.prepare_versioned_state(tmp_path, "1.0.0") == old
+
+    copied = app_state.prepare_versioned_state(tmp_path, "2.0.0")
+    assert (copied / "media" / upload.name).read_bytes() == payload
+
+
 def test_valid_nested_media_copies_only_files_and_leaves_cache(tmp_path):
     old = previous(tmp_path)
     (old / "media" / "nested").mkdir()
@@ -223,7 +266,6 @@ def test_changed_media_generation_never_publishes_and_stable_retry_succeeds(
     monkeypatch, tmp_path, mutation
 ):
     from concurrent.futures import ThreadPoolExecutor
-    from contextlib import contextmanager
     from threading import Event
 
     if mutation == "restore-mtime" and os.name == "nt":

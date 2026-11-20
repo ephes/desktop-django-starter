@@ -783,18 +783,19 @@ failed restore. The Windows fallback relies on per-user ACLs and checks names
 and identities; hostile concurrent changes by the same account are unsupported.
 
 Media upgrade limits default to 100,000 entries (files plus directories),
-2 GiB of actual copied bytes and 64 directory levels below the media root.
+2 GiB of source bytes and 64 directory levels below the media root.
 Operators can increase positive integer environment values before launching:
 `DESKTOP_DJANGO_MEDIA_MAX_ENTRIES`, `DESKTOP_DJANGO_MEDIA_MAX_BYTES`, and
 `DESKTOP_DJANGO_MEDIA_MAX_DEPTH`. Limits apply per attempt. All media symlinks,
 including internal links, are refused. A refusal retains the predecessor and
 removes unpublished staging; repair the synthetic/imported tree or adjust the
 budget with enough free disk space, then retry. Each file is read only to its
-initial size. Detected identity, size, mtime or ctime changes during copying
-refuse publication, including same-size in-place edits. Close media writers
-before retrying from the retained predecessor. This is per-file change
-detection using available filesystem metadata, not a snapshot across media
-files and SQLite. Cache is never imported.
+initial size. A short destination write stops the upgrade and retains the
+predecessor for retry. Detected identity, size, mtime or ctime changes during
+copying also refuse publication, including same-size in-place edits. Close
+media writers before retrying from the retained predecessor. Change detection
+uses the available filesystem metadata for each file. Media and SQLite can
+reflect different points in time. Cache is never imported.
 
 ### Interrupted upgrade recovery and durability
 
