@@ -45,7 +45,7 @@ class DesktopDjangoStarterPositron(toga.App):
         self._task_worker_thread: Thread | None = None
         self._smoke_exit_scheduled = False
         self._startup_error_message: str | None = None
-        self._exit_prompt_open = False
+        self._exit_in_progress = False
         self.auth_token = secrets.token_hex(32)
         self.server_ready: asyncio.Future[int] = asyncio.Future()
 
@@ -101,30 +101,30 @@ class DesktopDjangoStarterPositron(toga.App):
         Toga runs an async on_exit as a task and exits only if it returns True.
         Idle, smoke mode, or a failed count all quit normally.
         """
-        if self._exit_prompt_open:
+        if self._exit_in_progress:
             return False
 
-        message = None
-        if os.environ.get("DESKTOP_DJANGO_SMOKE_TEST") != "1" and self._django_ready():
-            try:
-                counts = await asyncio.to_thread(self._background_task_counts)
-            except Exception as error:  # never trap the user in the app
-                print(f"Could not read background task activity: {error}")
-            else:
-                message = exit_confirmation_message(counts)
+        self._exit_in_progress = True
+        try:
+            message = None
+            if os.environ.get("DESKTOP_DJANGO_SMOKE_TEST") != "1" and self._django_ready():
+                try:
+                    counts = await asyncio.to_thread(self._background_task_counts)
+                except Exception as error:  # never trap the user in the app
+                    print(f"Could not read background task activity: {error}")
+                else:
+                    message = exit_confirmation_message(counts)
 
-        if message is not None:
-            self._exit_prompt_open = True
-            try:
+            if message is not None:
                 should_quit = await self.main_window.dialog(
                     toga.QuestionDialog("A background task is still running", message)
                 )
-            finally:
-                self._exit_prompt_open = False
-            if not should_quit:
-                return False
+                if not should_quit:
+                    return False
 
-        return self.cleanup()
+            return self.cleanup()
+        finally:
+            self._exit_in_progress = False
 
     def _django_ready(self) -> bool:
         return (
