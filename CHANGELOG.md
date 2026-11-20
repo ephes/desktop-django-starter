@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Skip excluded directory trees before scanning them in the Python line counter.
+
 - Prevent caches from reusing desktop quit activity responses.
 
 - Read desktop quit activity from the task writer database when task writes are routed.

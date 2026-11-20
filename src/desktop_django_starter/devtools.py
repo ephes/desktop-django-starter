@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 from collections import defaultdict
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 try:
@@ -237,21 +237,16 @@ def _count_with_python() -> int:
     return 0
 
 
-def _iter_fallback_files(root: Path):
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if any(_is_excluded_dir(partial) for partial in _path_prefixes(path.relative_to(root))):
-            continue
-        yield path
-
-
-def _path_prefixes(path: Path) -> list[str]:
-    prefixes: list[str] = []
-    parts = list(path.parts)
-    for index in range(1, len(parts)):
-        prefixes.append("/".join(parts[:index]))
-    return prefixes
+def _iter_fallback_files(root: Path) -> Iterator[Path]:
+    for directory, subdirs, filenames in root.walk():
+        relative = directory.relative_to(root)
+        subdirs[:] = [
+            name for name in subdirs if not _is_excluded_dir((relative / name).as_posix())
+        ]
+        for name in filenames:
+            path = directory / name
+            if path.is_file():
+                yield path
 
 
 def _is_excluded_dir(path_fragment: str) -> bool:

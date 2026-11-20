@@ -1,3 +1,6 @@
+import os
+from pathlib import Path
+
 import pytest
 
 from desktop_django_starter import devtools
@@ -89,6 +92,37 @@ def test_excluded_dirs_cover_generated_shell_artifacts() -> None:
     assert _is_excluded_dir("shells/tauri/src-tauri/target")
     assert _is_excluded_dir("tauri")
     assert _is_excluded_dir("positron")
+
+
+def test_python_fallback_prunes_excluded_trees(monkeypatch, tmp_path, capsys) -> None:
+    excluded = {tmp_path / "node_modules", tmp_path / "shells/tauri/src-tauri/target"}
+    sources = {
+        tmp_path / "src/app/models.py": "first\nsecond\n",
+        tmp_path / "src/app/build/helper.py": "third\n",
+        **{directory / "nested/ignored.py": "ignored\n" for directory in excluded},
+    }
+    for path, content in sources.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    scanned = set()
+    real_scandir = os.scandir
+
+    def record_scan(directory):
+        scanned.add(Path(directory))
+        return real_scandir(directory)
+
+    monkeypatch.setattr(os, "scandir", record_scan)
+    monkeypatch.setattr(devtools.shutil, "which", lambda _: None)
+    monkeypatch.setattr(devtools, "Console", None)
+    monkeypatch.chdir(tmp_path)
+
+    assert devtools.count_lines_of_code() == 0
+    output = capsys.readouterr().out
+    assert "| Python   |     2 |     3 |" in output
+    assert "| src/app   |     2 |     3 |" in output
+    assert all(directory in scanned for directory in (tmp_path, tmp_path / "src/app/build"))
+    assert not any(directory.is_relative_to(tree) for directory in scanned for tree in excluded)
 
 
 @pytest.mark.parametrize("backend", ["cloc", "python"])
