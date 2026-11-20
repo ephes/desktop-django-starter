@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Normalize routine completion timestamps to UTC before writing so out-of-range
+  payloads fail the affected routine and leave the status poll available.
+
+- Log a safe startup warning when a database failure prevents abandoned-routine
+  recovery. The missing routine table before migrations remains expected.
+
+- Fence routine polling updates to the backend ID observed during lookup so
+  stale outcomes cannot finalize rebound routines.
+
+- Keep routine status polling available when a concurrently completed routine
+  is cleared before reconciliation reloads it.
+
 - Discard inherited Positron port, auth token and app version values so each
   launch uses its own settings and the normal version fallback.
 

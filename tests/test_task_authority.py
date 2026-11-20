@@ -11,7 +11,7 @@ from django.utils import timezone
 from django_tasks_db.models import DBTaskResult
 
 from tasks_demo.models import SimulatedTask
-from tasks_demo.tasks import SimulatedTaskFailure, run_simulated_task
+from tasks_demo.tasks import SimulatedTaskFailure, reconcile_task_with_backend, run_simulated_task
 
 pytestmark = pytest.mark.django_db
 
@@ -79,6 +79,33 @@ def test_status_rejects_invalid_success_payload(client, change):
     assert row.completed_at is not None
 
 
+@pytest.mark.parametrize("out_of_range", ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"])
+def test_poll_admits_completion_timestamps_in_utc(client, out_of_range):
+    invalid, invalid_backend = queued_task()
+    valid, valid_backend = queued_task()
+    for backend, timestamp in (
+        (invalid_backend, out_of_range),
+        (valid_backend, "2026-04-09T00:15:00+05:30"),
+    ):
+        backend.status = TaskResultStatus.SUCCESSFUL
+        backend.return_value = {
+            "status": "DONE",
+            "result": "Synthetic completion",
+            "duration": 2.0,
+            "completed_at": timestamp,
+        }
+        backend.save(update_fields=["status", "return_value"])
+
+    response = client.get(reverse("tasks_demo:task-status"))
+    assert response.status_code == 200
+    rows = {row["id"]: row for row in response.json()["tasks"]}
+    assert rows[invalid.pk]["status"] == "FAILED"
+    assert rows[invalid.pk]["result"] == "Task returned an invalid completion payload."
+    assert rows[invalid.pk]["duration"] is None
+    assert rows[valid.pk]["status"] == "DONE"
+    assert rows[valid.pk]["completed_at"] == "2026-04-08T18:45:00+00:00"
+
+
 @pytest.mark.parametrize("status", ["DONE", "FAILED"])
 def test_invalid_payload_cannot_replace_worker_completion(client, status):
     row, backend = queued_task()
@@ -90,6 +117,34 @@ def test_invalid_payload_cannot_replace_worker_completion(client, status):
     row.refresh_from_db()
     assert row.status == status
     assert row.result == "Worker result"
+
+
+def test_old_backend_completion_cannot_finalize_rebound_routine():
+    row, old_backend = queued_task()
+    replacement = run_simulated_task.enqueue(row.pk)
+
+    def load_result(backend_id):
+        assert backend_id == str(old_backend.pk)
+        SimulatedTask.objects.filter(pk=row.pk).update(backend_task_id=replacement.id)
+        return SimpleNamespace(
+            status=TaskResultStatus.SUCCESSFUL,
+            return_value={
+                "status": "DONE",
+                "result": "Completion for the old backend ID",
+                "duration": 2.0,
+                "completed_at": timezone.now().isoformat(),
+            },
+        )
+
+    reconciled = reconcile_task_with_backend(row, result_loader=load_result)
+    row.refresh_from_db()
+    assert reconciled is not None
+    for current in (row, reconciled):
+        assert current.backend_task_id == replacement.id
+        assert current.status == SimulatedTask.Status.PENDING
+        assert current.result is None
+        assert current.duration is None
+        assert current.completed_at is None
 
 
 @pytest.mark.django_db(transaction=True)

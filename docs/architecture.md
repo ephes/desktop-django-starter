@@ -296,9 +296,12 @@ Current launcher contract:
   and ID). Active queue results are loaded with the backend's public
   `DBTaskResult` model and `task_result` property in parameter-safe bulk batches,
   preserving task-function matching and the existing reconciliation guards.
-  Fresh completions enter history in the same response. This is a visibility
-  limit, not automatic deletion: older terminal rows remain until Clear Finished
-  Routines deletes them; history pagination is outside this teaching demo.
+  Fresh completions enter history in the same response. If reconciliation
+  reloads a routine that was completed and cleared in the meantime, the
+  response omits it; a routine whose backend result still reports it queued or
+  running keeps its polled snapshot until the next poll.
+  Older terminal rows remain until Clear Finished Routines deletes them.
+  History pagination is outside this teaching demo.
   SQLite partial indexes cover active creation ordering and terminal completion,
   creation and ID ordering. The ORM uses OR equality predicates matching those
   indexes: a bound `IN` predicate cannot imply a literal partial-index `IN`
@@ -334,13 +337,21 @@ Current launcher contract:
   routine still reconciles normally when another routine fails.
 - successful backend payloads must contain a `DONE`/`FAILED` status, string result,
   finite nonnegative numeric duration (no booleans), and timezone-aware ISO
-  completion timestamp. Invalid payloads become a failed demo row through the
-  same conditional update. A duplicate's active-state snapshot is a no-op.
+  completion timestamp. Polling normalizes the timestamp to the database's UTC
+  domain before writing. A conversion overflow or other invalid payload becomes
+  a failed demo row through the same conditional update. A duplicate's
+  active-state snapshot is a no-op.
 - workers finalize only a still-running row with the backend ID they claimed;
   a retired or deleted row is never overwritten or recreated. Missing queue
   metadata fails pending rows, but leaves running claims alone because a live
   worker may still finish. Startup reconciliation retires abandoned claims.
-- task polling reconciles backend outcomes only while the current demo row is pending or running; if the worker has already finalized it, polling reloads that row and preserves its status, result, duration, and completion time, including when the backend result is missing
+  A missing SQLite routine table is expected before migrations. Other
+  operational or programming errors log a fixed warning that abandoned
+  routines may remain active, and startup continues.
+- task polling applies backend outcomes only while the current demo row is
+  pending or running and still has the backend ID used for the lookup. If a
+  worker finalizes the row or it is rebound to another backend ID, a rejected
+  poll update reloads the current row and preserves its stored state.
 - shell-local wrappers such as `shells/electron/scripts/bundled-python.cjs` are allowed to resolve shared helpers from two locations: a packaged-app copy first, then a repo-relative source path for local development
 - the Tauri shell keeps its subprocess supervision in Rust under `shells/tauri/src-tauri/src/lib.rs` instead of forcing a cross-shell launcher abstraction
 - the Tauri shell now also owns its own shell-local splash window under `shells/tauri/src/splash.html`, shown while backend startup runs on a background thread
