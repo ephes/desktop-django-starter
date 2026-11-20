@@ -296,8 +296,10 @@ Current launcher contract:
   and ID). Active queue results are loaded with the backend's public
   `DBTaskResult` model and `task_result` property in parameter-safe bulk batches,
   preserving task-function matching and the existing reconciliation guards.
-  Fresh completions enter history in the same response. If a routine completes
-  and is cleared before reconciliation can reload it, the response omits it.
+  Fresh completions enter history in the same response. If reconciliation
+  reloads a routine that was completed and cleared in the meantime, the
+  response omits it; a routine whose backend result still reports it queued or
+  running keeps its polled snapshot until the next poll.
   Older terminal rows remain until Clear Finished Routines deletes them.
   History pagination is outside this teaching demo.
   SQLite partial indexes cover active creation ordering and terminal completion,
