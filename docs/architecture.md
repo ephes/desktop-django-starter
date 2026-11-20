@@ -496,11 +496,14 @@ fail the copy before the staged tree is synced. Admission, opened-descriptor
 and final named-file metadata must agree on device/inode, size, nanosecond
 mtime and ctime.
 Detected in-place edits, growth, truncation or replacement refuse publication.
-These checks use the filesystem metadata available on each platform; they do
-not provide an atomic snapshot across files and SQLite or protect against
-hostile same-account metadata manipulation. Cache is disposable and
-never copied. Refusal removes only the private unpublished stage and preserves
-the predecessor. See the release guide for configurable limits and recovery.
+At the end of traversal, each visited directory's identity, size, mtime and
+ctime must still match its admission metadata. This detects membership changes
+in an earlier subtree while another subtree is being copied. The checks use
+platform filesystem metadata. Media and SQLite may reflect different points in
+time, and hostile same-account mutation is outside the contract. Cache is
+disposable and never copied. Refusal removes only the private unpublished stage
+and preserves the predecessor. See the release guide for configurable limits
+and recovery.
 
 ### Interrupted and competing state initialization
 

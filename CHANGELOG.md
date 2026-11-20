@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refuse desktop state publication when source media directory membership
+  changes during copying. Preserve the predecessor for retry.
+
 - Recheck the state root and inspected abandoned stage before detaching it for
   removal. Retain stages with uncertain identity for offline inspection.
 

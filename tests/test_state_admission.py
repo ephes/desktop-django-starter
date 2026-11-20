@@ -210,6 +210,52 @@ def test_short_media_write_does_not_publish_generation(monkeypatch, tmp_path):
     assert (copied / "media" / upload.name).read_bytes() == payload
 
 
+@pytest.mark.parametrize("change", ["insert", "remove"])
+def test_media_membership_change_in_already_copied_directory_refuses_publication(
+    monkeypatch, tmp_path, change
+):
+    old = previous(tmp_path)
+    media = old / "media"
+    for name in ("one", "two"):
+        directory = media / name
+        directory.mkdir()
+        (directory / "upload").write_bytes(b"synthetic media")
+        # Keep the mutation observable on filesystems with coarse timestamps.
+        os.utime(directory, (1_600_000_000, 1_600_000_000))
+
+    reader = state_files.regular_reader
+    copied_files = []
+
+    @contextmanager
+    def change_membership_during_copy(path, **kwargs):
+        with reader(path, **kwargs) as stream:
+            if copied_files:
+                first = copied_files[0]
+                if change == "insert":
+                    (first.parent / "late").write_bytes(b"synthetic late upload")
+                else:
+                    first.unlink()
+            copied_files.append(path)
+            yield stream
+
+    with monkeypatch.context() as patch:
+        patch.setattr(state_files, "regular_reader", change_membership_during_copy)
+        with pytest.raises(ImproperlyConfigured, match="media.*copy failed") as error:
+            app_state.prepare_versioned_state(tmp_path, "2.0.0")
+
+    assert len(copied_files) == 2
+    assert "directory changed" in str(error.value.__cause__)
+    assert sorted(p.name for p in old.parent.iterdir()) == [".initialize.lock", "1.0.0"]
+    assert app_state.prepare_versioned_state(tmp_path, "1.0.0") == old
+
+    copied = app_state.prepare_versioned_state(tmp_path, "2.0.0")
+    source_files = sorted(p.relative_to(media) for p in media.glob("*/*"))
+    assert (
+        sorted(p.relative_to(copied / "media") for p in (copied / "media").glob("*/*"))
+        == source_files
+    )
+
+
 def test_valid_nested_media_copies_only_files_and_leaves_cache(tmp_path):
     old = previous(tmp_path)
     (old / "media" / "nested").mkdir()
