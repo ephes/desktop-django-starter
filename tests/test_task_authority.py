@@ -106,6 +106,35 @@ def test_poll_admits_completion_timestamps_in_utc(client, out_of_range):
     assert rows[valid.pk]["completed_at"] == "2026-04-08T18:45:00+00:00"
 
 
+@pytest.mark.parametrize(
+    "invalid_result",
+    ["x" * 1025, "é" * 513, "\ud800"],
+    ids=["oversized-ascii", "oversized-utf8", "unencodable"],
+)
+def test_poll_bounds_restored_completion_text(client, invalid_result):
+    invalid, invalid_backend = queued_task()
+    valid, valid_backend = queued_task()
+    exact_limit = "é" * 512
+    for backend, result in ((invalid_backend, invalid_result), (valid_backend, exact_limit)):
+        backend.status = TaskResultStatus.SUCCESSFUL
+        backend.return_value = {
+            "status": "DONE",
+            "result": result,
+            "duration": 2.0,
+            "completed_at": timezone.now().isoformat(),
+        }
+        backend.save(update_fields=["status", "return_value"])
+
+    response = client.get(reverse("tasks_demo:task-status"))
+    assert response.status_code == 200
+    rows = {row["id"]: row for row in response.json()["tasks"]}
+    assert rows[invalid.pk]["status"] == "FAILED"
+    assert rows[invalid.pk]["result"] == "Task returned an invalid completion payload."
+    assert rows[invalid.pk]["duration"] is None
+    assert rows[valid.pk]["status"] == "DONE"
+    assert rows[valid.pk]["result"] == exact_limit
+
+
 @pytest.mark.parametrize("status", ["DONE", "FAILED"])
 def test_invalid_payload_cannot_replace_worker_completion(client, status):
     row, backend = queued_task()

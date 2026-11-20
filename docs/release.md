@@ -4,6 +4,8 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 
 ## Unreleased
 
+- Fail restored routines with unencodable results or results over 1024 UTF-8
+  bytes. Other routines remain visible when polling.
 - Restrict single-pony removal to the revision-checked POST form.
 - Packaged Electron resumes a pending first-run pony seed after interruption.
   Existing databases without a pending seed and copied databases stay untouched.

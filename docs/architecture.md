@@ -338,8 +338,9 @@ Current launcher contract:
   exception class and allowlisted demo messages can publish a specific failure
   message. Worker-finalized results remain authoritative, and an independent
   routine still reconciles normally when another routine fails.
-- successful backend payloads must contain a `DONE`/`FAILED` status, string result,
-  finite nonnegative numeric duration (no booleans), and timezone-aware ISO
+- successful backend payloads must contain a `DONE`/`FAILED` status, a result
+  encodable in UTF-8 in at most 1024 bytes, a finite nonnegative numeric duration
+  (no booleans), and a timezone-aware ISO
   completion timestamp. Polling normalizes the timestamp to the database's UTC
   domain before writing. A conversion overflow or other invalid payload becomes
   a failed demo row through the same conditional update. A duplicate's
