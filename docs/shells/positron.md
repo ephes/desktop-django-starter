@@ -23,6 +23,14 @@ Current responsibilities:
 - reuse the shared brand source under `assets/brand/` and generate shell-local icon outputs into `shells/positron/resources/`
 - keep Positron-specific runtime behavior under `shells/positron/src/desktop_django_starter_positron/`
 
+Positron gives each launch its own port, auth token and app version. The WSGI
+server binds to port zero so the OS picks a free port, and startup generates a
+new auth token. When Toga and the installed distribution both lack version
+metadata, Django uses `<app-data>/state/unversioned/`. Omitted values are
+removed from both the constructed environment and the process environment
+before Django starts. Other inherited settings such as the smoke-test flag
+remain available.
+
 Lock acquisition and PID initialization failures close the opened handle and
 release any acquired lock. Shutdown also closes the handle when explicit unlock
 fails. Cleanup preserves the original failure, so a retained traceback does not

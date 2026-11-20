@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Discard inherited Positron port, auth token and app version values so each
+  launch uses its own settings and the normal version fallback.
+
 - Validate the shared Python package files before Positron selects a source
   tree, so an incomplete bundle cannot shadow a valid development tree.
 

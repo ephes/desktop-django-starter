@@ -1,5 +1,6 @@
 import asyncio
 import importlib.util
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -97,6 +98,61 @@ def test_positron_runtime_reuses_shared_django_and_brand_assets() -> None:
     assert "resources/app-icon" in pyproject
     assert "flying-stable-app-icon.svg" in icon_script
     assert "rsvg-convert" in icon_script
+
+
+def test_positron_runtime_environment_drops_omitted_launch_values(tmp_path, monkeypatch) -> None:
+    monkeypatch.syspath_prepend(str(POSITRON_SRC))
+    from desktop_django_starter_positron import runtime
+
+    optional_values = {
+        "DESKTOP_DJANGO_PORT": "9042",
+        "DESKTOP_DJANGO_AUTH_TOKEN": "first-launch-token",
+        "DESKTOP_DJANGO_APP_VERSION": "1.2.3",
+    }
+    monkeypatch.setattr(os, "environ", {})
+    paths = {"app_data_dir": tmp_path / "data", "bundle_dir": tmp_path / "bundle"}
+    first = runtime.django_environment(
+        **paths, port=9042, auth_token="first-launch-token", app_version="1.2.3"
+    )
+    assert {key: first[key] for key in optional_values} == optional_values
+    for key in optional_values:
+        monkeypatch.setenv(key, first[key])
+    monkeypatch.setenv("DESKTOP_DJANGO_SMOKE_TEST", "1")
+
+    second = runtime.django_environment(**paths)
+
+    assert optional_values.keys().isdisjoint(second)
+    assert second["DESKTOP_DJANGO_SMOKE_TEST"] == "1"
+    assert {key: os.environ[key] for key in optional_values} == optional_values
+
+
+def test_positron_configure_django_removes_stale_process_values(
+    tmp_path, monkeypatch, positron_app_module
+) -> None:
+    app_module = positron_app_module
+    monkeypatch.setattr(app_module, "ensure_project_imports", Mock())
+    monkeypatch.setattr(app_module, "positron_app_version", Mock(return_value=None))
+    monkeypatch.setattr(os, "environ", {})
+    os.environ.update(
+        DESKTOP_DJANGO_PORT="9042",
+        DESKTOP_DJANGO_AUTH_TOKEN="first-launch-token",
+        DESKTOP_DJANGO_APP_VERSION="1.2.3",
+        DESKTOP_DJANGO_SMOKE_TEST="1",
+    )
+
+    def setup(*, set_prefix):
+        assert "DESKTOP_DJANGO_PORT" not in os.environ
+        assert "DESKTOP_DJANGO_APP_VERSION" not in os.environ
+        assert os.environ["DESKTOP_DJANGO_AUTH_TOKEN"] == "current-launch-token"
+        assert os.environ["DESKTOP_DJANGO_SMOKE_TEST"] == "1"
+
+    monkeypatch.setattr(app_module.django, "setup", setup)
+    app = app_module.DesktopDjangoStarterPositron()
+    app.paths = SimpleNamespace(data=tmp_path / "data", cache=tmp_path / "cache")
+    app.auth_token = "current-launch-token"
+    app.version = None
+
+    app.configure_django()
 
 
 def test_positron_runtime_helpers_resolve_repo_paths(tmp_path, monkeypatch) -> None:
@@ -279,10 +335,9 @@ def test_positron_exit_confirmation_message() -> None:
     )
 
 
-@pytest.mark.parametrize("outcome", ["approve", "decline", "cancel"])
-def test_positron_quit_owns_activity_probe_and_dialog(monkeypatch, outcome) -> None:
+@pytest.fixture
+def positron_app_module(monkeypatch):
     monkeypatch.syspath_prepend(str(POSITRON_SRC))
-    monkeypatch.delenv("DESKTOP_DJANGO_SMOKE_TEST", raising=False)
     monkeypatch.setitem(sys.modules, "toga", SimpleNamespace(App=object, QuestionDialog=Mock()))
     spec = importlib.util.spec_from_file_location(
         "desktop_django_starter_positron.app",
@@ -290,6 +345,15 @@ def test_positron_quit_owns_activity_probe_and_dialog(monkeypatch, outcome) -> N
     )
     app_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(app_module)
+    return app_module
+
+
+@pytest.mark.parametrize("outcome", ["approve", "decline", "cancel"])
+def test_positron_quit_owns_activity_probe_and_dialog(
+    monkeypatch, outcome, positron_app_module
+) -> None:
+    monkeypatch.delenv("DESKTOP_DJANGO_SMOKE_TEST", raising=False)
+    app_module = positron_app_module
 
     async def exercise_exit() -> None:
         probe_started = asyncio.Event()

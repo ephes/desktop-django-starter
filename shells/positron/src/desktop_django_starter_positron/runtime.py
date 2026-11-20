@@ -15,6 +15,11 @@ POSITRON_DJANGO_SETTINGS_MODULE = "desktop_django_starter.settings.packaged"
 POSITRON_INSTANCE_LOCK_FILENAME = "desktop-django-starter-positron.lock"
 WORKER_ID = "desktop-django-starter-positron"
 POSITRON_DISTRIBUTION_NAME = "desktop-django-starter-positron"
+OPTIONAL_RUNTIME_ENV_KEYS = (
+    "DESKTOP_DJANGO_PORT",
+    "DESKTOP_DJANGO_AUTH_TOKEN",
+    "DESKTOP_DJANGO_APP_VERSION",
+)
 
 
 def bundled_app_root(module_file: str | Path | None = None) -> Path:
@@ -179,6 +184,9 @@ def django_environment(
         "DESKTOP_DJANGO_HOST": HOST,
         "PYTHONUNBUFFERED": "1",
     }
+    for key in OPTIONAL_RUNTIME_ENV_KEYS:
+        environment.pop(key, None)
+
     if port is not None:
         environment["DESKTOP_DJANGO_PORT"] = str(port)
     if auth_token is not None:
