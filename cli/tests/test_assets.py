@@ -142,16 +142,14 @@ def test_parallel_publications_preserve_placeholder(
 ) -> None:
     repo, assets = asset_tree
     rename = Path.rename
-    copy = sync_assets.shutil.copy2
     first_at_promotion = Event()
-    second_copied = Event()
+    second_started = Event()
     release_first = Event()
     publications = []
 
-    def copy_asset(src: Path, dst: Path) -> None:
-        copy(src, dst)
-        if src == repo / "nested/last.txt" and dst.read_bytes() == b"second last":
-            second_copied.set()
+    def sync_second() -> None:
+        second_started.set()
+        sync_assets.sync()
 
     def pause_first(src: Path, dst: Path) -> Path:
         if src.name != "staged":
@@ -164,7 +162,6 @@ def test_parallel_publications_preserve_placeholder(
         publications.append(generation)
         return result
 
-    monkeypatch.setattr(sync_assets.shutil, "copy2", copy_asset)
     monkeypatch.setattr(Path, "rename", pause_first)
     with ThreadPoolExecutor(max_workers=2) as pool:
         first = pool.submit(sync_assets.sync)
@@ -173,8 +170,8 @@ def test_parallel_publications_preserve_placeholder(
             assert not assets.exists()
             (repo / "first.txt").write_bytes(b"second first")
             (repo / "nested/last.txt").write_bytes(b"second last")
-            second = pool.submit(sync_assets.sync)
-            assert second_copied.wait(10)
+            second = pool.submit(sync_second)
+            assert second_started.wait(10)
             with pytest.raises(TimeoutError):
                 second.result(timeout=1)
         finally:

@@ -145,12 +145,14 @@ If restoration fails, sync raises the original publication error. Its traceback
 includes the restoration error and the retained previous tree's recovery path
 under `cli/src/dds/.assets-sync-*/`. Cleanup errors during a failed sync are
 also included in the traceback.
-Git ignores the lock file and recovery directories, and `cli/pyproject.toml`
-excludes them from wheel and sdist builds. Restore or remove recovery
-directories manually. If old-tree cleanup fails after publication, sync reports
-that cleanup failure while keeping the complete new bundle live. The two
-publication renames briefly vacate the bundle path and provide rollback for
-ordinary filesystem errors.
+The publication marker records the directory identities before the two
+renames. After a process stops mid-publication, the next sync or build restores
+the recorded predecessor if the bundle path is vacant, or keeps the completed
+replacement if promotion already finished. An ambiguous marker or directory
+stops the operation. Inspect the retained paths with syncs and builds stopped.
+Git and the build configuration exclude the lock, marker and work directories.
+If old-tree cleanup fails after publication, sync reports the cleanup failure
+and keeps the complete new bundle live.
 
 ## Wrapper config format and saves
 

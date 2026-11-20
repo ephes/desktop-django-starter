@@ -9,16 +9,22 @@ from __future__ import annotations
 
 import shutil
 import tempfile
+from contextlib import ExitStack
 from pathlib import Path
 
 from asset_inventory import CANONICAL_ASSETS
-from asset_lock import asset_lock
+from asset_lock import ASSET_MARKER, asset_lock, mark_asset_replacement, recover_asset_replacement
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = Path(__file__).resolve().parent / "src" / "dds" / "_assets"
 
 
 def sync() -> None:
+    marker = ASSETS_DIR.parent / ASSET_MARKER
+    if marker.exists() or marker.is_symlink():
+        with asset_lock(ASSETS_DIR.parent):
+            recover_asset_replacement(ASSETS_DIR)
+
     missing = [rel for rel in CANONICAL_ASSETS if not (REPO_ROOT / rel).is_file()]
     if missing:
         print(f"warning: {len(missing)} canonical file(s) not found:")
@@ -30,44 +36,57 @@ def sync() -> None:
     work = Path(tempfile.mkdtemp(prefix=".assets-sync-", dir=ASSETS_DIR.parent))
     staged = work / "staged"
     backup = work / "previous"
-    try:
-        staged.mkdir()
-        for rel in CANONICAL_ASSETS:
-            dst = staged / rel
-            dst.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO_ROOT / rel, dst)
-        with asset_lock(ASSETS_DIR.parent):
+    # Keep the publication lock through rollback and its cleanup. A later
+    # process may take ownership of the work directory as soon as we unlock.
+    with ExitStack() as lock:
+        pending = False
+        try:
+            staged.mkdir()
+            for rel in CANONICAL_ASSETS:
+                dst = staged / rel
+                dst.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(REPO_ROOT / rel, dst)
+            lock.enter_context(asset_lock(ASSETS_DIR.parent))
+            recover_asset_replacement(ASSETS_DIR)
             # Preserve the repository placeholder, including its bytes, if present.
             placeholder = ASSETS_DIR / ".gitkeep"
             if placeholder.is_file():
                 shutil.copy2(placeholder, staged / ".gitkeep")
 
-            if ASSETS_DIR.exists():
-                ASSETS_DIR.rename(backup)
             try:
+                if ASSETS_DIR.exists() or ASSETS_DIR.is_symlink():
+                    pending = True
+                    mark_asset_replacement(ASSETS_DIR, work)
+                    ASSETS_DIR.rename(backup)
                 staged.rename(ASSETS_DIR)
             except BaseException as publish_error:
                 try:
                     if backup.exists():
                         backup.rename(ASSETS_DIR)
+                    if pending:
+                        marker.unlink(missing_ok=True)
+                        pending = False
                 except BaseException as restore_error:
                     recovery = RuntimeError(f"Previous assets retained at {backup}")
                     recovery.__cause__ = restore_error
                     raise publish_error from recovery
                 raise
-    except BaseException as primary:
-        try:
-            if backup.exists():
-                print(f"Previous assets retained at {backup}")
-                if staged.exists():
-                    shutil.rmtree(staged)
-            else:
-                shutil.rmtree(work)
-        except BaseException as cleanup_error:
-            # Keep any rollback diagnostics in the chain under the primary error.
-            cleanup_error.__cause__ = primary.__cause__
-            raise primary from cleanup_error
-        raise
+            if pending:
+                marker.unlink()
+        except BaseException as primary:
+            try:
+                if pending:
+                    if backup.exists():
+                        print(f"Previous assets retained at {backup}")
+                        if staged.exists():
+                            shutil.rmtree(staged)
+                else:
+                    shutil.rmtree(work)
+            except BaseException as cleanup_error:
+                # Keep any rollback diagnostics in the chain under the primary error.
+                cleanup_error.__cause__ = primary.__cause__
+                raise primary from cleanup_error
+            raise
 
     try:
         shutil.rmtree(work)
