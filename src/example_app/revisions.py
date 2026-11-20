@@ -4,9 +4,10 @@ import hashlib
 import json
 
 from django.core import signing
+from django.db.models import F
 from django.utils.crypto import constant_time_compare
 
-from .models import Item
+from .models import Item, ItemInventory
 
 SALT = "example_app.item-content-revision"
 CONFLICT_MESSAGE = "This pony changed since you opened it. Reload the current pony before retrying."
@@ -29,18 +30,21 @@ def matches_displayed_revision(item: Item, token: str) -> bool:
     return isinstance(revision, str) and constant_time_compare(revision, _content_revision(item))
 
 
-INVENTORY_SALT = "example_app.inventory-revision"
+INVENTORY_SALT = "example_app.inventory-generation"
 
 
-def _inventory_revision() -> str:
-    digest = hashlib.sha256()
-    for item in Item.objects.order_by("pk").iterator():
-        digest.update(_content_revision(item).encode("ascii"))
-    return digest.hexdigest()
+def lock_item_writes() -> None:
+    # A write statement acquires SQLite's writer even if the row is absent.
+    ItemInventory.objects.filter(pk=1).update(generation=F("generation"))
+
+
+def _inventory_generation() -> str | None:
+    return ItemInventory.objects.filter(pk=1).values_list("generation", flat=True).first()
 
 
 def displayed_inventory_revision() -> str:
-    return signing.dumps(_inventory_revision(), salt=INVENTORY_SALT)
+    generation = _inventory_generation()
+    return signing.dumps(generation, salt=INVENTORY_SALT) if generation is not None else ""
 
 
 def matches_inventory_revision(token: str) -> bool:
@@ -48,4 +52,9 @@ def matches_inventory_revision(token: str) -> bool:
         revision = signing.loads(token, salt=INVENTORY_SALT)
     except signing.BadSignature:
         return False
-    return isinstance(revision, str) and constant_time_compare(revision, _inventory_revision())
+    generation = _inventory_generation()
+    return (
+        isinstance(revision, str)
+        and generation is not None
+        and constant_time_compare(revision, generation)
+    )

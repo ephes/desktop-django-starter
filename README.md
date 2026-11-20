@@ -24,7 +24,9 @@ Runnable starter slices:
   confirmations detect changes made in another window; reload the current pony
   after a conflict. Edit conflicts keep your submitted input for comparison.
   Release All Ponies confirms the whole stable count and refuses changes made
-  anywhere in the stable since that page loaded; reload before confirming again.
+  anywhere in the stable since that page loaded. Reload before confirming again.
+  Run `just migrate` in development to install the SQLite inventory revision
+  used by the confirmation. Packaged startup applies it automatically.
 - Start Routine admits at most 16 queued/running routines globally; a full queue
   returns a retryable refusal, shown on the page, without creating a routine or
   backend result.

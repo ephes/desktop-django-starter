@@ -255,10 +255,12 @@ Current launcher contract:
 - packaged Django settings keep SQLite in per-user app data and now add desktop-oriented SQLite tuning with `transaction_mode=IMMEDIATE`, a 20-second timeout, `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, and modest cache/mmap settings
 - My Ponies uses 20-row database pages, ordered by update time, creation time
   and primary key (descending) so timestamp ties cannot omit rows. Native page
-  links and create/edit/delete navigation retain the displayed page; successful
-  mutations clamp the return page when the last page disappears. The release
-  modal follows that clamped redirect, and Release All Ponies returns to the
-  first page, so neither reloads a page number that no longer exists.
+  links and create/edit/delete navigation retain the displayed page. Cancel
+  links and success redirects accept only positive page numbers written with up
+  to 19 ASCII digits. Missing or invalid values return to the first page.
+  Accepted values clamp to the current last page, using the new count after a
+  successful mutation. The release modal follows that redirect, and Release All
+  Ponies returns to the first page.
 - Edit and release requests carry a signed digest of the displayed pony's ID,
   editable content and update timestamp. SQLite's writer lock is acquired before
   reloading and comparing that revision, and is held through save/delete. Missing,
@@ -270,15 +272,17 @@ Current launcher contract:
   visible with a link to the current confirmation page. That page shows the full
   current personality/status before a fresh release. Release All Ponies opens an
   explicit confirmation for the total stable count, including other pages. Its
-  signed inventory digest and page rows come from one deferred SQLite read
-  snapshot. Even under packaged `IMMEDIATE` transactions the list read never
-  takes the writer lock, so it does not wait for or block other writers. The
-  digest streams all IDs, content and update timestamps in primary-key order.
-  Confirmation acquires SQLite's writer before verifying the digest and deleting.
-  Any addition, edit or release since the displayed snapshot returns HTTP 409;
-  the modal preserves the conflict and links to a fresh stable view. A successful
-  clear cannot be replayed against the now-empty inventory. No migration is needed;
-  reading a list adds one streaming inventory query across the whole stable.
+  signed inventory generation, count and page rows come from one deferred SQLite
+  read snapshot. The list reads one generation row alongside the count and page
+  query. Even under packaged `IMMEDIATE` transactions the deferred read avoids the
+  writer lock. SQLite triggers assign a fresh generation on item inserts, updates
+  and deletes in the same transaction, including bulk writes. Confirmation takes
+  SQLite's writer lock before comparing the generation and deleting. An older
+  form, including one with a pre-upgrade digest, returns HTTP 409 and links to a
+  fresh stable view. Clearing a nonempty stable advances its generation, so the
+  same confirmation cannot clear it again. Run `just migrate` to install the
+  generation table and triggers locally. Packaged startup applies the migration.
+  Future SQLite migrations that rebuild the item table must recreate its triggers.
 - Start Routine admits at most 16 pending/running demo rows globally. A no-op
   UPDATE on the existing routine table takes SQLite's writer lock before the
   count; admission and both demo/backend inserts share that transaction, including

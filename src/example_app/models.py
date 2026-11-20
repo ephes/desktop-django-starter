@@ -24,6 +24,12 @@ class Item(models.Model):
         return self.title
 
 
+class ItemInventory(models.Model):
+    """Singleton generation maintained by SQLite triggers on the item table."""
+
+    generation = models.CharField(max_length=32)
+
+
 class DemoContentState(models.Model):
     class Key(models.TextChoices):
         FIRST_RUN_PONY_SEED = "first_run_pony_seed", "First-run pony seed"
