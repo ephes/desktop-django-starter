@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refuse CLI asset publication when a canonical file changes during staging,
+  preserving the previous bundle.
+
 - Recover interrupted CLI asset publication during the next sync or package
   build using the recorded generation under the asset lock.
 

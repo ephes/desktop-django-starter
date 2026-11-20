@@ -8,6 +8,7 @@ Or via just:             just cli-sync-assets
 from __future__ import annotations
 
 import shutil
+import stat
 import tempfile
 from contextlib import ExitStack
 from pathlib import Path
@@ -19,13 +20,35 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = Path(__file__).resolve().parent / "src" / "dds" / "_assets"
 
 
+def source_identity(rel: str) -> tuple[int, ...] | None:
+    try:
+        info = (REPO_ROOT / rel).stat()
+    except (FileNotFoundError, NotADirectoryError):
+        return None
+    if not stat.S_ISREG(info.st_mode):
+        return None
+    return info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def check_source(rel: str, expected: tuple[int, ...]) -> None:
+    if source_identity(rel) != expected:
+        raise RuntimeError(f"Canonical asset changed: {rel}. Retry after edits finish.")
+
+
 def sync() -> None:
     marker = ASSETS_DIR.parent / ASSET_MARKER
     if marker.exists() or marker.is_symlink():
         with asset_lock(ASSETS_DIR.parent):
             recover_asset_replacement(ASSETS_DIR)
 
-    missing = [rel for rel in CANONICAL_ASSETS if not (REPO_ROOT / rel).is_file()]
+    sources = {}
+    missing = []
+    for rel in CANONICAL_ASSETS:
+        identity = source_identity(rel)
+        if identity is None:
+            missing.append(rel)
+        else:
+            sources[rel] = identity
     if missing:
         print(f"warning: {len(missing)} canonical file(s) not found:")
         for rel in missing:
@@ -42,10 +65,15 @@ def sync() -> None:
         pending = False
         try:
             staged.mkdir()
-            for rel in CANONICAL_ASSETS:
+            for rel, expected in sources.items():
                 dst = staged / rel
                 dst.parent.mkdir(parents=True, exist_ok=True)
+                check_source(rel, expected)
                 shutil.copy2(REPO_ROOT / rel, dst)
+                check_source(rel, expected)
+            # Catch edits to assets that were copied before later entries.
+            for rel, expected in sources.items():
+                check_source(rel, expected)
             lock.enter_context(asset_lock(ASSETS_DIR.parent))
             recover_asset_replacement(ASSETS_DIR)
             # Preserve the repository placeholder, including its bytes, if present.

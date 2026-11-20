@@ -107,6 +107,39 @@ def test_late_copy_failure_preserves_assets(
     assert list(assets.parent.iterdir()) == [assets]
 
 
+@pytest.mark.parametrize("change_at", ["before copy", "during copy", "after copy"])
+def test_changed_canonical_input_refuses_publication(
+    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, change_at: str
+) -> None:
+    repo, assets = asset_tree
+    before = tree_bytes(assets)
+    first = repo / "first.txt"
+    last = repo / "nested/last.txt"
+    changed = last if change_at == "before copy" else first
+    copy = sync_assets.shutil.copy2
+    copied = []
+
+    def copy_with_change(src: Path, dst: Path) -> None:
+        if change_at == "before copy" and src == first:
+            replacement = changed.with_suffix(".new")
+            replacement.write_bytes(b"x" * changed.stat().st_size)
+            replacement.replace(changed)
+        copy(src, dst)
+        copied.append(src)
+        if (change_at == "during copy" and src == first) or (
+            change_at == "after copy" and src == last
+        ):
+            changed.write_bytes(b"x" * changed.stat().st_size)
+
+    monkeypatch.setattr(sync_assets.shutil, "copy2", copy_with_change)
+    relative_path = re.escape(changed.relative_to(repo).as_posix())
+    with pytest.raises(RuntimeError, match=f"Canonical asset changed: {relative_path}"):
+        sync_assets.sync()
+    assert copied == ([first, last] if change_at == "after copy" else [first])
+    assert tree_bytes(assets) == before
+    assert list(assets.parent.iterdir()) == [assets]
+
+
 @pytest.mark.parametrize("failure", [OSError, KeyboardInterrupt])
 def test_publication_failure_restores_assets(
     asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, failure: type[BaseException]

@@ -131,8 +131,11 @@ missing paths and points to `just cli-sync-assets`. `just cli-test` provisions
 pytest and Hatchling; synthetic build/install probes run offline and require
 no agents, Node runtime or package downloads during the tests.
 
-Asset staging validates every canonical input before touching the existing bundle,
-then copies into a unique sibling staging directory. Syncs hold the persistent
+Asset staging records each canonical input's file identity and metadata before
+copying to a unique sibling staging directory. It rechecks those values around
+each copy and across the inventory before publication. A detected edit stops
+the sync and preserves the existing bundle. Retry after edits finish.
+Syncs hold the persistent
 `cli/src/dds/.assets-sync-lock` while capturing `.gitkeep` and replacing the old
 bundle. Wheel and sdist builds hold that same lock while validating and copying
 one generation to a private snapshot. Hatch discovers and reads the archive
