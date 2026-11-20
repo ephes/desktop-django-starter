@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import stat
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import BinaryIO
 
@@ -83,14 +83,22 @@ def regular_reader(
             dir_fd=parent_fd,
         )
     )
-    with os.fdopen(descriptor, "rb") as stream:
-        if signature(os.fstat(stream.fileno())) != signature(before):
-            raise state_error("file changed while opening")
-        yield stream
-        if signature(os.fstat(stream.fileno())) != signature(before) or signature(
-            admit(path)
-        ) != signature(before):
-            raise state_error("file changed during initialization")
+    try:
+        # Keep ownership here even if fdopen fails after creating its raw stream.
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            if signature(os.fstat(stream.fileno())) != signature(before):
+                raise state_error("file changed while opening")
+            yield stream
+            if signature(os.fstat(stream.fileno())) != signature(before) or signature(
+                admit(path)
+            ) != signature(before):
+                raise state_error("file changed during initialization")
+    except BaseException:
+        with suppress(OSError):
+            os.close(descriptor)
+        raise
+    else:
+        os.close(descriptor)
 
 
 def optional_file(path: Path) -> bool:
@@ -116,10 +124,10 @@ def copy_media(source: Path, destination: Path) -> None:
         limits.append(limit)
     max_entries, max_bytes, max_depth = limits
     entries = 0
-    copied_bytes = 0
+    source_bytes = 0
 
     def copy_directory(src: Path, dst: Path, depth: int, parent_fd: int | None = None) -> None:
-        nonlocal entries, copied_bytes
+        nonlocal entries, source_bytes
         if depth > max_depth:
             raise state_error("media depth budget exceeded")
         with directory_guard(src, parent_fd=parent_fd) as source_fd:
@@ -140,15 +148,16 @@ def copy_media(source: Path, destination: Path) -> None:
                             target.open("xb") as writer,
                         ):
                             remaining = os.fstat(reader.fileno()).st_size
-                            if remaining > max_bytes - copied_bytes:
+                            if remaining > max_bytes - source_bytes:
                                 raise state_error("media byte budget exceeded")
                             while remaining:
                                 chunk = reader.read(min(1024 * 1024, remaining))
                                 if not chunk:
                                     raise state_error("media file truncated during copy")
                                 remaining -= len(chunk)
-                                copied_bytes += len(chunk)
-                                writer.write(chunk)
+                                source_bytes += len(chunk)
+                                if writer.write(chunk) != len(chunk):
+                                    raise state_error("short write while copying a media file")
 
     try:
         copy_directory(source, destination, 0)

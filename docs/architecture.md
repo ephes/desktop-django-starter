@@ -469,7 +469,9 @@ state root are left untouched and do not block an upgrade; links there are refus
 The per-user app-data root, state root, version directories and SQLite leaves
 (including existing sidecars) reject symlinks/reparse points; POSIX ownership is
 checked. POSIX directory descriptors pin identities and media children open
-relative to their admitted parent. Windows uses direct-entry/reparse checks and
+relative to their admitted parent. The state reader owns the descriptor and
+closes it even if stream construction fails, preserving the original error.
+Windows uses direct-entry/reparse checks and
 name/identity rechecks, with ACLs as the authority boundary. SQLite's public
 backup API still opens a filename, and settings ultimately return writable
 paths: concurrent hostile mutation by the same account is outside this contract.
@@ -478,9 +480,11 @@ System parent aliases such as macOS `/tmp` are allowed.
 
 Media copies stream a direct tree and refuse all links (including internal
 links), special files and hard-linked files. Limits count both directories and
-files, actual copied bytes and depth (root is zero). Each file is read only to
-its initial size, refusing early EOF. Admission, opened-descriptor and final
-named-file metadata must agree on device/inode, size, nanosecond mtime and ctime.
+files, bytes read from the admitted sources and depth (root is zero). Each
+file is read only to its initial size. Early EOF and short destination writes
+fail the copy before the staged tree is synced. Admission, opened-descriptor
+and final named-file metadata must agree on device/inode, size, nanosecond
+mtime and ctime.
 Detected in-place edits, growth, truncation or replacement refuse publication.
 These checks use the filesystem metadata available on each platform; they do
 not provide an atomic snapshot across files and SQLite or protect against

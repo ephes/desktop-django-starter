@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Abort desktop state upgrades after a short media write and retain the
+  previous generation for retry.
+
+- Close desktop state reader descriptors when stream construction fails and
+  preserve the original startup error.
+
 - Refuse CLI asset publication when a canonical file changes during staging,
   including same-size edits detected by comparing staged bytes with the
   sources, preserving the previous bundle.
