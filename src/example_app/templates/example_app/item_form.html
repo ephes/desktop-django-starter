@@ -11,7 +11,7 @@
     {% if object %}<input type="hidden" name="revision" value="{{ item_revision }}">{% endif %}
     {{ form.as_p }}
     <div class="actions actions-right">
-        <a class="button secondary" href="{% url 'example_app:item-list' %}{% if return_page %}?page={{ return_page }}{% endif %}">Cancel</a>
+        <a class="button secondary" href="{{ return_url }}">Cancel</a>
         <button type="submit" class="primary">{% if object %}Save Changes{% else %}Save{% endif %}</button>
     </div>
 </form>

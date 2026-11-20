@@ -19,6 +19,7 @@ from .revisions import (
 )
 
 PAGE_SIZE = 20
+MAX_RETURN_PAGE_DIGITS = 19  # Enough digits for any SQLite row count.
 
 
 @contextmanager
@@ -49,16 +50,19 @@ def read_snapshot():
 class ItemReturnNavigation:
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        page = self.request.GET.get("page", "")
-        context["return_page"] = page if page.isascii() and page.isdigit() else ""
+        context["return_url"] = self.get_success_url()
         return context
 
     def get_success_url(self):
-        page = self.request.GET.get("page")
-        if page:
-            page = Paginator(Item.objects.all(), PAGE_SIZE).get_page(page).number
-            return f"{self.success_url}?page={page}"
-        return str(self.success_url)
+        list_url = str(self.success_url)
+        page = self.request.GET.get("page", "")
+        if len(page) > MAX_RETURN_PAGE_DIGITS or not (page.isascii() and page.isdecimal()):
+            return list_url
+        number = int(page)
+        if number == 0:
+            return list_url
+        last_page = Paginator(Item.objects.all(), PAGE_SIZE).num_pages
+        return f"{list_url}?page={min(number, last_page)}"
 
 
 class ItemListView(ListView):

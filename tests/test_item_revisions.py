@@ -1,5 +1,7 @@
 """Displayed content, rather than a fresh POST lookup, owns mutation intent."""
 
+from urllib.parse import urlencode
+
 import pytest
 from django.urls import reverse
 
@@ -98,6 +100,48 @@ def test_delete_from_last_page_clamps_return_navigation(client):
     current = token(client.get(url))
     response = client.post(url, {"revision": current})
     assert response.url == reverse("example_app:item-list") + "?page=1"
+    assert client.get(response.url).status_code == 200
+
+
+@pytest.mark.parametrize("action", ["update", "delete"])
+@pytest.mark.parametrize(
+    ("page", "return_page"),
+    [
+        ("2", 2),
+        ("0002", 2),
+        ("9" * 19, 2),
+        ("9" * 20, None),
+        ("9" * 5000, None),
+        ("0", None),
+        ("２", None),
+        ("//example.invalid", None),
+    ],
+    ids=["valid", "leading-zeroes", "overflow", "too-long", "huge", "zero", "unicode", "malformed"],
+)
+def test_item_forms_and_mutations_share_return_page_policy(client, action, page, return_page):
+    Item.objects.bulk_create([Item(title=f"Synthetic {i}") for i in range(20)])
+    item = Item.objects.create(title="Synthetic target")
+    url = reverse(f"example_app:item-{action}", args=[item.pk]) + "?" + urlencode({"page": page})
+    list_url = reverse("example_app:item-list")
+    form_url = list_url if return_page is None else f"{list_url}?page={return_page}"
+
+    form = client.get(url)
+    assert form.status_code == 200
+    assert client.get(form_url).status_code == 200
+    data = {"revision": token(form)}
+    if action == "update":
+        data.update(title="Updated", notes="Synthetic notes", status="active")
+    response = client.post(url, data)
+    assert response.status_code == 302
+    if action == "update":
+        assert Item.objects.get(pk=item.pk).title == "Updated"
+    else:
+        assert not Item.objects.filter(pk=item.pk).exists()
+
+    link_text = "Cancel" if action == "update" else "Keep It"
+    assert f'href="{form_url}">{link_text}' in form.content.decode()
+    expected = f"{list_url}?page=1" if action == "delete" and return_page else form_url
+    assert response.url == expected
     assert client.get(response.url).status_code == 200
 
 

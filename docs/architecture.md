@@ -255,10 +255,12 @@ Current launcher contract:
 - packaged Django settings keep SQLite in per-user app data and now add desktop-oriented SQLite tuning with `transaction_mode=IMMEDIATE`, a 20-second timeout, `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, and modest cache/mmap settings
 - My Ponies uses 20-row database pages, ordered by update time, creation time
   and primary key (descending) so timestamp ties cannot omit rows. Native page
-  links and create/edit/delete navigation retain the displayed page; successful
-  mutations clamp the return page when the last page disappears. The release
-  modal follows that clamped redirect, and Release All Ponies returns to the
-  first page, so neither reloads a page number that no longer exists.
+  links and create/edit/delete navigation retain the displayed page. Cancel
+  links and success redirects accept only positive page numbers written with up
+  to 19 ASCII digits. Missing or invalid values return to the first page.
+  Accepted values clamp to the current last page, using the new count after a
+  successful mutation. The release modal follows that redirect, and Release All
+  Ponies returns to the first page.
 - Edit and release requests carry a signed digest of the displayed pony's ID,
   editable content and update timestamp. SQLite's writer lock is acquired before
   reloading and comparing that revision, and is held through save/delete. Missing,

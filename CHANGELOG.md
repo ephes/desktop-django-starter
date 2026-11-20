@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Use the same bounded page numbers for pony form links and success redirects.
+  Invalid return pages open the first page, and valid ones clamp to the current
+  page count.
+
 - Use a transactional SQLite inventory generation for Release All Ponies.
   List pages and clear confirmations no longer read every pony's content.
 
