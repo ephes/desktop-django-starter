@@ -3,6 +3,7 @@
 from urllib.parse import urlencode
 
 import pytest
+from django.test import Client
 from django.urls import reverse
 
 from example_app.models import Item
@@ -82,6 +83,29 @@ def test_delete_rejects_stale_confirmation_then_fresh_confirmation_deletes_once(
     assert client.post(url, {"revision": current}).status_code == 404
 
 
+def test_delete_method_allowlist_with_csrf():
+    client = Client(enforce_csrf_checks=True)
+    item = Item.objects.create(title="Displayed pony")
+    url = reverse("example_app:item-delete", args=[item.pk])
+    revision = token(client.get(url))
+    headers = {"origin": "http://testserver", "x-csrftoken": client.cookies["csrftoken"].value}
+
+    for method in ("DELETE", "PUT", "PATCH", "TRACE"):
+        response = client.generic(method, url, headers=headers)
+        assert response.status_code == 405
+        assert set(response["Allow"].split(", ")) == {"GET", "POST", "HEAD", "OPTIONS"}
+        assert Item.objects.filter(pk=item.pk).exists()
+
+    assert client.head(url).status_code == 200
+    assert client.options(url).status_code == 200
+    Item.objects.filter(pk=item.pk).update(notes="Changed since confirmation")
+    assert client.post(url, {"revision": revision}, headers=headers).status_code == 409
+    assert Item.objects.filter(pk=item.pk).exists()
+    current = token(client.get(url))
+    assert client.post(url, {"revision": current}, headers=headers).status_code == 302
+    assert not Item.objects.filter(pk=item.pk).exists()
+
+
 @pytest.mark.parametrize("revision", ["", "tampered", "another-item"])
 def test_delete_refuses_missing_forged_and_cross_item_revision(client, revision):
     item = Item.objects.create(title="Current", notes="Current")
@@ -147,8 +171,6 @@ def test_item_forms_and_mutations_share_return_page_policy(client, action, page,
 
 @pytest.mark.parametrize("csrf", ["missing", "wrong", "foreign", "valid"])
 def test_edit_revision_does_not_bypass_csrf(csrf):
-    from django.test import Client
-
     client = Client(enforce_csrf_checks=True)
     item = Item.objects.create(title="Current", notes="Current")
     url = reverse("example_app:item-update", args=[item.pk])

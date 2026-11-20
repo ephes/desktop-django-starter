@@ -121,6 +121,7 @@ class ItemUpdateView(ItemReturnNavigation, UpdateView):
 
 
 class ItemDeleteView(ItemReturnNavigation, DeleteView):
+    http_method_names = ["get", "post", "head", "options"]
     model = Item
     success_url = reverse_lazy("example_app:item-list")
 

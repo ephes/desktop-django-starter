@@ -268,6 +268,9 @@ Current launcher contract:
   keep the submitted input and original token. Reload current pony opens a fresh
   form/confirmation. Invalid forms also retain their original revision. CSRF and
   shell authentication still apply independently. No schema migration is needed.
+- The single-pony release route allows GET and HEAD for the confirmation, OPTIONS
+  for method discovery, and POST for revision-checked removal. Other methods
+  receive Django's HTTP 405 when the request passes CSRF validation.
 - The list's release modal submits the row's displayed revision and keeps conflicts
   visible with a link to the current confirmation page. That page shows the full
   current personality/status before a fresh release. Release All Ponies opens an

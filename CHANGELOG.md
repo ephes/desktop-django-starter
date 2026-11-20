@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Restrict single-pony removal to the revision-checked POST form.
 - Resume packaged Electron demo seeding after interrupted first-run migration.
   Leave existing and copied databases untouched.
 
