@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Normalize routine completion timestamps to UTC before writing so out-of-range
+  payloads fail the affected routine and leave the status poll available.
+
 - Log a safe startup warning when a database failure prevents abandoned-routine
   recovery. The missing routine table before migrations remains expected.
 

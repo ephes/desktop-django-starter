@@ -4,7 +4,7 @@ import math
 import random
 import time
 from collections.abc import Callable
-from datetime import datetime
+from datetime import UTC, datetime
 from uuid import UUID
 
 from django.db.models import Q
@@ -226,7 +226,7 @@ def _validated_completion(payload: object) -> tuple[str, str, float, datetime]:
     timestamp = datetime.fromisoformat(completed_at)
     if timezone.is_naive(timestamp):
         raise ValueError("Expected a timezone-aware timestamp")
-    return status, result, float(duration), timestamp
+    return status, result, float(duration), timestamp.astimezone(UTC)
 
 
 def _serialized_terminal_payload(task_row: SimulatedTask) -> dict[str, object]:

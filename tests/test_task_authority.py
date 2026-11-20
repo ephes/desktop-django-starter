@@ -79,6 +79,33 @@ def test_status_rejects_invalid_success_payload(client, change):
     assert row.completed_at is not None
 
 
+@pytest.mark.parametrize("out_of_range", ["0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"])
+def test_poll_admits_completion_timestamps_in_utc(client, out_of_range):
+    invalid, invalid_backend = queued_task()
+    valid, valid_backend = queued_task()
+    for backend, timestamp in (
+        (invalid_backend, out_of_range),
+        (valid_backend, "2026-04-09T00:15:00+05:30"),
+    ):
+        backend.status = TaskResultStatus.SUCCESSFUL
+        backend.return_value = {
+            "status": "DONE",
+            "result": "Synthetic completion",
+            "duration": 2.0,
+            "completed_at": timestamp,
+        }
+        backend.save(update_fields=["status", "return_value"])
+
+    response = client.get(reverse("tasks_demo:task-status"))
+    assert response.status_code == 200
+    rows = {row["id"]: row for row in response.json()["tasks"]}
+    assert rows[invalid.pk]["status"] == "FAILED"
+    assert rows[invalid.pk]["result"] == "Task returned an invalid completion payload."
+    assert rows[invalid.pk]["duration"] is None
+    assert rows[valid.pk]["status"] == "DONE"
+    assert rows[valid.pk]["completed_at"] == "2026-04-08T18:45:00+00:00"
+
+
 @pytest.mark.parametrize("status", ["DONE", "FAILED"])
 def test_invalid_payload_cannot_replace_worker_completion(client, status):
     row, backend = queued_task()

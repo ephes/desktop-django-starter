@@ -335,8 +335,10 @@ Current launcher contract:
   routine still reconciles normally when another routine fails.
 - successful backend payloads must contain a `DONE`/`FAILED` status, string result,
   finite nonnegative numeric duration (no booleans), and timezone-aware ISO
-  completion timestamp. Invalid payloads become a failed demo row through the
-  same conditional update. A duplicate's active-state snapshot is a no-op.
+  completion timestamp. Polling normalizes the timestamp to the database's UTC
+  domain before writing. A conversion overflow or other invalid payload becomes
+  a failed demo row through the same conditional update. A duplicate's
+  active-state snapshot is a no-op.
 - workers finalize only a still-running row with the backend ID they claimed;
   a retired or deleted row is never overwritten or recreated. Missing queue
   metadata fails pending rows, but leaves running claims alone because a live
