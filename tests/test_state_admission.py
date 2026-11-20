@@ -1,13 +1,15 @@
 """Synthetic restored-state admission and bounded media regression cases."""
 
+import errno
 import json
+import os
 import sqlite3
 from pathlib import Path
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from desktop_django_starter import app_state
+from desktop_django_starter import app_state, state_files
 
 
 def previous(root: Path) -> Path:
@@ -16,6 +18,49 @@ def previous(root: Path) -> Path:
         connection.execute("CREATE TABLE sentinel (value TEXT)")
         connection.execute("INSERT INTO sentinel VALUES ('synthetic')")
     return state
+
+
+@pytest.mark.parametrize("close_fails", [False, True])
+def test_regular_reader_closes_descriptor_if_stream_construction_fails(
+    monkeypatch, tmp_path, close_fails
+):
+    source = tmp_path / "state.json"
+    source.write_bytes(b"{}")
+    wrap_error = OSError("injected stream construction failure")
+    descriptors = []
+    closed = []
+    real_close = os.close
+
+    def fail_fdopen(descriptor, *args, **kwargs):
+        os.fstat(descriptor)
+        descriptors.append(descriptor)
+        raise wrap_error
+
+    def record_close(descriptor):
+        if descriptor in descriptors:
+            closed.append(descriptor)
+        real_close(descriptor)
+        if descriptor in descriptors and close_fails:
+            raise OSError("injected descriptor cleanup failure")
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(os, "fdopen", fail_fdopen)
+            patch.setattr(os, "close", record_close)
+            with pytest.raises(OSError, match="injected stream construction failure") as error:
+                with state_files.regular_reader(source):
+                    pytest.fail("the reader yielded after stream construction failed")
+            assert error.value is wrap_error
+
+        (descriptor,) = descriptors
+        assert closed == [descriptor]
+        with pytest.raises(OSError) as retired:
+            os.fstat(descriptor)
+        assert retired.value.errno == errno.EBADF
+    finally:
+        for descriptor in descriptors:
+            if descriptor not in closed:
+                real_close(descriptor)
 
 
 @pytest.mark.parametrize("damage", ["missing", "json", "version", "database", "media", "cache"])
@@ -158,8 +203,6 @@ def test_state_root_swap_does_not_publish_or_clean_external_tree(monkeypatch, tm
 
 @pytest.mark.parametrize("kind", ["fifo", "hardlink"])
 def test_media_special_entries_are_refused(tmp_path, kind):
-    import os
-
     old = previous(tmp_path)
     path = old / "media" / "unsafe"
     if kind == "fifo":
@@ -179,12 +222,9 @@ def test_media_special_entries_are_refused(tmp_path, kind):
 def test_changed_media_generation_never_publishes_and_stable_retry_succeeds(
     monkeypatch, tmp_path, mutation
 ):
-    import os
     from concurrent.futures import ThreadPoolExecutor
     from contextlib import contextmanager
     from threading import Event
-
-    from desktop_django_starter import state_files
 
     if mutation == "restore-mtime" and os.name == "nt":
         pytest.skip("Windows stat ctime can report creation time rather than change time")

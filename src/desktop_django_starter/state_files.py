@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 import stat
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 from typing import BinaryIO
 
@@ -83,14 +83,22 @@ def regular_reader(
             dir_fd=parent_fd,
         )
     )
-    with os.fdopen(descriptor, "rb") as stream:
-        if signature(os.fstat(stream.fileno())) != signature(before):
-            raise state_error("file changed while opening")
-        yield stream
-        if signature(os.fstat(stream.fileno())) != signature(before) or signature(
-            admit(path)
-        ) != signature(before):
-            raise state_error("file changed during initialization")
+    try:
+        # Keep ownership here even if fdopen fails after creating its raw stream.
+        with os.fdopen(descriptor, "rb", closefd=False) as stream:
+            if signature(os.fstat(stream.fileno())) != signature(before):
+                raise state_error("file changed while opening")
+            yield stream
+            if signature(os.fstat(stream.fileno())) != signature(before) or signature(
+                admit(path)
+            ) != signature(before):
+                raise state_error("file changed during initialization")
+    except BaseException:
+        with suppress(OSError):
+            os.close(descriptor)
+        raise
+    else:
+        os.close(descriptor)
 
 
 def optional_file(path: Path) -> bool:

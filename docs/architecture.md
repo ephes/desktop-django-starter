@@ -469,7 +469,9 @@ state root are left untouched and do not block an upgrade; links there are refus
 The per-user app-data root, state root, version directories and SQLite leaves
 (including existing sidecars) reject symlinks/reparse points; POSIX ownership is
 checked. POSIX directory descriptors pin identities and media children open
-relative to their admitted parent. Windows uses direct-entry/reparse checks and
+relative to their admitted parent. The state reader owns the descriptor and
+closes it even if stream construction fails, preserving the original error.
+Windows uses direct-entry/reparse checks and
 name/identity rechecks, with ACLs as the authority boundary. SQLite's public
 backup API still opens a filename, and settings ultimately return writable
 paths: concurrent hostile mutation by the same account is outside this contract.
