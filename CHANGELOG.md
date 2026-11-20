@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Read desktop quit activity from the task writer database when task writes are routed.
+
 - Handle one Positron quit request at a time, starting before the activity check.
 
 - Build CLI wheels and sdists from a snapshot of one validated asset

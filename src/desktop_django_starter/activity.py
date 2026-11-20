@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.apps import apps
+from django.db import router
 from django.db.models import Count, Q
 
 
@@ -18,9 +19,13 @@ def background_task_counts() -> dict[str, int]:
     from django.tasks import TaskResultStatus
     from django_tasks_db.models import DBTaskResult
 
-    return DBTaskResult.objects.filter(
-        status__in=[TaskResultStatus.READY, TaskResultStatus.RUNNING]
-    ).aggregate(
-        running_tasks=Count("pk", filter=Q(status=TaskResultStatus.RUNNING)),
-        queued_tasks=Count("pk", filter=Q(status=TaskResultStatus.READY)),
+    # django-tasks-db enqueues through the ORM's write router.
+    writer = router.db_for_write(DBTaskResult)
+    return (
+        DBTaskResult.objects.using(writer)
+        .filter(status__in=[TaskResultStatus.READY, TaskResultStatus.RUNNING])
+        .aggregate(
+            running_tasks=Count("pk", filter=Q(status=TaskResultStatus.RUNNING)),
+            queued_tasks=Count("pk", filter=Q(status=TaskResultStatus.READY)),
+        )
     )

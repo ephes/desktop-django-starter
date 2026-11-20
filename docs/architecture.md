@@ -301,8 +301,9 @@ Current launcher contract:
   condition in SQLite. Routine polling therefore visits active rows and the
   bounded history window without sorting or scanning all retained history.
 - Shell activity counts queued and running backend tasks in one conditional
-  aggregate statement, so a READY-to-RUNNING transition cannot fall between two
-  counter reads and falsely report idle. An outer READY/RUNNING filter excludes
+  aggregate statement on the database alias Django routes task writes to. A
+  READY-to-RUNNING transition cannot fall between two counter reads and falsely
+  report idle. An outer READY/RUNNING filter excludes
   terminal backend history before aggregation, using the application's ordinary
   `dds_backend_status_idx` status index. Apps without the backend still report
   zero without a database query; shell quit confirmation uses the same API.

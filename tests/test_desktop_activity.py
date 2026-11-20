@@ -1,12 +1,12 @@
 import pytest
+from django.db import DEFAULT_DB_ALIAS, connections
 from django.tasks import TaskResultStatus
 from django_tasks_db.models import DBTaskResult
 
 from tasks_demo.tasks import run_simulated_task
 
-pytestmark = pytest.mark.django_db
 
-
+@pytest.mark.django_db
 def test_activity_reports_no_work_when_idle(client) -> None:
     response = client.get("/desktop/activity/")
 
@@ -14,6 +14,7 @@ def test_activity_reports_no_work_when_idle(client) -> None:
     assert response.json() == {"running_tasks": 0, "queued_tasks": 0}
 
 
+@pytest.mark.django_db
 def test_activity_counts_running_and_queued_tasks(client) -> None:
     first = run_simulated_task.enqueue(1)
     run_simulated_task.enqueue(2)
@@ -24,6 +25,7 @@ def test_activity_counts_running_and_queued_tasks(client) -> None:
     assert response.json() == {"running_tasks": 1, "queued_tasks": 1}
 
 
+@pytest.mark.django_db
 def test_activity_transition_between_old_count_queries_cannot_report_idle(client):
     from django.db import connection
 
@@ -46,6 +48,45 @@ def test_activity_transition_between_old_count_queries_cannot_report_idle(client
     assert len(statements) == 1
 
 
+def test_activity_reads_task_writer(
+    client, django_db_blocker, monkeypatch, settings, tmp_path
+) -> None:
+    reader, writer = "task_reader", "task_writer"
+    aliases = (reader, writer)
+    for alias in aliases:
+        monkeypatch.setitem(
+            connections.databases,
+            alias,
+            {**connections.databases[DEFAULT_DB_ALIAS], "NAME": str(tmp_path / f"{alias}.sqlite3")},
+        )
+
+    class TaskRouter:
+        def db_for_read(self, model, **hints):
+            return reader if model is DBTaskResult else None
+
+        def db_for_write(self, model, **hints):
+            return writer if model is DBTaskResult else None
+
+    settings.DATABASE_ROUTERS = [TaskRouter()]
+    with django_db_blocker.unblock():
+        try:
+            for alias in aliases:
+                with connections[alias].schema_editor() as editor:
+                    editor.create_model(DBTaskResult)
+
+            task_result = run_simulated_task.enqueue(1)
+            DBTaskResult.objects.filter(pk=task_result.id).update(status=TaskResultStatus.RUNNING)
+            assert not DBTaskResult.objects.using(reader).exists()
+
+            response = client.get("/desktop/activity/")
+            assert response.json() == {"running_tasks": 1, "queued_tasks": 0}
+        finally:
+            for alias in aliases:
+                connections[alias].close()
+                del connections[alias]
+
+
+@pytest.mark.django_db
 def test_activity_without_backend_uses_no_database(django_assert_num_queries):
     from unittest.mock import patch
 
