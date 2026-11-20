@@ -1,6 +1,12 @@
+import asyncio
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 POSITRON_SRC = ROOT / "shells" / "positron" / "src"
@@ -243,3 +249,80 @@ def test_positron_exit_confirmation_message() -> None:
         "Quitting now stops 1 running background task. "
         "2 queued tasks will start the next time the app runs."
     )
+
+
+@pytest.mark.parametrize("outcome", ["approve", "decline", "cancel"])
+def test_positron_quit_owns_activity_probe_and_dialog(monkeypatch, outcome) -> None:
+    monkeypatch.syspath_prepend(str(POSITRON_SRC))
+    monkeypatch.delenv("DESKTOP_DJANGO_SMOKE_TEST", raising=False)
+    monkeypatch.setitem(sys.modules, "toga", SimpleNamespace(App=object, QuestionDialog=Mock()))
+    spec = importlib.util.spec_from_file_location(
+        "desktop_django_starter_positron.app",
+        POSITRON_SRC / "desktop_django_starter_positron" / "app.py",
+    )
+    app_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(app_module)
+
+    async def exercise_exit() -> None:
+        probe_started = asyncio.Event()
+        release_probe = asyncio.Event()
+        counts = Mock(return_value={"running_tasks": 1, "queued_tasks": 0})
+
+        async def probe(function):
+            result = function()
+            if not release_probe.is_set():
+                if probe_started.is_set():
+                    return {"running_tasks": 0, "queued_tasks": 0}
+                probe_started.set()
+                await release_probe.wait()
+            return result
+
+        monkeypatch.setattr(app_module.asyncio, "to_thread", probe)
+        dialog_open = asyncio.Event()
+
+        async def answer(_dialog):
+            if outcome == "cancel":
+                dialog_open.set()
+                await asyncio.Future()
+            return outcome == "approve"
+
+        window = SimpleNamespace(dialog=AsyncMock(side_effect=answer))
+        app = SimpleNamespace(
+            _exit_in_progress=False,
+            _django_ready=lambda: True,
+            _background_task_counts=counts,
+            main_window=window,
+            cleanup=Mock(return_value=True),
+        )
+        confirm_exit = app_module.DesktopDjangoStarterPositron.confirm_exit
+        first = asyncio.create_task(confirm_exit(app, None))
+        try:
+            await asyncio.wait_for(probe_started.wait(), timeout=2)
+            assert await asyncio.wait_for(confirm_exit(app, None), timeout=2) is False
+            counts.assert_called_once()
+            window.dialog.assert_not_awaited()
+            app.cleanup.assert_not_called()
+
+            release_probe.set()
+            if outcome == "cancel":
+                await asyncio.wait_for(dialog_open.wait(), timeout=2)
+                first.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await first
+            else:
+                assert await first is (outcome == "approve")
+
+            window.dialog.assert_awaited_once()
+            if outcome != "approve":
+                app.cleanup.assert_not_called()
+                window.dialog.side_effect = None
+                window.dialog.return_value = True
+                assert await confirm_exit(app, None) is True
+            app.cleanup.assert_called_once()
+        finally:
+            if not first.done():
+                first.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await first
+
+    asyncio.run(exercise_exit())
