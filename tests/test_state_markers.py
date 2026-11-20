@@ -2,12 +2,13 @@
 
 import json
 import sqlite3
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from desktop_django_starter import app_state
+from desktop_django_starter import app_state, state_staging
 
 
 def snapshot(root: Path):
@@ -93,3 +94,42 @@ def test_ordinary_owned_abandoned_stage_is_still_recovered(tmp_path):
     (stage / "media" / "sentinel").write_bytes(b"synthetic abandoned copy")
     app_state.prepare_versioned_state(tmp_path, "2.0.0")
     assert not stage.exists()
+
+
+def test_recovery_retains_replacement_after_stage_inspection(monkeypatch, tmp_path, caplog):
+    app_state.prepare_versioned_state(tmp_path, "1.0.0")
+    root = tmp_path / "state"
+    stage = root / (".dds-stage-" + "c" * 32)
+    stage.mkdir()
+    (stage / ".stage-owner.json").write_text(
+        json.dumps({"schema": 1, "stage": stage.name, "kind": "dds-state-initialization"})
+    )
+    guard = state_staging.directory_guard
+    saved = tmp_path / "inspected"
+    active_stage_guards = 0
+
+    @contextmanager
+    def replace_after_inspection(path, **kwargs):
+        nonlocal active_stage_guards
+        if path != stage:
+            with guard(path, **kwargs) as descriptor:
+                yield descriptor
+            return
+        active_stage_guards += 1
+        try:
+            with guard(path, **kwargs) as descriptor:
+                yield descriptor
+        finally:
+            active_stage_guards -= 1
+        if active_stage_guards == 0:
+            stage.rename(saved)
+            stage.mkdir()
+            (stage / "unrelated").write_bytes(b"synthetic replacement")
+
+    monkeypatch.setattr(state_staging, "directory_guard", replace_after_inspection)
+
+    app_state.prepare_versioned_state(tmp_path, "2.0.0")
+
+    assert (stage / "unrelated").read_bytes() == b"synthetic replacement"
+    assert (saved / ".stage-owner.json").is_file()
+    assert "Retained ambiguous abandoned state stage" in caplog.text

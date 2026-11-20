@@ -9,6 +9,7 @@ import shutil
 import stat
 import sys
 import time
+import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -171,10 +172,58 @@ def _validate_cleanup_tree(root: Path) -> None:
     walk(root, 0)
 
 
+def _retire_stage(
+    stage: Path,
+    parent_fd: int | None,
+    parent_identity: tuple[int, int],
+    stage_identity: tuple[int, int],
+) -> None:
+    root = stage.parent
+    if (
+        identity(admit(root, directory=True)) != parent_identity
+        or identity(admit(stage, directory=True)) != stage_identity
+    ):
+        raise state_error("abandoned stage or parent changed before retirement")
+
+    # Detach from the discoverable name before recursive deletion. A failed
+    # identity check after rename leaves the detached bytes for inspection.
+    retirement = root / f".dds-retired-{uuid.uuid4().hex}"
+    os.mkdir(retirement if parent_fd is None else retirement.name, mode=0o700, dir_fd=parent_fd)
+    with directory_guard(retirement, parent_fd=parent_fd) as retirement_fd:
+        if (
+            identity(admit(root, directory=True)) != parent_identity
+            or identity(admit(stage, directory=True)) != stage_identity
+        ):
+            raise state_error("abandoned stage or parent changed before detaching")
+        detached = retirement / stage.name
+        os.rename(
+            stage if parent_fd is None else stage.name,
+            detached if retirement_fd is None else stage.name,
+            src_dir_fd=parent_fd,
+            dst_dir_fd=retirement_fd,
+        )
+        detached_info = (
+            admit(detached, directory=True)
+            if retirement_fd is None
+            else os.stat(stage.name, dir_fd=retirement_fd, follow_symlinks=False)
+        )
+        if identity(detached_info) != stage_identity:
+            raise state_error("detached abandoned stage changed before removal")
+        shutil.rmtree(detached if retirement_fd is None else stage.name, dir_fd=retirement_fd)
+    os.rmdir(retirement if parent_fd is None else retirement.name, dir_fd=parent_fd)
+
+
 def recover_stages(root: Path) -> None:
     """Only under the persistent global lock; a live initializer cannot own a stage."""
+    with directory_guard(root) as parent_fd:
+        _recover_stages(root, parent_fd)
+
+
+def _recover_stages(root: Path, parent_fd: int | None) -> None:
+    parent_info = admit(root, directory=True) if parent_fd is None else os.fstat(parent_fd)
+    parent_identity = identity(parent_info)
     candidates = []
-    with os.scandir(root) as entries:
+    with os.scandir(root if parent_fd is None else parent_fd) as entries:
         for count, entry in enumerate(entries, 1):
             if count > MAX_DISCOVERY_ENTRIES:
                 raise state_error("state discovery exceeds 1024 entries; inspect retained stages")
@@ -185,7 +234,11 @@ def recover_stages(root: Path) -> None:
     ambiguous = 0
     for stage in candidates:
         try:
-            with directory_guard(stage):
+            with directory_guard(stage, parent_fd=parent_fd) as stage_fd:
+                stage_info = (
+                    admit(stage, directory=True) if stage_fd is None else os.fstat(stage_fd)
+                )
+                stage_identity = identity(stage_info)
                 owner = read_state_marker(stage / OWNER_FILENAME, max_bytes=4096)
                 if type(owner.get("schema")) is not int or owner != {
                     "schema": 1,
@@ -209,7 +262,7 @@ def recover_stages(root: Path) -> None:
                 ):
                     raise ValueError("unknown stage contents")
                 _validate_cleanup_tree(stage)
-            shutil.rmtree(stage)
+            _retire_stage(stage, parent_fd, parent_identity, stage_identity)
         except (OSError, ValueError, TypeError, RecursionError, ImproperlyConfigured) as error:
             # Refuse to guess ownership; keep ambiguous bytes for manual inspection.
             logger.warning("Retained ambiguous abandoned state stage (%s)", type(error).__name__)

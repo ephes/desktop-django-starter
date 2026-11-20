@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Recheck the state root and inspected abandoned stage before detaching it for
+  removal. Retain stages with uncertain identity for offline inspection.
+
 - Preserve the retryable routine queue response after rollback if diagnostics fail.
 - Fail restored routines with unencodable results or results over 1024 UTF-8
   bytes. Other routines remain visible when polling.

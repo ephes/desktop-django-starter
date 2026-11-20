@@ -515,10 +515,13 @@ record bound to its exact name and initialization kind. The next lock holder
 scans at most 1024 root entries and 16 stage candidates, validating at most
 100,016 cleanup entries and 65 directory levels per stage. Only direct owned
 regular trees with the exact owner record and known top-level entries qualify
-for deletion. Live cooperating initializers cannot be collected because they
-hold the same lock. Ambiguous stages, including duplicate owner claims, remain
-byte-for-byte intact with bounded warnings; inspect them with the app closed. Old-style
-hidden stages without ownership evidence are never automatically removed.
+for deletion. Recovery rechecks the admitted state root and stage before
+renaming the stage into a private `.dds-retired-<uuid>` directory. It verifies
+the detached identity before recursive removal. POSIX uses directory-relative
+rename and removal; Windows rechecks named entries. Live cooperating
+initializers hold the same lock. Inspect retained ambiguous stages and leftover
+retirement directories with the app closed. Old-style hidden stages without
+ownership evidence are never automatically removed.
 
 Owner metadata is flushed before copying. After SQLite closes its backup target,
 all payload files are flushed, child directories then parent directories are
