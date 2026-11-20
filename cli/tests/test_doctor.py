@@ -7,6 +7,7 @@ import subprocess
 from pathlib import Path
 
 import pytest
+from asset_inventory import CANONICAL_ASSETS, MANIFEST
 from dds import config, doctor, wrap
 from dds.cli import main
 
@@ -27,10 +28,11 @@ def snapshot(root: Path) -> dict[str, bytes | None]:
 @pytest.fixture
 def installation(tmp_path, monkeypatch, isolated_user_dirs):
     package = tmp_path / "relocated package with spaces"
-    for rel in ASSETS:
+    for rel in CANONICAL_ASSETS:
         path = package / "_assets" / rel
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("synthetic asset", encoding="utf-8")
+    (package / MANIFEST.name).write_bytes(MANIFEST.read_bytes())
     bin_dir = tmp_path / "fake tools"
     bin_dir.mkdir()
     monkeypatch.setenv("PATH", str(bin_dir))
@@ -83,9 +85,8 @@ def test_core_health_matrix(installation, capsys, missing):
     assert code == int(required_failure)
     assert str(package / "_assets") in out
     if missing in ASSETS:
-        label = "electron/main.js" if missing.endswith("main.js") else Path(missing).name
-        assert f"asset missing: {label}" in err
-        assert str(package / "_assets" / missing) in err
+        assert "bundled assets incomplete" in err
+        assert missing in err
     elif required_failure:
         assert f"{missing}: not found" in err
         assert doctor.REQUIRED_TOOLS[missing] in err
@@ -100,6 +101,43 @@ def test_core_health_matrix(installation, capsys, missing):
         for tool in TOOLS:
             if tool != missing:
                 assert f"ok {tool}: {tools[tool]}" in out
+
+
+def test_missing_non_sentinel_asset_fails(installation, capsys):
+    package, _, _ = installation
+    missing = "scripts/stage-backend.cjs"
+    (package / "_assets" / missing).unlink()
+
+    code, _, err = invoke_readonly(installation, capsys)
+    assert code == 1
+    assert missing in err
+
+
+def test_missing_asset_diagnostic_is_bounded(installation, capsys):
+    package, _, _ = installation
+    for rel in CANONICAL_ASSETS:
+        (package / "_assets" / rel).unlink()
+
+    code, _, err = invoke_readonly(installation, capsys)
+    assert code == 1
+    assert f"{len(CANONICAL_ASSETS)} required file(s) missing" in err
+    assert f"(+{len(CANONICAL_ASSETS) - 8} more)" in err
+    listed = err.split("required file(s) missing: ", 1)[1].split(" (+", 1)[0]
+    assert listed.split(", ") == CANONICAL_ASSETS[:8]
+
+
+@pytest.mark.parametrize("manifest", [None, b"", b"\xff"])
+def test_missing_or_unreadable_inventory_fails(installation, capsys, manifest):
+    package, _, _ = installation
+    path = package / MANIFEST.name
+    if manifest is None:
+        path.unlink()
+    else:
+        path.write_bytes(manifest)
+
+    code, _, err = invoke_readonly(installation, capsys)
+    assert code == 1
+    assert "bundled asset inventory" in err
 
 
 @pytest.mark.parametrize(

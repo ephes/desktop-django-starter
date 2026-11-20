@@ -34,10 +34,14 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 - Add isolated CLI doctor regression matrices for relocated resources, missing
   required/optional tools and wrapper configuration advice. Setup attention
   remains advisory when core checks pass; doctor performs no setup writes.
+  Doctor now checks every required file from the bundled build manifest and
+  lists up to eight missing paths.
 
 - CLI wheel and sdist builds now reject every missing canonical staged file,
   including required paths replaced by directories. Offline synthetic wheel
   installation tests cover asset inclusion, relocated prompts and doctor.
+  Wheel and sdist builds copy one validated asset generation under the sync lock
+  and archive it from a private snapshot.
 
 - Positron icon generation preflights tools and renders all platform outputs
   before publication, with rollback for ordinary filesystem failures. Unique

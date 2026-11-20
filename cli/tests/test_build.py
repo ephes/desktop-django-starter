@@ -9,11 +9,15 @@ import socket
 import subprocess
 import sys
 import zipfile
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 
 import pytest
+import sync_assets
 from asset_inventory import CANONICAL_ASSETS
 from hatchling.build import build_sdist, build_wheel
+from hatchling.builders.wheel import WheelBuilder
 
 CLI_ROOT = Path(__file__).resolve().parents[1]
 BUILDERS = {"wheel": build_wheel, "sdist": build_sdist}
@@ -23,7 +27,13 @@ BUILDERS = {"wheel": build_wheel, "sdist": build_sdist}
 def project(tmp_path, monkeypatch):
     root = tmp_path / "synthetic build"
     root.mkdir()
-    for name in ("pyproject.toml", "hatch_build.py", "asset_inventory.py", "README.md"):
+    for name in (
+        "pyproject.toml",
+        "hatch_build.py",
+        "asset_inventory.py",
+        "asset_lock.py",
+        "README.md",
+    ):
         shutil.copy2(CLI_ROOT / name, root / name)
     shutil.copytree(
         CLI_ROOT / "src",
@@ -89,6 +99,48 @@ def test_complete_build_is_admitted(project, target):
     root, _ = project
     artifact = BUILDERS[target](str(root / "dist"))
     assert (root / "dist" / artifact).is_file()
+
+
+def test_wheel_reads_one_asset_generation_during_sync(project, tmp_path, monkeypatch):
+    root, assets = project
+    expected = {rel: (assets / rel).read_bytes() for rel in CANONICAL_ASSETS}
+    replacement = tmp_path / "replacement repo"
+    for rel in CANONICAL_ASSETS:
+        path = replacement / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"second generation")
+    monkeypatch.setattr(sync_assets, "REPO_ROOT", replacement)
+    monkeypatch.setattr(sync_assets, "ASSETS_DIR", assets)
+
+    paused = Event()
+    resume = Event()
+    recurse = WheelBuilder.recurse_included_files
+
+    def pause_after_first_asset(builder):
+        for item in recurse(builder):
+            yield item
+            if "/_assets/" in item.distribution_path.replace(os.sep, "/") and not paused.is_set():
+                # Hatch has written the first asset and is about to discover more.
+                paused.set()
+                assert resume.wait(10)
+
+    monkeypatch.setattr(WheelBuilder, "recurse_included_files", pause_after_first_asset)
+    dist = root / "dist"
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        build = pool.submit(build_wheel, str(dist))
+        try:
+            assert paused.wait(10)
+            sync_assets.sync()
+            assert all((assets / rel).read_bytes() == b"second generation" for rel in expected)
+        finally:
+            resume.set()
+        wheel = dist / build.result(timeout=10)
+
+    with zipfile.ZipFile(wheel) as archive:
+        members = [name for name in archive.namelist() if name.startswith("dds/_assets/")]
+        assert sorted(members) == sorted(f"dds/_assets/{rel}" for rel in expected)
+        actual = {rel: archive.read(f"dds/_assets/{rel}") for rel in expected}
+    assert actual == expected
 
 
 def tree(root):

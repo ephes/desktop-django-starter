@@ -52,7 +52,9 @@ Important constraints:
 - [tests/test_health.py](tests/test_health.py): Readiness endpoint coverage.
 - [src/tasks_demo/](src/tasks_demo/): Background task visualization demo ("Stable Routines") with animated pulse-ring indicators, polling-based live updates, and a SQLite-backed `django.tasks` plus `django_tasks_db` worker flow (optional post-v1 extension).
 
-- CLI wheel/sdist admission shares `cli/asset_inventory.py` with asset sync.
+- CLI wheel/sdist admission, asset sync and installed `dds doctor` share
+  `cli/src/dds/asset_inventory.txt`. Builds snapshot one generation under the
+  sync lock before archive discovery.
   Run `just cli-sync-assets` before building; `just cli-test` exercises offline
   build and relocated-install contracts with local Hatchling dependencies.
 
