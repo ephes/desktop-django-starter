@@ -119,23 +119,53 @@ def test_changed_canonical_input_refuses_publication(
     copy = sync_assets.shutil.copy2
     copied = []
 
+    def replace_changed() -> None:
+        # A new inode changes the recorded identity on every platform.
+        replacement = changed.with_suffix(".new")
+        replacement.write_bytes(b"x" * changed.stat().st_size)
+        replacement.replace(changed)
+
     def copy_with_change(src: Path, dst: Path) -> None:
         if change_at == "before copy" and src == first:
-            replacement = changed.with_suffix(".new")
-            replacement.write_bytes(b"x" * changed.stat().st_size)
-            replacement.replace(changed)
+            replace_changed()
         copy(src, dst)
         copied.append(src)
         if (change_at == "during copy" and src == first) or (
             change_at == "after copy" and src == last
         ):
-            changed.write_bytes(b"x" * changed.stat().st_size)
+            replace_changed()
 
     monkeypatch.setattr(sync_assets.shutil, "copy2", copy_with_change)
     relative_path = re.escape(changed.relative_to(repo).as_posix())
     with pytest.raises(RuntimeError, match=f"Canonical asset changed: {relative_path}"):
         sync_assets.sync()
     assert copied == ([first, last] if change_at == "after copy" else [first])
+    assert tree_bytes(assets) == before
+    assert list(assets.parent.iterdir()) == [assets]
+
+
+@pytest.mark.parametrize("edited", ["first.txt", "nested/last.txt"])
+def test_same_metadata_edit_refuses_publication(
+    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, edited: str
+) -> None:
+    """A same-size edit within one timestamp tick keeps the metadata identity."""
+    repo, assets = asset_tree
+    before = tree_bytes(assets)
+    target = repo / edited
+    copy = sync_assets.shutil.copy2
+    copied = []
+
+    def copy_then_edit(src: Path, dst: Path) -> None:
+        copy(src, dst)
+        copied.append(src)
+        if src == target:
+            target.write_bytes(b"x" * target.stat().st_size)
+
+    monkeypatch.setattr(sync_assets, "source_identity", lambda rel: (0,))
+    monkeypatch.setattr(sync_assets.shutil, "copy2", copy_then_edit)
+    with pytest.raises(RuntimeError, match=f"Canonical asset changed: {re.escape(edited)}"):
+        sync_assets.sync()
+    assert copied == [repo / "first.txt", repo / "nested/last.txt"]
     assert tree_bytes(assets) == before
     assert list(assets.parent.iterdir()) == [assets]
 

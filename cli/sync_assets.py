@@ -7,6 +7,7 @@ Or via just:             just cli-sync-assets
 
 from __future__ import annotations
 
+import hashlib
 import shutil
 import stat
 import tempfile
@@ -33,6 +34,22 @@ def source_identity(rel: str) -> tuple[int, ...] | None:
 def check_source(rel: str, expected: tuple[int, ...]) -> None:
     if source_identity(rel) != expected:
         raise RuntimeError(f"Canonical asset changed: {rel}. Retry after edits finish.")
+
+
+def file_digest(path: Path) -> bytes:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1 << 16), b""):
+            digest.update(chunk)
+    return digest.digest()
+
+
+def check_source_content(rel: str, expected: tuple[int, ...], staged: Path) -> None:
+    """Compare bytes too: same-size edits can keep coarse timestamps unchanged."""
+    check_source(rel, expected)
+    if file_digest(REPO_ROOT / rel) != file_digest(staged / rel):
+        raise RuntimeError(f"Canonical asset changed: {rel}. Retry after edits finish.")
+    check_source(rel, expected)
 
 
 def sync() -> None:
@@ -71,9 +88,10 @@ def sync() -> None:
                 check_source(rel, expected)
                 shutil.copy2(REPO_ROOT / rel, dst)
                 check_source(rel, expected)
-            # Catch edits to assets that were copied before later entries.
+            # Catch edits to assets that were copied before later entries,
+            # including same-size edits within one timestamp tick.
             for rel, expected in sources.items():
-                check_source(rel, expected)
+                check_source_content(rel, expected, staged)
             lock.enter_context(asset_lock(ASSETS_DIR.parent))
             recover_asset_replacement(ASSETS_DIR)
             # Preserve the repository placeholder, including its bytes, if present.

@@ -133,8 +133,9 @@ no agents, Node runtime or package downloads during the tests.
 
 Asset staging records each canonical input's file identity and metadata before
 copying to a unique sibling staging directory. It rechecks those values around
-each copy and across the inventory before publication. A detected edit stops
-the sync and preserves the existing bundle. Retry after edits finish.
+each copy, then compares every staged file's bytes with its source across the
+whole inventory before publication. A detected edit stops the sync and
+preserves the existing bundle. Retry after edits finish.
 Syncs hold the persistent
 `cli/src/dds/.assets-sync-lock` while capturing `.gitkeep` and replacing the old
 bundle. Wheel and sdist builds hold that same lock while validating and copying
