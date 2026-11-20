@@ -9,8 +9,8 @@ def test_electron_runtime_seeds_demo_content_only_for_new_packaged_database() ->
     assert "getPackagedDatabasePath" in runtime
     assert '"state", getStateDirName(app.getVersion()), "app.sqlite3"' in runtime
     assert "DESKTOP_DJANGO_APP_VERSION: app.getVersion()" in runtime
-    assert 'runManageCommand(["seed_demo_content"]' in runtime
-    assert "shouldSeedDemoContent" in runtime
+    assert 'runCommand(["seed_demo_content"]' in runtime
+    assert "await migrateDatabase(runtimeMode, runCommand)" in runtime
 
 
 def test_shells_do_not_inject_a_shared_packaged_secret_key() -> None:

@@ -17,7 +17,7 @@ const IGNORED_DIRS = new Set([
   "venv"
 ]);
 const STARTER_TEMPLATE_CHECKSUMS = {
-  "main.js": "400788d73570bd261c00067a0eb45d8e19cf48993decadf0416c601b8789b12b",
+  "main.js": "ea376a6dce7b5778858ac255d2bc3ef7ed3e436f7c021f1f44a50e5600e0f4dc",
   "scripts/electron-builder-config.cjs": "d273efe85f67cdffe611fd35b78cadd42457c665ebd8aec297d293b5fdb5680b",
   "scripts/launch-electron.cjs": "c383e90dc8ab279dcff53f4ba67375e17917bc7878df13a0a12e1b5244b9b0da",
   "scripts/stage-backend.cjs": "3a75fe18c59ced767bbfd7d00c664cd977e96a1bcaf352761289a678c9450999",
@@ -742,8 +742,11 @@ function updateLaunchScripts(electronRoot, targetConfig, slug) {
   // not abort startup.
   mainSource = replaceRequired(
     mainSource,
-    "  const shouldSeedDemoContent = packagedDatabasePath !== null && !fs.existsSync(packagedDatabasePath);",
-    '  const shouldSeedDemoContent = process.env.DESKTOP_DJANGO_SEED_DEMO_CONTENT === "1";',
+    "  await migrateDatabase(runtimeMode, runCommand);",
+    '  await runCommand(["migrate", "--noinput"]);\n'
+      + '  if (process.env.DESKTOP_DJANGO_SEED_DEMO_CONTENT === "1") {\n'
+      + '    await runCommand(["seed_demo_content"]);\n'
+      + '  }',
     mainPath
   );
 

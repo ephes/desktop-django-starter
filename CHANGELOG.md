@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Preserve the retryable routine queue response after rollback if diagnostics fail.
+- Fail restored routines with unencodable results or results over 1024 UTF-8
+  bytes. Other routines remain visible when polling.
+- Restrict single-pony removal to the revision-checked POST form.
+- Resume packaged Electron demo seeding after interrupted first-run migration.
+  Leave existing and copied databases untouched.
+
 - Abort desktop state upgrades after a short media write and retain the
   previous generation for retry.
 

@@ -143,7 +143,7 @@ The current implementation follows this sequence:
 2. Electron chooses an open localhost port and creates a local splash window.
 3. Electron admits a regular session marker of at most 4096 bytes in the app-data directory, preserving and refusing unreadable/unsafe markers. If the previous run never marked itself finished (a crash, a force quit, power loss), Electron stops backend processes that run left behind: every backend process carries this install's random app key on its command line, so they can be found without touching other apps.
 4. Electron runs migrations using either the bundled runtime or a local development interpreter. In packaged mode, the first start of a new app version prepares that version's state directory first (see Data and Files).
-5. Electron starts Django.
+5. Electron completes any pending first-run demo seed, then starts Django.
 6. Django exposes a dedicated health endpoint.
 7. Electron polls that endpoint until it succeeds or times out (15 seconds).
 8. Electron starts the single `db_worker` process only after Django is healthy.
@@ -268,6 +268,9 @@ Current launcher contract:
   keep the submitted input and original token. Reload current pony opens a fresh
   form/confirmation. Invalid forms also retain their original revision. CSRF and
   shell authentication still apply independently. No schema migration is needed.
+- The single-pony release route allows GET and HEAD for the confirmation, OPTIONS
+  for method discovery, and POST for revision-checked removal. Other methods
+  receive Django's HTTP 405 when the request passes CSRF validation.
 - The list's release modal submits the row's displayed revision and keeps conflicts
   visible with a link to the current confirmation page. That page shows the full
   current personality/status before a fresh release. Release All Ponies opens an
@@ -335,8 +338,9 @@ Current launcher contract:
   exception class and allowlisted demo messages can publish a specific failure
   message. Worker-finalized results remain authoritative, and an independent
   routine still reconciles normally when another routine fails.
-- successful backend payloads must contain a `DONE`/`FAILED` status, string result,
-  finite nonnegative numeric duration (no booleans), and timezone-aware ISO
+- successful backend payloads must contain a `DONE`/`FAILED` status, a result
+  encodable in UTF-8 in at most 1024 bytes, a finite nonnegative numeric duration
+  (no booleans), and a timezone-aware ISO
   completion timestamp. Polling normalizes the timestamp to the database's UTC
   domain before writing. A conversion overflow or other invalid payload becomes
   a failed demo row through the same conditional update. A duplicate's
@@ -428,6 +432,12 @@ Shutdown handling must be treated as a cross-platform lifecycle concern, not as 
 - verified on macOS: `kill -9` of the Electron main process ends `runserver` and `db_worker` within three seconds, and a planted leftover is stopped on the next start. The Windows paths (Job Object, `taskkill`, PowerShell process listing) are implemented but not yet validated on a live Windows machine
 
 ## First-run Demo Content
+
+Before migrating a new packaged database, Electron flushes a per-version pending
+seed marker in the app-data root. The next launch resumes that seed even if
+migration already created the database. Electron retires the marker after the
+seed command succeeds or when the version's state records a copied predecessor.
+An existing database without a pending marker stays untouched, even when empty.
 
 First-run demo seeding uses a unique `DemoContentState` marker as its first
 transactional write, before checking for existing user content. This serializes

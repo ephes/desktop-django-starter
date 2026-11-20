@@ -256,7 +256,12 @@ class TestTaskViews:
         assert not DBTaskResult.objects.exists()
         assert client.get(reverse("tasks_demo:task-status")).json() == {"tasks": []}
 
-    def test_enqueue_signal_failure_rolls_back_queue_and_demo(self, client):
+    @pytest.mark.parametrize(
+        "diagnostics_error",
+        [None, OSError("diagnostics unavailable")],
+        ids=["logging", "broken-logging"],
+    )
+    def test_enqueue_signal_failure_rolls_back_queue_and_demo(self, client, diagnostics_error):
         from django.tasks.signals import task_enqueued
 
         def fail_after_insert(sender, **kwargs):
@@ -265,10 +270,15 @@ class TestTaskViews:
 
         task_enqueued.connect(fail_after_insert)
         try:
-            response = client.post(reverse("tasks_demo:task-run"))
+            with mock.patch(
+                "tasks_demo.views.logger.exception", side_effect=diagnostics_error
+            ) as log:
+                response = client.post(reverse("tasks_demo:task-run"))
+            log.assert_called_once_with("Could not queue demo routine")
         finally:
             task_enqueued.disconnect(fail_after_insert)
         assert response.status_code == 503
+        assert response.json() == {"error": "Routine could not be queued. Please try again."}
         assert not DBTaskResult.objects.exists()
         assert not SimulatedTask.objects.exists()
         retry = client.post(reverse("tasks_demo:task-run"))

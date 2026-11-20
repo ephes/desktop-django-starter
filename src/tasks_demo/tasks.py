@@ -23,6 +23,7 @@ INVALID_BACKEND_PAYLOAD = "Task returned an invalid completion payload."
 UNEXPECTED_BACKEND_RESULT = "Task exited before the demo row was finalized."
 TERMINAL_HISTORY_LIMIT = 100
 TRACEBACK_PREVIEW_LIMIT = 1024
+COMPLETION_RESULT_BYTE_LIMIT = 1024
 
 TASK_LABELS: list[str] = [
     "Restocking hay loft",
@@ -214,6 +215,13 @@ def _validated_completion(payload: object) -> tuple[str, str, float, datetime]:
         raise ValueError("Expected a terminal status")
     if not isinstance(result, str):
         raise ValueError("Expected a result string")
+    # Every UTF-8 character takes at least one byte. Bound the encoding work
+    # before checking the byte length and rejecting unencodable text.
+    if (
+        len(result) > COMPLETION_RESULT_BYTE_LIMIT
+        or len(result.encode("utf-8")) > COMPLETION_RESULT_BYTE_LIMIT
+    ):
+        raise ValueError("Completion result exceeds the UTF-8 byte limit")
     if (
         not isinstance(duration, (int, float))
         or isinstance(duration, bool)
