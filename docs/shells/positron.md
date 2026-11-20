@@ -7,7 +7,11 @@ The current Positron port lives under [`shells/positron/`](../../shells/positron
 Current responsibilities:
 
 - import the shared Django code from `src/` instead of forking app code into the shell
-- validate that the shared Django source tree is present before configuring Django, so startup failures stay readable
+- prefer the bundled `src/` when it contains the three shared packages'
+  `__init__.py` files and the settings package's `__init__.py` and `packaged.py`
+  files. Fall back to the development `src/` when it has those files. If neither
+  tree qualifies, report the candidate paths and required files before Django
+  starts.
 - start Django inside the Positron process with an in-process WSGI server bound to a random localhost port
 - generate a fresh per-session shell-to-Django auth token, pass it into Django as `DESKTOP_DJANGO_AUTH_TOKEN`, and load the web view through Django's `/desktop-auth/bootstrap/` URL so Django can set an HttpOnly same-origin auth cookie before redirecting to the app
 - enforce a single running instance per app-data directory with a lock file before the in-process server starts
@@ -18,6 +22,14 @@ Current responsibilities:
 - refresh collected static files on startup without clearing the cache-backed staticfiles tree on every launch
 - reuse the shared brand source under `assets/brand/` and generate shell-local icon outputs into `shells/positron/resources/`
 - keep Positron-specific runtime behavior under `shells/positron/src/desktop_django_starter_positron/`
+
+Positron gives each launch its own port, auth token and app version. The WSGI
+server binds to port zero so the OS picks a free port, and startup generates a
+new auth token. When Toga and the installed distribution both lack version
+metadata, Django uses `<app-data>/state/unversioned/`. Omitted values are
+removed from both the constructed environment and the process environment
+before Django starts. Other inherited settings such as the smoke-test flag
+remain available.
 
 Lock acquisition and PID initialization failures close the opened handle and
 release any acquired lock. Shutdown also closes the handle when explicit unlock

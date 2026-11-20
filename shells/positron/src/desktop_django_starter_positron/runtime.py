@@ -15,6 +15,11 @@ POSITRON_DJANGO_SETTINGS_MODULE = "desktop_django_starter.settings.packaged"
 POSITRON_INSTANCE_LOCK_FILENAME = "desktop-django-starter-positron.lock"
 WORKER_ID = "desktop-django-starter-positron"
 POSITRON_DISTRIBUTION_NAME = "desktop-django-starter-positron"
+OPTIONAL_RUNTIME_ENV_KEYS = (
+    "DESKTOP_DJANGO_PORT",
+    "DESKTOP_DJANGO_AUTH_TOKEN",
+    "DESKTOP_DJANGO_APP_VERSION",
+)
 
 
 def bundled_app_root(module_file: str | Path | None = None) -> Path:
@@ -40,22 +45,26 @@ def shared_brand_icon(module_file: str | Path | None = None) -> Path:
 
 
 def resolve_django_source_root(module_file: str | Path | None = None) -> Path:
-    expected_packages = ("desktop_django_starter", "example_app", "tasks_demo")
+    required_files = (
+        "desktop_django_starter/__init__.py",
+        "desktop_django_starter/settings/__init__.py",
+        "desktop_django_starter/settings/packaged.py",
+        "example_app/__init__.py",
+        "tasks_demo/__init__.py",
+    )
     candidates = [
         bundled_django_src(module_file),
         development_repo_src(module_file),
     ]
 
     for candidate in candidates:
-        if not candidate.exists():
-            continue
-        if all((candidate / package).exists() for package in expected_packages):
+        if all((candidate / filename).is_file() for filename in required_files):
             return candidate
 
     expected_locations = ", ".join(str(candidate) for candidate in candidates)
     raise RuntimeError(
         "Could not locate the shared Django source tree. "
-        f"Expected {expected_locations} to contain {', '.join(expected_packages)}."
+        f"Expected {expected_locations} to contain {', '.join(required_files)}."
     )
 
 
@@ -175,6 +184,9 @@ def django_environment(
         "DESKTOP_DJANGO_HOST": HOST,
         "PYTHONUNBUFFERED": "1",
     }
+    for key in OPTIONAL_RUNTIME_ENV_KEYS:
+        environment.pop(key, None)
+
     if port is not None:
         environment["DESKTOP_DJANGO_PORT"] = str(port)
     if auth_token is not None:

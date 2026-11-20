@@ -19,6 +19,7 @@ from django.core.servers.basehttp import WSGIRequestHandler
 
 from .runtime import (
     HOST,
+    OPTIONAL_RUNTIME_ENV_KEYS,
     WORKER_ID,
     acquire_instance_lock,
     django_environment,
@@ -175,7 +176,12 @@ class DesktopDjangoStarterPositron(toga.App):
 
     def configure_django(self) -> None:
         ensure_project_imports()
-        os.environ.update(self.runtime_environment())
+        environment = self.runtime_environment()
+        # Django starts in this process, so an update alone leaves omitted keys set.
+        for key in OPTIONAL_RUNTIME_ENV_KEYS:
+            if key not in environment:
+                os.environ.pop(key, None)
+        os.environ.update(environment)
         django.setup(set_prefix=False)
 
     def prepare_runtime(self) -> None:
