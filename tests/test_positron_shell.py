@@ -191,7 +191,16 @@ if lock_file is not None:
         holder.wait(timeout=5)
 
 
-def test_positron_runtime_validation_uses_shared_django_source(tmp_path) -> None:
+@pytest.mark.parametrize(
+    "invalid_marker",
+    [
+        None,
+        "example_app/__init__.py",
+        "tasks_demo/__init__.py",
+        "desktop_django_starter/settings/packaged.py",
+    ],
+)
+def test_positron_runtime_validation_uses_shared_django_source(tmp_path, invalid_marker) -> None:
     sys.path.insert(0, str(POSITRON_SRC))
     try:
         from desktop_django_starter_positron import runtime
@@ -205,10 +214,27 @@ def test_positron_runtime_validation_uses_shared_django_source(tmp_path) -> None
     module_file.write_text("", encoding="utf-8")
 
     repo_src = tmp_path / "src"
-    for package in ("desktop_django_starter", "example_app", "tasks_demo"):
-        (repo_src / package).mkdir(parents=True)
+    bundled_src = module_file.parents[1] / "src"
+    for source in (repo_src, bundled_src):
+        for marker in (
+            "desktop_django_starter/__init__.py",
+            "desktop_django_starter/settings/__init__.py",
+            "desktop_django_starter/settings/packaged.py",
+            "example_app/__init__.py",
+            "tasks_demo/__init__.py",
+        ):
+            path = source / marker
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
 
-    assert runtime.resolve_django_source_root(module_file) == repo_src
+    if invalid_marker:
+        path = bundled_src / invalid_marker
+        path.unlink()
+        if invalid_marker == "tasks_demo/__init__.py":
+            path.mkdir()
+
+    expected = repo_src if invalid_marker else bundled_src
+    assert runtime.resolve_django_source_root(module_file) == expected
 
 
 def test_positron_runtime_validation_raises_clear_error_when_src_missing(tmp_path) -> None:
@@ -232,7 +258,9 @@ def test_positron_runtime_validation_raises_clear_error_when_src_missing(tmp_pat
         raise AssertionError("Expected a clear runtime validation error.")
 
     assert "Could not locate the shared Django source tree" in message
-    assert "desktop_django_starter" in message
+    assert str(tmp_path / "src") in message
+    assert str(module_file.parents[1] / "src") in message
+    assert "desktop_django_starter/settings/packaged.py" in message
 
 
 def test_positron_exit_confirmation_message() -> None:

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Validate the shared Python package files before Positron selects a source
+  tree, so an incomplete bundle cannot shadow a valid development tree.
+
 - Use the same bounded page numbers for pony form links and success redirects.
   Invalid return pages open the first page, and valid ones clamp to the current
   page count.

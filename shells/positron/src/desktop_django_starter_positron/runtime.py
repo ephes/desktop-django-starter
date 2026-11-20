@@ -40,22 +40,26 @@ def shared_brand_icon(module_file: str | Path | None = None) -> Path:
 
 
 def resolve_django_source_root(module_file: str | Path | None = None) -> Path:
-    expected_packages = ("desktop_django_starter", "example_app", "tasks_demo")
+    required_files = (
+        "desktop_django_starter/__init__.py",
+        "desktop_django_starter/settings/__init__.py",
+        "desktop_django_starter/settings/packaged.py",
+        "example_app/__init__.py",
+        "tasks_demo/__init__.py",
+    )
     candidates = [
         bundled_django_src(module_file),
         development_repo_src(module_file),
     ]
 
     for candidate in candidates:
-        if not candidate.exists():
-            continue
-        if all((candidate / package).exists() for package in expected_packages):
+        if all((candidate / filename).is_file() for filename in required_files):
             return candidate
 
     expected_locations = ", ".join(str(candidate) for candidate in candidates)
     raise RuntimeError(
         "Could not locate the shared Django source tree. "
-        f"Expected {expected_locations} to contain {', '.join(expected_packages)}."
+        f"Expected {expected_locations} to contain {', '.join(required_files)}."
     )
 
 
