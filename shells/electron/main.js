@@ -353,6 +353,54 @@ function getPackagedDatabasePath(runtimeMode) {
   return path.join(app.getPath("userData"), "state", getStateDirName(app.getVersion()), "app.sqlite3");
 }
 
+function syncAppDataDirectory(appDataDir) {
+  // Node does not expose a directory flush on Windows.
+  if (process.platform === "win32") return;
+  const fd = fs.openSync(appDataDir, "r");
+  try {
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function claimPendingDemoSeed(databasePath) {
+  const appDataDir = app.getPath("userData");
+  const version = getStateDirName(app.getVersion());
+  // Keep the marker outside state/<version>: Django publishes that directory
+  // itself when it prepares or copies the version's database.
+  const marker = path.join(appDataDir, `.demo-seed-${version}.pending`);
+  const pending = fs.lstatSync(marker, { throwIfNoEntry: false });
+  if (!pending && fs.lstatSync(databasePath, { throwIfNoEntry: false })) return null;
+  if (pending && (!pending.isFile() || pending.size !== 0)) {
+    throw new Error("Invalid pending demo seed marker.");
+  }
+
+  const fd = fs.openSync(marker, pending ? "r+" : "wx", 0o600);
+  try {
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+  syncAppDataDirectory(appDataDir);
+  return marker;
+}
+
+async function migrateDatabase(runtimeMode, runCommand) {
+  const databasePath = getPackagedDatabasePath(runtimeMode);
+  const pendingSeed = databasePath === null ? null : claimPendingDemoSeed(databasePath);
+  await runCommand(["migrate", "--noinput"]);
+  if (pendingSeed) {
+    const statePath = path.join(path.dirname(databasePath), "state.json");
+    const state = JSON.parse(fs.readFileSync(statePath, "utf8"));
+    if (state.copied_from === null) {
+      await runCommand(["seed_demo_content"]);
+    }
+    fs.unlinkSync(pendingSeed);
+    syncAppDataDirectory(path.dirname(pendingSeed));
+  }
+}
+
 // Mirrors state_dir_name() in desktop_django_starter/app_state.py.
 function getStateDirName(version) {
   const cleaned = String(version).trim().replace(/[^0-9A-Za-z.+_-]/g, "_").replace(/^\.+|\.+$/g, "");
@@ -768,8 +816,6 @@ async function bootstrap() {
   const port = await getOpenPort();
   const baseUrl = `http://${HOST}:${port}`;
   const authToken = crypto.randomBytes(32).toString("hex");
-  const packagedDatabasePath = getPackagedDatabasePath(runtimeMode);
-  const shouldSeedDemoContent = packagedDatabasePath !== null && !fs.existsSync(packagedDatabasePath);
 
   createSplashWindow(backendRoot);
 
@@ -789,10 +835,8 @@ async function bootstrap() {
 
   shellRecoveryConfirmed = true;
 
-  await runManageCommand(["migrate", "--noinput"], port, runtimeMode, backendRoot, authToken);
-  if (shouldSeedDemoContent) {
-    await runManageCommand(["seed_demo_content"], port, runtimeMode, backendRoot, authToken);
-  }
+  const runCommand = args => runManageCommand(args, port, runtimeMode, backendRoot, authToken);
+  await migrateDatabase(runtimeMode, runCommand);
   await startDjangoServer(port, runtimeMode, backendRoot, authToken);
   await waitForDjango(baseUrl, authToken);
   // Start the worker only after Django is healthy so startup failures are

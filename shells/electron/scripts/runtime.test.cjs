@@ -12,6 +12,7 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), c
     requestSingleInstanceLock: () => true,
     whenReady: () => new Promise(() => {}),
     getPath: () => dir,
+    getVersion: () => "0.1.6",
     exit: code => { app.exitStatus = code; },
     quit: () => {}
   });
@@ -34,9 +35,10 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), c
       recover: error => recoverFailedUpdateInstall(error),
       state: () => ({ currentAppUrl, updateInstallInProgress, quitting, shellSession }),
       stops: (worker, django) => { stopTaskWorker = worker; stopDjango = django; },
-      startup: (manage) => {
+      startup: (manage, packaged = false) => {
         getOpenPort = async () => 12345;
-        getPackagedDatabasePath = () => null;
+        getRuntimeMode = () => packaged ? "packaged" : "development";
+        validatePackagedBackendRoot = () => {};
         createSplashWindow = () => {};
         runManageCommand = manage;
         startDjangoServer = manage;
@@ -169,4 +171,56 @@ test("actual shutdown never marks a signal-acknowledging child as retired", asyn
   assert.deepEqual(signals, ["SIGTERM", "SIGKILL"]);
   assert.equal(readSession(dir).running, true);
   assert.equal(app.exitStatus, 1);
+});
+
+function packagedFixture(t) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-first-run-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const state = path.join(dir, "state", "0.1.6");
+  function writeMigratedState(copiedFrom) {
+    fs.mkdirSync(state, { recursive: true });
+    fs.writeFileSync(path.join(state, "state.json"), JSON.stringify({ copied_from: copiedFrom }));
+    fs.closeSync(fs.openSync(path.join(state, "app.sqlite3"), "a"));
+  }
+  async function launch(manage) {
+    const { control } = runtime(dir, async () => ({ status: "confirmed", pids: [] }));
+    control.startup(async args => { if (Array.isArray(args)) await manage(args[0]); }, true);
+    await control.bootstrap();
+  }
+  return { launch, writeMigratedState };
+}
+
+test("packaged startup retries interrupted migration and seeding, then retires the pending seed", async t => {
+  const { launch, writeMigratedState } = packagedFixture(t);
+  await assert.rejects(launch(async command => {
+    assert.equal(command, "migrate");
+    writeMigratedState(null);
+    throw Error("interrupted after migration");
+  }), /interrupted after migration/);
+
+  const attempts = [];
+  await assert.rejects(launch(async command => {
+    attempts.push(command);
+    if (command === "seed_demo_content") throw Error("seed failed");
+  }), /seed failed/);
+  await launch(async command => { attempts.push(command); });
+  // An intentionally emptied database still exists on the next launch.
+  await launch(async command => { attempts.push(command); });
+  assert.deepEqual(attempts, [
+    "migrate", "seed_demo_content", "migrate", "seed_demo_content", "migrate"
+  ]);
+});
+
+test("packaged startup leaves existing and copied legacy databases without demo content", async t => {
+  const existing = packagedFixture(t);
+  existing.writeMigratedState(null);
+  await existing.launch(async command => { assert.equal(command, "migrate"); });
+
+  for (const predecessor of ["legacy", "0.1.5"]) {
+    const copied = packagedFixture(t);
+    await copied.launch(async command => {
+      assert.equal(command, "migrate");
+      copied.writeMigratedState(predecessor);
+    });
+  }
 });

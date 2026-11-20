@@ -143,7 +143,7 @@ The current implementation follows this sequence:
 2. Electron chooses an open localhost port and creates a local splash window.
 3. Electron admits a regular session marker of at most 4096 bytes in the app-data directory, preserving and refusing unreadable/unsafe markers. If the previous run never marked itself finished (a crash, a force quit, power loss), Electron stops backend processes that run left behind: every backend process carries this install's random app key on its command line, so they can be found without touching other apps.
 4. Electron runs migrations using either the bundled runtime or a local development interpreter. In packaged mode, the first start of a new app version prepares that version's state directory first (see Data and Files).
-5. Electron starts Django.
+5. Electron completes any pending first-run demo seed, then starts Django.
 6. Django exposes a dedicated health endpoint.
 7. Electron polls that endpoint until it succeeds or times out (15 seconds).
 8. Electron starts the single `db_worker` process only after Django is healthy.
@@ -428,6 +428,12 @@ Shutdown handling must be treated as a cross-platform lifecycle concern, not as 
 - verified on macOS: `kill -9` of the Electron main process ends `runserver` and `db_worker` within three seconds, and a planted leftover is stopped on the next start. The Windows paths (Job Object, `taskkill`, PowerShell process listing) are implemented but not yet validated on a live Windows machine
 
 ## First-run Demo Content
+
+Before migrating a new packaged database, Electron flushes a per-version pending
+seed marker in the app-data root. The next launch resumes that seed even if
+migration already created the database. Electron retires the marker after the
+seed command succeeds or when the version's state records a copied predecessor.
+An existing database without a pending marker stays untouched, even when empty.
 
 First-run demo seeding uses a unique `DemoContentState` marker as its first
 transactional write, before checking for existing user content. This serializes

@@ -4,6 +4,9 @@ This starter now includes the packaging scaffolding needed to make signing, nota
 
 ## Unreleased
 
+- Packaged Electron resumes a pending first-run pony seed after interruption.
+  Existing databases without a pending seed and copied databases stay untouched.
+
 - Shell responses now use `Cache-Control: private, no-store` for application
   content and refusals as well as bootstrap. The updated distribution also
   redacts encoded/duplicate bootstrap credentials in request logs; older cached
