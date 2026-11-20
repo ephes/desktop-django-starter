@@ -11,7 +11,7 @@ from django.utils import timezone
 from django_tasks_db.models import DBTaskResult
 
 from tasks_demo.models import SimulatedTask
-from tasks_demo.tasks import SimulatedTaskFailure, run_simulated_task
+from tasks_demo.tasks import SimulatedTaskFailure, reconcile_task_with_backend, run_simulated_task
 
 pytestmark = pytest.mark.django_db
 
@@ -90,6 +90,34 @@ def test_invalid_payload_cannot_replace_worker_completion(client, status):
     row.refresh_from_db()
     assert row.status == status
     assert row.result == "Worker result"
+
+
+def test_old_backend_completion_cannot_finalize_rebound_routine():
+    row, old_backend = queued_task()
+    replacement = run_simulated_task.enqueue(row.pk)
+
+    def load_result(backend_id):
+        assert backend_id == str(old_backend.pk)
+        SimulatedTask.objects.filter(pk=row.pk).update(backend_task_id=replacement.id)
+        return SimpleNamespace(
+            status=TaskResultStatus.SUCCESSFUL,
+            return_value={
+                "status": "DONE",
+                "result": "Completion for the old backend ID",
+                "duration": 2.0,
+                "completed_at": timezone.now().isoformat(),
+            },
+        )
+
+    reconciled = reconcile_task_with_backend(row, result_loader=load_result)
+    row.refresh_from_db()
+    assert reconciled is not None
+    for current in (row, reconciled):
+        assert current.backend_task_id == replacement.id
+        assert current.status == SimulatedTask.Status.PENDING
+        assert current.result is None
+        assert current.duration is None
+        assert current.completed_at is None
 
 
 @pytest.mark.django_db(transaction=True)

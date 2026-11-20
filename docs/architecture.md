@@ -341,7 +341,10 @@ Current launcher contract:
   a retired or deleted row is never overwritten or recreated. Missing queue
   metadata fails pending rows, but leaves running claims alone because a live
   worker may still finish. Startup reconciliation retires abandoned claims.
-- task polling reconciles backend outcomes only while the current demo row is pending or running; if the worker has already finalized it, polling reloads that row and preserves its status, result, duration, and completion time, including when the backend result is missing
+- task polling applies backend outcomes only while the current demo row is
+  pending or running and still has the backend ID used for the lookup. If a
+  worker finalizes the row or it is rebound to another backend ID, a rejected
+  poll update reloads the current row and preserves its stored state.
 - shell-local wrappers such as `shells/electron/scripts/bundled-python.cjs` are allowed to resolve shared helpers from two locations: a packaged-app copy first, then a repo-relative source path for local development
 - the Tauri shell keeps its subprocess supervision in Rust under `shells/tauri/src-tauri/src/lib.rs` instead of forcing a cross-shell launcher abstraction
 - the Tauri shell now also owns its own shell-local splash window under `shells/tauri/src/splash.html`, shown while backend startup runs on a background thread

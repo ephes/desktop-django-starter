@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Fence routine polling updates to the backend ID observed during lookup so
+  stale outcomes cannot finalize rebound routines.
+
 - Keep routine status polling available when a concurrently completed routine
   is cleared before reconciliation reloads it.
 
