@@ -548,6 +548,9 @@ any symlink used in the manifest, still identifies the hashed generation before
 replacing the manifest. Keep build outputs stable until this step completes. A
 detected change or hash failure preserves an existing manifest.
 Existing manifest permissions and output symlinks are preserved; new manifests use the process umask.
+If staging or replacement fails, that error remains the primary failure.
+If cleanup also fails, a separate diagnostic names the staging file left in
+the manifest's destination directory.
 
 
 The Electron packaging workflow now uploads two artifact groups per platform:

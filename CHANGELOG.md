@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep release checksum write and replacement errors visible when staging-file
+  cleanup also fails, and report the retained staging filename.
+
 - Refuse to replace a release checksum manifest when an input artifact changes
   during hashing or before publication.
 

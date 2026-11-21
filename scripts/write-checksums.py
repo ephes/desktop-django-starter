@@ -6,7 +6,9 @@ import glob
 import hashlib
 import os
 import stat
+import sys
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 
 
@@ -151,9 +153,17 @@ def main() -> int:
         for path, info in matches:
             verify_artifact(path, info)
         os.replace(temporary, output)
-    finally:
+    except BaseException:
         if temporary is not None:
-            temporary.unlink(missing_ok=True)
+            try:
+                temporary.unlink(missing_ok=True)
+            except OSError:
+                with suppress(OSError, ValueError):
+                    print(
+                        f"Could not remove checksum staging file {temporary.name!r}.",
+                        file=sys.stderr,
+                    )
+        raise
     print(f"Wrote {args.output} for {len(matches)} artifact(s)")
     return 0
 

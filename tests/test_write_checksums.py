@@ -176,6 +176,54 @@ def test_hash_failure_preserves_manifest(tmp_path):
     assert sorted(p.name for p in tmp_path.iterdir()) == ["checksums.txt", "directory.zip"]
 
 
+def test_publication_error_survives_stage_cleanup_failure(
+    tmp_path, monkeypatch, capsys, checksum_script
+):
+    source = tmp_path / "app.zip"
+    source.write_bytes(b"artifact")
+    output = tmp_path / "checksums.txt"
+    output.write_bytes(b"previous manifest\n")
+    publication_error = PermissionError("replacement refused")
+    retained = []
+
+    def fail_replace(source_path, output_path):
+        assert output_path == output.resolve()
+        retained.append(source_path)
+        raise publication_error
+
+    def fail_unlink(path, *, missing_ok=False):
+        assert retained == [path]
+        raise PermissionError("cleanup refused")
+
+    monkeypatch.setattr(checksum_script.os, "replace", fail_replace)
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--glob", str(source), "--output", str(output)])
+
+    with pytest.raises(PermissionError) as raised:
+        checksum_script.main()
+    assert raised.value is publication_error
+    assert output.read_bytes() == b"previous manifest\n"
+    assert retained[0].is_file()
+    assert capsys.readouterr().err == (
+        f"Could not remove checksum staging file {retained[0].name!r}.\n"
+    )
+
+
+def test_successful_publication_skips_stage_cleanup(tmp_path, monkeypatch, checksum_script):
+    source = tmp_path / "app.zip"
+    source.write_bytes(b"artifact")
+    output = tmp_path / "checksums.txt"
+
+    def fail_unlink(path, *, missing_ok=False):
+        pytest.fail("published stage should not be unlinked")
+
+    monkeypatch.setattr(Path, "unlink", fail_unlink)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--glob", str(source), "--output", str(output)])
+
+    assert checksum_script.main() == 0
+    assert output.read_text() == f"{hashlib.sha256(b'artifact').hexdigest()}  app.zip\n"
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX permissions")
 def test_replacement_preserves_mode_and_symlink(tmp_path):
     target = tmp_path / "target.txt"
