@@ -30,6 +30,10 @@ If the managed Django process exits during startup, Electron cancels its health
 probe or retry delay and shows the exit details in the startup error dialog.
 An exit during readiness stops startup before the task worker and main window.
 
+The **Open App Data Folder** button shows the file manager's error in the app
+when the operating system cannot open the folder. On success the app shows the
+opened path.
+
 Installing the shell's npm dependencies (`just electron-install`) needs Node.js 22.12 or newer, the minimum declared by Electron 45.
 
 The shell tracks a supported Electron major (currently Electron 45). Since Electron 42 the `electron` npm package no longer downloads its binary in a `postinstall` script; the first `npm start`, `just packaged-smoke` or other launch through `scripts/launch-electron.cjs` downloads it on demand (or run `npx install-electron --no` in `shells/electron/` ahead of time, for example before going offline). Electron 45 requires macOS 13 (Ventura) or newer and publishes 64-bit builds only, so Windows x86 (ia32) and Linux 32-bit ARM (armv7l) packages are no longer possible.

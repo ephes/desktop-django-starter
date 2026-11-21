@@ -21,7 +21,7 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), c
   const actualRequire = createRequire(filename);
   const context = {
     require: name => name === "electron" ? {
-      app, ipcMain: { handle() {} }, dialog: { showErrorBox: (...args) => errors.push(args) }
+      app, ipcMain: { handle() {} }, dialog: { showErrorBox: (...args) => errors.push(args) }, ...overrides.electron
     } : name === "./scripts/orphan-processes.cjs" && cleanup ? {
       ...actualRequire(name), stopOrphanedBackendProcesses: cleanup
     } : name === "electron-updater" ? { autoUpdater: {} } : overrides[name] ?? actualRequire(name),
@@ -111,6 +111,61 @@ test("Django exit cancels a pending startup probe before the worker or window st
   assert.deepEqual(commands, ["migrate", "runserver"]);
   assert.equal(windowOpened, false);
   assert.deepEqual(errors, []);
+});
+
+test("the renderer shows an app-data folder error only when the native open fails", {
+  // Wrapped projects have electron/ at their root and ship their own templates.
+  skip: path.basename(path.resolve(__dirname, "../..")) !== "shells" && "Requires the starter Django template"
+}, async () => {
+  const appData = "/synthetic/app-data";
+  const paths = [];
+  let openError = "No file manager is available.";
+  const handlers = new Map();
+  const { control } = runtime(appData, undefined, {
+    electron: {
+      ipcMain: { handle: (channel, handler) => handlers.set(channel, handler) },
+      shell: { openPath: async folder => { paths.push(folder); return openError; } }
+    }
+  });
+  control.visible(null);
+  const handle = handlers.get("desktop:open-app-data-directory");
+  await assert.rejects(handle({ senderFrame: { url: "http://127.0.0.1:2/" } }), /only available to the local Django app/);
+  assert.deepEqual(paths, []);
+
+  const window = {};
+  const trustedEvent = { senderFrame: { url: "http://127.0.0.1:1/" } };
+  const preload = fs.readFileSync(path.join(__dirname, "..", "preload.cjs"), "utf8");
+  vm.runInNewContext(preload, {
+    require: () => ({
+      contextBridge: { exposeInMainWorld: (name, api) => { window[name] = api; } },
+      ipcRenderer: {
+        invoke: async channel => {
+          try {
+            return await handlers.get(channel)(trustedEvent);
+          } catch (error) {
+            // IPC delivers a new Error in the renderer's realm.
+            throw new Error(error.message);
+          }
+        }
+      }
+    })
+  });
+
+  let click;
+  const button = { hidden: true, addEventListener: (_event, listener) => { click = listener; } };
+  const status = {};
+  const templatePath = path.join(__dirname, "../../../src/desktop_django_starter/templates/base.html");
+  const template = fs.readFileSync(templatePath, "utf8");
+  const document = { querySelector: selector => selector === "[data-open-app-data]" ? button : status };
+  vm.runInNewContext(template.match(/<script>([\s\S]*?)<\/script>/)[1], { window, document, Error });
+
+  await click();
+  assert.match(status.textContent, /No file manager is available/);
+
+  openError = "";
+  await click();
+  assert.equal(status.textContent, `Opened ${appData}`);
+  assert.deepEqual(paths, [appData, appData]);
 });
 
 test("unreadable marker refuses bootstrap before any backend command", async () => {

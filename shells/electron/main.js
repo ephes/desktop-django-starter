@@ -895,7 +895,10 @@ ipcMain.handle("desktop:open-app-data-directory", async (event) => {
   }
 
   const folderPath = app.getPath("userData");
-  await shell.openPath(folderPath);
+  const openError = await shell.openPath(folderPath);
+  if (openError) {
+    throw new Error(openError);
+  }
   return { path: folderPath };
 });
 

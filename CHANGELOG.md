@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Show native file-manager errors in the renderer when opening the app data
+  folder fails.
+
 - Cancel Electron readiness polling when the managed Django process exits and
   report its exit details through the startup error dialog.
 
