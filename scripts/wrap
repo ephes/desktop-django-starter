@@ -229,7 +229,7 @@ if [[ "${run_agent}" == true ]]; then
                 --add-dir "${starter_repo}"
             ;;
         pi)
-            exec pi --model openai-codex/gpt-5.4 --thinking high \
+            exec pi --model openai-codex/gpt-6.2-sol --thinking high \
                 -p "${resolved_prompt}" \
                 < /dev/null
             ;;

@@ -394,23 +394,37 @@ def _prompt_for_harness(options: list[str], default: str) -> str:
 
 def _prompt_for_model(current_model: str | None, harness: str) -> str | None:
     current = current_model or ""
-    if current:
-        prompt = (
-            "Default model (optional; press Enter to keep current, '-' to clear"
-            f"{_model_prompt_hint(harness)}) [{current}]: "
-        )
-    else:
-        prompt = (
-            "Default model (optional; press Enter to use the harness default"
-            f"{_model_prompt_hint(harness)}): "
-        )
+    while True:
+        if current and _is_unapproved_openai_model(harness, current):
+            print(
+                f"The saved model {_bounded_text(repr(current), 200)} is outside the approved "
+                f"GPT-6.2 model list. Enter an approved model such as "
+                f"{_approved_model_replacement(harness)}, or press Enter to use the harness "
+                "default."
+            )
+            current = ""
+        if current:
+            prompt = (
+                "Default model (optional; press Enter to keep current, '-' to clear"
+                f"{_model_prompt_hint(harness)}) [{current}]: "
+            )
+        else:
+            prompt = (
+                "Default model (optional; press Enter to use the harness default"
+                f"{_model_prompt_hint(harness)}): "
+            )
 
-    answer = input(prompt).strip()
-    if not answer:
-        return current_model
-    if answer == "-":
-        return None
-    return answer
+        answer = input(prompt).strip()
+        if not answer:
+            return current or None
+        if answer == "-":
+            return None
+        if not _is_unapproved_openai_model(harness, answer):
+            return answer
+        print(
+            f"{_bounded_text(repr(answer), 200)} is outside the approved GPT-6.2 model list. "
+            f"Enter an approved model such as {_approved_model_replacement(harness)}."
+        )
 
 
 def _run_setup_flow(*, existing_config: WrapperConfig | None, config_path: Path) -> WrapperConfig:
@@ -479,13 +493,12 @@ def _describe_model_source(resolved: _ResolvedRunConfig) -> str:
     return resolved.model_source
 
 
-def _validate_openai_model(resolved: _ResolvedRunConfig) -> None:
-    model = resolved.model
-    if not model or resolved.harness not in ("codex", "pi"):
-        return
+def _is_unapproved_openai_model(harness: str, model: str | None) -> bool:
+    if not model or harness not in ("codex", "pi"):
+        return False
 
     reference = model.strip()
-    if resolved.harness == "pi":
+    if harness == "pi":
         base, _, suffix = reference.rpartition(":")
         if suffix in _PI_THINKING_LEVELS:
             reference = base
@@ -493,22 +506,30 @@ def _validate_openai_model(resolved: _ResolvedRunConfig) -> None:
     provider, separator, model_id = reference.lower().partition("/")
     if separator:
         if provider.strip() not in _OPENAI_PROVIDERS:
-            return
+            return False
         model_id = model_id.strip()
     else:
         model_id = provider
         if not _BARE_OPENAI_MODEL.match(model_id):
-            return
+            return False
 
-    if model_id in _APPROVED_OPENAI_MODELS:
+    return model_id not in _APPROVED_OPENAI_MODELS
+
+
+def _approved_model_replacement(harness: str) -> str:
+    return DEFAULT_PI_MODEL if harness == "pi" else OPENAI_MODEL_EXAMPLE
+
+
+def _validate_openai_model(resolved: _ResolvedRunConfig) -> None:
+    if not _is_unapproved_openai_model(resolved.harness, resolved.model):
         return
 
-    replacement = DEFAULT_PI_MODEL if resolved.harness == "pi" else OPENAI_MODEL_EXAMPLE
+    replacement = _approved_model_replacement(resolved.harness)
     instruction = f"Pass `--model {replacement}`"
     if resolved.model_source == "config":
         instruction += " or update the saved model with `dds init`"
     raise HarnessResolutionError(
-        f"{resolved.harness} OpenAI model {_bounded_text(repr(model), 200)} "
+        f"{resolved.harness} OpenAI model {_bounded_text(repr(resolved.model), 200)} "
         f"({_describe_model_source(resolved)}) is outside the approved GPT-6.2 model list. "
         f"{instruction}."
     )

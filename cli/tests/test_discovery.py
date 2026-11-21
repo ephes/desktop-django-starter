@@ -215,6 +215,47 @@ def test_selected_model_is_passed_through(preflight, monkeypatch, harness, appro
     assert selected_models == [approved]
 
 
+@pytest.mark.parametrize(
+    ("harness", "saved", "answers", "expected"),
+    [
+        ("codex", None, ["gpt-5.4", "gpt-6.2-sol"], "gpt-6.2-sol"),
+        ("pi", None, ["openai-codex/gpt-5.4:high", ""], None),
+        ("codex", "gpt-5.4", ["gpt-6.2-astra"], "gpt-6.2-astra"),
+        ("pi", "openai-codex/gpt-5.4", [""], None),
+        ("pi", "openai-codex/gpt-5.4", ["-"], None),
+        ("codex", "qwen3-coder", [""], "qwen3-coder"),
+    ],
+)
+def test_setup_rejects_unapproved_openai_models(
+    preflight, monkeypatch, capsys, harness, saved, answers, expected
+):
+    config_path = default_config_path()
+    existing = WrapperConfig(harness, saved) if saved else None
+    pending = iter([""] + answers)
+    prompts = []
+
+    def answer(prompt):
+        prompts.append(prompt)
+        return next(pending)
+
+    monkeypatch.setattr(wrap, "detect_installed_harnesses", lambda: {harness: f"/fake/{harness}"})
+    monkeypatch.setattr("builtins.input", answer)
+    config = wrap._run_setup_flow(existing_config=existing, config_path=config_path)
+
+    assert config == WrapperConfig(harness, expected)
+    assert wrap.load_wrapper_config(config_path) == config
+    assert len(prompts) == len(answers) + 1
+    output = capsys.readouterr().out
+    unapproved = [a for a in [saved, *answers] if a and a != "-" and a != expected]
+    for model in unapproved:
+        assert f"{model!r}" in output
+        assert "outside the approved GPT-6.2 model list" in output
+    if not unapproved:
+        assert "outside the approved" not in output
+    if saved and saved != expected:
+        assert f"[{saved}]" not in "".join(prompts)
+
+
 @pytest.mark.parametrize("run", [False, True])
 def test_missing_tools_warn_only_in_print_mode(preflight, monkeypatch, capsys, run):
     root, _, launches = preflight
