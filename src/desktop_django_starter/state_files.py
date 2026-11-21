@@ -63,7 +63,12 @@ def directory_guard(path: Path, *, parent_fd: int | None = None) -> Iterator[int
         yield descriptor
         if identity(admit(path, directory=True)) != identity(before):
             raise state_error("directory changed during initialization")
-    finally:
+    except BaseException:
+        if descriptor is not None:
+            with suppress(OSError):
+                os.close(descriptor)
+        raise
+    else:
         if descriptor is not None:
             os.close(descriptor)
 

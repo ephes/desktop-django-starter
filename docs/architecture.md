@@ -486,6 +486,8 @@ name/identity rechecks, with ACLs as the authority boundary. SQLite's public
 backup API still opens a filename, and settings ultimately return writable
 paths: concurrent hostile mutation by the same account is outside this contract.
 Directory identity changes detected during initialization refuse publication.
+On POSIX, the directory guard preserves an active error if closing its
+descriptor also fails. A standalone close failure stops initialization.
 System parent aliases such as macOS `/tmp` are allowed.
 
 Media copies stream a direct tree and refuse all links (including internal
