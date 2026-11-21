@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Recover abandoned demo routines during desktop shell startup after the
+  previous worker has stopped. Django setup, management checks and standalone
+  worker startup leave active routines alone.
+
 - Reject saved and explicit unapproved OpenAI model selections before Codex
   or Pi launches. Report how to select an approved model.
   `dds init` re-prompts for an unapproved OpenAI model instead of saving or

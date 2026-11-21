@@ -76,7 +76,7 @@ Scope boundaries:
 
 `tasks_demo` posture in this slice:
 
-- supported
+- recover abandoned rows after acquiring the profile lock and running migrations, before starting the server or worker. The lock stays held through process exit if a worker outlives the shutdown wait.
 - Positron intentionally differs from Electron and Tauri here: the shell starts the `django_tasks_db` worker in-process on a thread instead of spawning a `db_worker` subprocess
 
 Positron's canonical Python prereleases (`X.Y.ZaN`, `X.Y.ZbN`, `X.Y.ZrcN`)

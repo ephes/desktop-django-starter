@@ -845,6 +845,7 @@ async function bootstrap() {
 
   const runCommand = args => runManageCommand(args, port, runtimeMode, backendRoot, authToken);
   await migrateDatabase(runtimeMode, runCommand);
+  await runCommand(["recover_stale_routines"]);
 
   const startup = new AbortController();
   let starting = true;

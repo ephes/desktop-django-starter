@@ -17,7 +17,7 @@ const IGNORED_DIRS = new Set([
   "venv"
 ]);
 const STARTER_TEMPLATE_CHECKSUMS = {
-  "main.js": "ff4f50575e4700aa868d9b028732834a327e8c85c50cbb4d6f1e9dbbe2dec73b",
+  "main.js": "50f9ae6826fdd20e8d54cc3276331493b442ba846283d993794818128f3720d9",
   "scripts/electron-builder-config.cjs": "d273efe85f67cdffe611fd35b78cadd42457c665ebd8aec297d293b5fdb5680b",
   "scripts/launch-electron.cjs": "c383e90dc8ab279dcff53f4ba67375e17917bc7878df13a0a12e1b5244b9b0da",
   "scripts/stage-backend.cjs": "3a75fe18c59ced767bbfd7d00c664cd977e96a1bcaf352761289a678c9450999",
@@ -737,10 +737,11 @@ function updateLaunchScripts(electronRoot, targetConfig, slug) {
   // (ensure_runtime_database), not the starter-only `seed_demo_content`
   // management command, which most targets do not provide. Make the electron-side
   // seed step opt-in (default off) so wrapping a target without that command does
-  // not abort startup.
+  // not abort startup. Routine recovery also belongs to the starter demo.
   mainSource = replaceRequired(
     mainSource,
-    "  await migrateDatabase(runtimeMode, runCommand);",
+    "  await migrateDatabase(runtimeMode, runCommand);\n"
+      + '  await runCommand(["recover_stale_routines"]);',
     '  await runCommand(["migrate", "--noinput"]);\n'
       + '  if (process.env.DESKTOP_DJANGO_SEED_DEMO_CONTENT === "1") {\n'
       + '    await runCommand(["seed_demo_content"]);\n'

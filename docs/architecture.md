@@ -143,14 +143,14 @@ The current implementation follows this sequence:
 2. Electron chooses an open localhost port and creates a local splash window.
 3. Electron admits a regular session marker of at most 4096 bytes in the app-data directory, preserving and refusing unreadable/unsafe markers. If the previous run never marked itself finished (a crash, a force quit, power loss), Electron stops backend processes that run left behind: every backend process carries this install's random app key on its command line, so they can be found without touching other apps.
 4. Electron runs migrations using either the bundled runtime or a local development interpreter. In packaged mode, the first start of a new app version prepares that version's state directory first (see Data and Files).
-5. Electron completes any pending first-run demo seed, then starts Django.
+5. Electron completes any pending first-run demo seed, runs `recover_stale_routines`, then starts Django.
 6. Django exposes a dedicated health endpoint.
 7. Electron polls that endpoint until it succeeds or times out (15 seconds). If that Django child exits, Electron cancels the pending request or retry delay and reports the exit as a startup failure.
 8. Electron starts the single `db_worker` process only after Django is healthy.
 9. Electron loads the main app window, then closes the splash window once the main window is ready to show.
 10. When the user closes the window or quits while background tasks are running or queued (`/desktop/activity/`), Electron asks first. Quitting then stops both child processes; on Windows with explicit forced process-tree termination (`taskkill /t /f`) rather than a graceful drain. Electron marks the session finished only after confirmed child exit and confirmed orphan recovery; uncertainty retains dirty evidence.
 
-Every backend process (`migrate`, `seed_demo_content`, `runserver`, `db_worker`) is started through `desktop_process_guard.py`, a small standard-library launcher staged next to `manage.py`. It runs `manage.py` in the same process and adds ownership safety nets for the case where the shell dies without cleaning up:
+Every backend process (`migrate`, `seed_demo_content`, `recover_stale_routines`, `runserver`, `db_worker`) is started through `desktop_process_guard.py`, a small standard-library launcher staged next to `manage.py`. It runs `manage.py` in the same process and adds ownership safety nets for the case where the shell dies without cleaning up:
 
 - the shell keeps an open pipe on the child's stdin; when the shell process ends for any reason, the operating system closes it and the guard forcibly retires its owned backend tree
 - on POSIX the guard establishes a dedicated group before Django runs, including when invoked from a shared caller group. Stdin loss kills only that owned group with SIGKILL. SIGTERM and SIGINT do the same only until the managed command installs its own handlers: `db_worker` replaces them with its graceful shutdown, so a shell that only signals the leader cannot rely on them. Group admission failure refuses startup before Django runs
@@ -365,10 +365,14 @@ Current launcher contract:
 - workers finalize only a still-running row with the backend ID they claimed;
   a retired or deleted row is never overwritten or recreated. Missing queue
   metadata fails pending rows, but leaves running claims alone because a live
-  worker may still finish. Startup reconciliation retires abandoned claims.
-  A missing SQLite routine table is expected before migrations. Other
-  operational or programming errors log a fixed warning that abandoned
-  routines may remain active, and startup continues.
+  worker may still finish. The shells run `recover_stale_routines` after
+  migrations, with exclusive profile ownership and after the old worker has
+  stopped. It marks pending and running demo rows failed and leaves terminal
+  rows and the backend queue intact. Without the optional demo app it does
+  nothing. Operational or programming errors log a fixed warning and startup
+  continues. Ordinary Django setup and standalone worker startup leave these
+  rows alone. When using the development database, stop any manually launched
+  worker before starting a desktop shell against the same checkout.
 - task polling applies backend outcomes only while the current demo row is
   pending or running and still has the backend ID used for the lookup. If a
   worker finalizes the row or it is rebound to another backend ID, a rejected

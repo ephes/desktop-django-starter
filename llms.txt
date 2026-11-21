@@ -105,6 +105,9 @@ this ownership. Native Windows process-tree acceptance remains required.
   retain the entire stage for offline inspection; ambiguous completion records
   stop reuse/import without rewriting the published generation.
 
+- Shell startup explicitly calls `recover_stale_routines` after migrations
+  and previous-worker retirement. Django app initialization is read-only
+  for routine rows.
 - Task polling uses partial active/history indexes and matching OR predicates.
   Shell counts filter READY/RUNNING before one aggregate and use an app-owned
   ordinary backend status index. Apply migrations after updating; packaged

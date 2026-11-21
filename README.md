@@ -27,6 +27,9 @@ Runnable starter slices:
   anywhere in the stable since that page loaded. Reload before confirming again.
   Run `just migrate` in development to install the SQLite inventory revision
   used by the confirmation. Packaged startup applies it automatically.
+- Desktop shell startup recovers abandoned demo routines after migrations and
+  after the previous shell worker has stopped. Regular Django and standalone
+  worker startup leave routine rows alone.
 - Start Routine admits at most 16 queued/running routines globally; a full queue
   returns a retryable refusal, shown on the page, without creating a routine or
   backend result.

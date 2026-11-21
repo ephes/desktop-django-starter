@@ -155,8 +155,11 @@ class DesktopDjangoStarterPositron(toga.App):
         if hasattr(self, "server_thread") and self.server_thread.is_alive():
             self.server_thread.join(timeout=5)
 
-        release_instance_lock(self._instance_lock)
-        self._instance_lock = None
+        # If the worker is still finishing a routine, hold the profile lock
+        # until process exit releases it along with the daemon worker.
+        if self._task_worker_thread is None or not self._task_worker_thread.is_alive():
+            release_instance_lock(self._instance_lock)
+            self._instance_lock = None
 
         return True
 
@@ -195,6 +198,7 @@ class DesktopDjangoStarterPositron(toga.App):
         )
         django_manage.call_command("collectstatic", interactive=False, verbosity=0, clear=False)
         django_manage.call_command("migrate", interactive=False, verbosity=0)
+        django_manage.call_command("recover_stale_routines", verbosity=0)
         if should_seed_demo_content:
             django_manage.call_command("seed_demo_content", verbosity=0)
 
@@ -242,7 +246,6 @@ class DesktopDjangoStarterPositron(toga.App):
         if self._task_worker_thread is not None:
             self._task_worker_thread.join(timeout=5)
         self._task_worker = None
-        self._task_worker_thread = None
 
 
 def main() -> DesktopDjangoStarterPositron:
