@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Validate a new desktop state generation before and after publishing it. An
+  invalid staged copy leaves the final version path free for a retry.
+
 - Preserve SQLite backup errors during upgrade cleanup. Attempt to close both
   connections and report a close failure if the backup succeeded.
 

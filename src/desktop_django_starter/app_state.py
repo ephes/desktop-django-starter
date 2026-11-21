@@ -195,6 +195,7 @@ def _prepare_state(
         (staging / STATE_METADATA_FILENAME).write_text(json.dumps(metadata, indent=2) + "\n")
         sync_file(staging / STATE_METADATA_FILENAME)
         sync_directory(staging)
+        _validate_state(staging, version)
         _check_roots(roots)
         # Cooperating callers hold the same persistent lock; no winner can be replaced.
         if os.path.lexists(state_dir):

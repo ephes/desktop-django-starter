@@ -212,6 +212,33 @@ def test_two_real_initializers_converge_without_deleting_active_stage(tmp_path, 
         connection.close()
 
 
+def test_invalid_staged_database_is_refused_before_publication(monkeypatch, tmp_path):
+    old, connection = seed(tmp_path)
+    state_root = old.parent
+    sync = app_state.sync_directory
+
+    def replace_staged_database(path):
+        sync(path)
+        if path.name.startswith(app_state.STAGE_PREFIX) and (path / "state.json").exists():
+            database = path / "app.sqlite3"
+            database.unlink()
+            database.mkdir()
+
+    try:
+        with monkeypatch.context() as patch:
+            patch.setattr(app_state, "sync_directory", replace_staged_database)
+            with pytest.raises(ImproperlyConfigured, match="single-link regular file"):
+                app_state.prepare_versioned_state(tmp_path, "2.0.0")
+
+        assert not (state_root / "2.0.0").exists()
+        assert list(state_root.glob(f"{app_state.STAGE_PREFIX}*")) == []
+        assert app_state.prepare_versioned_state(tmp_path, "1.0.0") == old
+        assert connection.execute("SELECT value FROM sentinel").fetchall() == [("wal-sentinel",)]
+        assert_generation(app_state.prepare_versioned_state(tmp_path, "2.0.0"))
+    finally:
+        connection.close()
+
+
 def test_post_rename_sync_error_retains_visible_complete_generation(monkeypatch, tmp_path):
     old, connection = seed(tmp_path)
     sync = app_state.sync_directory

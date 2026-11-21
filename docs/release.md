@@ -846,8 +846,11 @@ procedure above. A scan-budget error requires reducing confirmed abandoned
 entries offline before retrying. No PID age or filename alone authorizes cleanup.
 
 Before publication the initializer flushes the backup database, media files and
-owner record, syncs directories, then writes/flushes `state.json` and renames the
-stage. POSIX syncs the parent after rename; macOS also requests full file flushes.
+owner record, syncs directories, then writes/flushes `state.json`. It validates
+the staged marker and layout for the intended version before renaming the stage
+and validates the published generation again after rename and sync. A failed
+staged validation keeps the predecessor and leaves the final version path free
+for retry. POSIX syncs the parent after rename. macOS also requests full file flushes.
 A reported post-rename sync failure means the new complete generation is already
 visible but power-loss durability is uncertain: retain both generations, inspect
 and retry startup; do not overwrite the new version with its predecessor merely
