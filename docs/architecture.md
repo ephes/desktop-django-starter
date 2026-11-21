@@ -194,7 +194,7 @@ Expected persistence rules:
 - older state directories are kept for rollback: going back to an older version reopens that version's own directory with its data as that version left it; changes made in the newer version do not travel back. State from a newer version is never imported into an older one, so a rollback to a version that never ran on this machine starts empty and logs a warning
 - predecessor selection uses public SemVer parsing plus the narrow Positron a/b/rc mapping described in {ref}`the release guide <upgrades-and-rollbacks>`: `0.2.0-rc.2 < 0.2.0-rc.10 < 0.2.0`; unsupported current or candidate versions stop startup with recovery guidance
 - SQLite sources open through an escaped read-only URI; a disappeared or invalid source fails initialization without recreating it or publishing state
-- SQLite backup has a total monotonic 30-second startup budget, including busy retries and page copying; failure closes connections and removes only unpublished staging
+- SQLite backup has a total monotonic 30-second startup budget, including busy retries and page copying. Startup attempts to close both connections, preserves the first failure, and removes only unpublished staging on failure.
 - the `unversioned` build/local fallback has no release ordering and only imports legacy root state
 
 - old state directories are not pruned automatically; the secret key (`secret_key`) and the shell session file stay in the app-data root

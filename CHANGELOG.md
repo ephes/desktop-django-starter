@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve SQLite backup errors during upgrade cleanup. Attempt to close both
+  connections and report a close failure if the backup succeeded.
+
 - Check source media across the SQLite backup during packaged upgrades. Refuse
   publication on detected drift and keep the predecessor available for retry.
 
