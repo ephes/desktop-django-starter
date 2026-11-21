@@ -799,10 +799,11 @@ removes unpublished staging; repair the synthetic/imported tree or adjust the
 budget with enough free disk space, then retry. Each file is read only to its
 initial size. A short destination write stops the upgrade and retains the
 predecessor for retry. Detected identity, size, mtime or ctime changes during
-copying also refuse publication, including same-size in-place edits. Close
-media writers before retrying from the retained predecessor. Change detection
-uses the available filesystem metadata for each file. Media and SQLite can
-reflect different points in time. Cache is never imported.
+copying also refuse publication, including same-size in-place edits. Directory
+metadata is rechecked after traversal to detect media entries added, removed
+or renamed during copying. Close media writers and retry from the retained
+predecessor. Change detection uses the available filesystem metadata. Media and
+SQLite can reflect different points in time. Cache is never imported.
 
 ### Interrupted upgrade recovery and durability
 
@@ -820,6 +821,11 @@ raised media budgets), unknown contents, links or missing/invalid owner records
 remain for inspection. Duplicate JSON members in owner or completion markers
 are invalid, even if their values agree or names use JSON escapes; nested
 objects are checked too. Ambiguous owner claims retain the entire stage.
+Recovery rechecks the state root and stage identities before detaching the stage
+into a private `.dds-retired-<uuid>` directory and verifies its identity again
+before removal. A failure before detaching removes the empty retirement
+directory. A replacement or interrupted retirement can leave bytes under either
+hidden directory name. Inspect these directories offline before cleanup.
 Ambiguous completion markers stop reuse or import and leave the published
 generation untouched. Back up and inspect these records with all app processes
 closed; do not discard an earlier claim merely because a later claim looks valid.

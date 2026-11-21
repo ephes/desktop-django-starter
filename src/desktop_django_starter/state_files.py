@@ -125,12 +125,15 @@ def copy_media(source: Path, destination: Path) -> None:
     max_entries, max_bytes, max_depth = limits
     entries = 0
     source_bytes = 0
+    directories: list[tuple[Path, tuple[int, ...]]] = []
 
     def copy_directory(src: Path, dst: Path, depth: int, parent_fd: int | None = None) -> None:
         nonlocal entries, source_bytes
         if depth > max_depth:
             raise state_error("media depth budget exceeded")
         with directory_guard(src, parent_fd=parent_fd) as source_fd:
+            source_info = admit(src, directory=True) if source_fd is None else os.fstat(source_fd)
+            directories.append((src, _generation(source_info)))
             dst.mkdir(mode=0o700)
             # scandir streams entries instead of allocating the entire tree.
             with os.scandir(source_fd if source_fd is not None else src) as children:
@@ -161,5 +164,10 @@ def copy_media(source: Path, destination: Path) -> None:
 
     try:
         copy_directory(source, destination, 0)
+        # A previously visited directory can change while a sibling is copied.
+        # Keep one signature per admitted directory within the entry budget.
+        for directory, generation in reversed(directories):
+            if _generation(admit(directory, directory=True)) != generation:
+                raise state_error("media directory changed during copy")
     except (OSError, ImproperlyConfigured) as error:
         raise state_error("media tree refused or copy failed") from error

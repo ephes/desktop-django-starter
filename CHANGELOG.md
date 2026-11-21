@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Refuse desktop state publication when source media directory membership
+  changes during copying. Preserve the predecessor for retry.
+
+- Recheck the state root and inspected abandoned stage before detaching it for
+  removal. Retain stages with uncertain identity for offline inspection and
+  remove the empty retirement directory when detaching fails.
+
 - Preserve the retryable routine queue response after rollback if diagnostics fail.
 - Fail restored routines with unencodable results or results over 1024 UTF-8
   bytes. Other routines remain visible when polling.

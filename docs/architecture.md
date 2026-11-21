@@ -496,11 +496,14 @@ fail the copy before the staged tree is synced. Admission, opened-descriptor
 and final named-file metadata must agree on device/inode, size, nanosecond
 mtime and ctime.
 Detected in-place edits, growth, truncation or replacement refuse publication.
-These checks use the filesystem metadata available on each platform; they do
-not provide an atomic snapshot across files and SQLite or protect against
-hostile same-account metadata manipulation. Cache is disposable and
-never copied. Refusal removes only the private unpublished stage and preserves
-the predecessor. See the release guide for configurable limits and recovery.
+At the end of traversal, each visited directory's identity, size, mtime and
+ctime must still match its admission metadata. This detects membership changes
+in an earlier subtree while another subtree is being copied. The checks use
+platform filesystem metadata. Media and SQLite may reflect different points in
+time, and hostile same-account mutation is outside the contract. Cache is
+disposable and never copied. Refusal removes only the private unpublished stage
+and preserves the predecessor. See the release guide for configurable limits
+and recovery.
 
 ### Interrupted and competing state initialization
 
@@ -515,10 +518,15 @@ record bound to its exact name and initialization kind. The next lock holder
 scans at most 1024 root entries and 16 stage candidates, validating at most
 100,016 cleanup entries and 65 directory levels per stage. Only direct owned
 regular trees with the exact owner record and known top-level entries qualify
-for deletion. Live cooperating initializers cannot be collected because they
-hold the same lock. Ambiguous stages, including duplicate owner claims, remain
-byte-for-byte intact with bounded warnings; inspect them with the app closed. Old-style
-hidden stages without ownership evidence are never automatically removed.
+for deletion. Recovery rechecks the admitted state root and stage before
+renaming the stage into a private `.dds-retired-<uuid>` directory. It verifies
+the detached identity before recursive removal. If a check or the rename fails
+before the stage is detached, the still-empty retirement directory is removed
+so retries do not accumulate root entries. POSIX uses directory-relative
+rename and removal; Windows rechecks named entries. Live cooperating
+initializers hold the same lock. Inspect retained ambiguous stages and leftover
+retirement directories with the app closed. Old-style hidden stages without
+ownership evidence are never automatically removed.
 
 Owner metadata is flushed before copying. After SQLite closes its backup target,
 all payload files are flushed, child directories then parent directories are
