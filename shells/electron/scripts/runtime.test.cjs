@@ -7,7 +7,7 @@ const { createRequire } = require("node:module");
 const vm = require("node:vm");
 const test = require("node:test");
 
-function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), cleanup) {
+function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), cleanup, overrides = {}) {
   const app = Object.assign(new EventEmitter(), {
     requestSingleInstanceLock: () => true,
     whenReady: () => new Promise(() => {}),
@@ -24,8 +24,8 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), c
       app, ipcMain: { handle() {} }, dialog: { showErrorBox: (...args) => errors.push(args) }
     } : name === "./scripts/orphan-processes.cjs" && cleanup ? {
       ...actualRequire(name), stopOrphanedBackendProcesses: cleanup
-    } : name === "electron-updater" ? { autoUpdater: {} } : actualRequire(name),
-    __dirname: path.dirname(filename), process, console, setTimeout, clearTimeout, URL
+    } : name === "electron-updater" ? { autoUpdater: {} } : overrides[name] ?? actualRequire(name),
+    __dirname: path.dirname(filename), process, console, setTimeout, clearTimeout, URL, AbortController
   };
   vm.runInNewContext(fs.readFileSync(filename, "utf8") + `
     globalThis.control = {
@@ -35,6 +35,12 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), c
       recover: error => recoverFailedUpdateInstall(error),
       state: () => ({ currentAppUrl, updateInstallInProgress, quitting, shellSession }),
       stops: (worker, django) => { stopTaskWorker = worker; stopDjango = django; },
+      stubWindows: open => {
+        getOpenPort = async () => 12345;
+        getRuntimeMode = () => "development";
+        createSplashWindow = () => {};
+        createWindow = open;
+      },
       startup: (manage, packaged = false) => {
         getOpenPort = async () => 12345;
         getRuntimeMode = () => packaged ? "packaged" : "development";
@@ -52,6 +58,60 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), c
 }
 
 module.exports = { runtime };
+
+test("Django exit cancels a pending startup probe before the worker or window starts", async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-backend-exit-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const django = new EventEmitter();
+  django.stdout = new EventEmitter();
+  django.stderr = new EventEmitter();
+  const commands = [];
+  let probeCount = 0;
+  let probeAborted = false;
+  let probeStarted;
+  const pendingProbe = new Promise(resolve => { probeStarted = resolve; });
+  const { control, errors } = runtime(dir, undefined, {
+    "./scripts/managed-process.cjs": {
+      spawnManagedProcess: ({ args }) => {
+        const command = args[args.findIndex(arg => path.basename(arg) === "manage.py") + 1];
+        commands.push(command);
+        if (command === "runserver") {
+          queueMicrotask(() => django.emit("spawn"));
+          return django;
+        }
+        const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
+        queueMicrotask(() => command === "migrate" ? child.emit("exit", 0) : child.emit("spawn"));
+        return child;
+      }
+    },
+    "node:http": {
+      get: (_url, { signal }, respond) => {
+        probeCount++;
+        const request = Object.assign(new EventEmitter(), { setTimeout() {} });
+        signal?.addEventListener("abort", () => {
+          probeAborted = true;
+          request.emit("error", new Error("Request aborted"));
+        }, { once: true });
+        probeStarted(respond);
+        return request;
+      }
+    }
+  });
+  let windowOpened = false;
+  control.stubWindows(() => { windowOpened = true; });
+
+  const startup = control.bootstrap();
+  const respond = await pendingProbe;
+  django.emit("exit", 7, null);
+  respond({ resume() {}, statusCode: 200 });
+
+  await assert.rejects(startup, /Django process stopped[\s\S]*Code: 7/);
+  assert.equal(probeAborted, true);
+  assert.equal(probeCount, 1);
+  assert.deepEqual(commands, ["migrate", "runserver"]);
+  assert.equal(windowOpened, false);
+  assert.deepEqual(errors, []);
+});
 
 test("unreadable marker refuses bootstrap before any backend command", async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-marker-"));

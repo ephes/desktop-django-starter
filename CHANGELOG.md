@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Cancel Electron readiness polling when the managed Django process exits and
+  report its exit details through the startup error dialog.
+
 - Clear Finished Routines also retires verified, exclusively owned terminal
   database queue results in the same batches as their routine history.
 
