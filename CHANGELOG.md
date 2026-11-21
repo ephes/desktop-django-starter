@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reject saved and explicit unapproved OpenAI model selections before Codex
+  or Pi launches. Report how to select an approved model.
+
 - Default the packaged Pi wrapper to `openai-codex/gpt-6.2-sol` and show that
   model in setup, help and preflight.
 

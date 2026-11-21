@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from dds import wrap
 from dds.cli import main
+from dds.config import WrapperConfig, default_config_path, save_wrapper_config
 
 EXCLUDED = (
     ".git",
@@ -145,6 +146,73 @@ def test_pi_default_model_is_used_and_advertised(preflight, capsys, monkeypatch,
         wrap._run_setup_flow(existing_config=None, config_path=wrap.default_config_path())
         assert approved_model in prompts[-1]
         assert f"Default model: {approved_model}" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("source", ["saved", "explicit"])
+@pytest.mark.parametrize(
+    ("harness", "model", "replacement"),
+    [
+        ("codex", "gpt-5.4", "gpt-6.2-sol"),
+        ("codex", "o3", "gpt-6.2-sol"),
+        ("pi", "openai-codex/gpt-5.4", "openai-codex/gpt-6.2-sol"),
+        ("pi", " OpenAI / gpt-6.1-sol:high ", "openai-codex/gpt-6.2-sol"),
+        ("pi", "gpt-5.4-mini", "openai-codex/gpt-6.2-sol"),
+    ],
+)
+def test_disallowed_openai_model_stops_before_launch(
+    preflight, capsys, source, harness, model, replacement
+):
+    root, git_calls, launches = preflight
+    plant(root, ["manage.py"])
+    config_path = default_config_path()
+    saved = WrapperConfig(harness, model if source == "saved" else replacement)
+    save_wrapper_config(saved, config_path)
+    args = ["wrap", "--run", "--force"]
+    if source == "explicit":
+        args += ["--model", model]
+
+    with pytest.raises(SystemExit) as error:
+        main(args)
+
+    assert error.value.code == 1
+    diagnostic = capsys.readouterr().err
+    assert repr(model) in diagnostic
+    assert f"--model {replacement}" in diagnostic
+    assert ("dds init" in diagnostic) is (source == "saved")
+    assert not git_calls
+    assert not launches
+    assert wrap.load_wrapper_config(config_path) == saved
+
+
+@pytest.mark.parametrize(
+    ("harness", "approved", "saved"),
+    [
+        ("codex", "gpt-6.2-sol", "gpt-5.4"),
+        ("codex", "gpt-6.2-astra", "gpt-5.4"),
+        ("codex", "qwen3-coder", None),
+        ("pi", "openai/gpt-6.2-sol:high", "openai/gpt-5.4"),
+        ("pi", "ollama/gpt-5.4", "openai-codex/gpt-5.4"),
+        ("pi", "gpt-oss-120b", "openai-codex/gpt-5.4"),
+        ("claude", "claude-opus-4-6", None),
+    ],
+)
+def test_selected_model_is_passed_through(preflight, monkeypatch, harness, approved, saved):
+    root, _, _ = preflight
+    plant(root, ["manage.py"])
+    save_wrapper_config(WrapperConfig(harness, saved), default_config_path())
+    selected_models = []
+
+    def record_exec(name, argv):
+        assert name == harness
+        selected_models.append(argv[argv.index("--model") + 1])
+
+    monkeypatch.setattr(wrap.os, "execvp", record_exec)
+    monkeypatch.setattr(
+        wrap, "_run_claude", lambda prompt, assets, model: selected_models.append(model)
+    )
+    main(["wrap", "--run", "--model", approved])
+
+    assert selected_models == [approved]
 
 
 @pytest.mark.parametrize("run", [False, True])

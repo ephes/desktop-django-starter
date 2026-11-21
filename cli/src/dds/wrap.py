@@ -39,6 +39,10 @@ _STARTER_TOKEN = "../desktop-django-starter/"
 _CLAUDE_TERMINATION_GRACE = 5.0
 _CLAUDE_MAX_EVENT_BYTES = 1024 * 1024
 _CLAUDE_DISPLAY_BYTES = 4096
+_OPENAI_PROVIDERS = frozenset({"openai", "openai-codex"})
+_APPROVED_OPENAI_MODELS = frozenset({OPENAI_MODEL_EXAMPLE, "gpt-6.2-astra"})
+_BARE_OPENAI_MODEL = re.compile(r"^(?:gpt-(?!oss(?:-|$))|chatgpt-|codex-|o[1-9](?:-|$))")
+_PI_THINKING_LEVELS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh", "max"})
 
 
 def _summarize_claude_tool_use(content: dict[str, object]) -> str | None:
@@ -475,6 +479,41 @@ def _describe_model_source(resolved: _ResolvedRunConfig) -> str:
     return resolved.model_source
 
 
+def _validate_openai_model(resolved: _ResolvedRunConfig) -> None:
+    model = resolved.model
+    if not model or resolved.harness not in ("codex", "pi"):
+        return
+
+    reference = model.strip()
+    if resolved.harness == "pi":
+        base, _, suffix = reference.rpartition(":")
+        if suffix in _PI_THINKING_LEVELS:
+            reference = base
+
+    provider, separator, model_id = reference.lower().partition("/")
+    if separator:
+        if provider.strip() not in _OPENAI_PROVIDERS:
+            return
+        model_id = model_id.strip()
+    else:
+        model_id = provider
+        if not _BARE_OPENAI_MODEL.match(model_id):
+            return
+
+    if model_id in _APPROVED_OPENAI_MODELS:
+        return
+
+    replacement = DEFAULT_PI_MODEL if resolved.harness == "pi" else OPENAI_MODEL_EXAMPLE
+    instruction = f"Pass `--model {replacement}`"
+    if resolved.model_source == "config":
+        instruction += " or update the saved model with `dds init`"
+    raise HarnessResolutionError(
+        f"{resolved.harness} OpenAI model {_bounded_text(repr(model), 200)} "
+        f"({_describe_model_source(resolved)}) is outside the approved GPT-6.2 model list. "
+        f"{instruction}."
+    )
+
+
 def _resolve_run_config(agent: str | None, model: str | None) -> _ResolvedRunConfig:
     config_path = default_config_path()
     try:
@@ -589,6 +628,7 @@ def run_wrap(
     if run_agent:
         try:
             resolved_run = _resolve_run_config(agent, model)
+            _validate_openai_model(resolved_run)
         except HarnessResolutionError as exc:
             print(f"error: {exc}", file=sys.stderr)
             sys.exit(1)
