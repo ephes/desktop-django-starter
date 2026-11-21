@@ -26,6 +26,8 @@ import sqlite3
 import stat
 import time
 import uuid
+from collections.abc import Iterator
+from contextlib import contextmanager, suppress
 from datetime import UTC, datetime
 from pathlib import Path, PurePath
 from urllib.parse import quote
@@ -193,6 +195,7 @@ def _prepare_state(
         (staging / STATE_METADATA_FILENAME).write_text(json.dumps(metadata, indent=2) + "\n")
         sync_file(staging / STATE_METADATA_FILENAME)
         sync_directory(staging)
+        _validate_state(staging, version)
         _check_roots(roots)
         # Cooperating callers hold the same persistent lock; no winner can be replaced.
         if os.path.lexists(state_dir):
@@ -296,6 +299,18 @@ def _copy_state(source: Path, destination: Path) -> None:
                 _copy_database(source, destination)
 
 
+@contextmanager
+def _close_backup_connection(connection: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
+    try:
+        yield connection
+    except BaseException:
+        with suppress(Exception):
+            connection.close()
+        raise
+    else:
+        connection.close()
+
+
 def _copy_database(source: Path, destination: Path) -> None:
     # The backup API copies a consistent snapshot, including pages that are
     # still only in the -wal file after an unclean shutdown.
@@ -311,12 +326,8 @@ def _copy_database(source: Path, destination: Path) -> None:
             )
 
     source_uri = _readonly_database_uri((source / DATABASE_FILENAME).absolute())
-    source_database = sqlite3.connect(source_uri, uri=True, timeout=0.1)
-    try:
-        target_database = sqlite3.connect(destination / DATABASE_FILENAME)
-        try:
-            source_database.backup(target_database, pages=128, progress=check_deadline, sleep=0.05)
-        finally:
-            target_database.close()
-    finally:
-        source_database.close()
+    with (
+        _close_backup_connection(sqlite3.connect(source_uri, uri=True, timeout=0.1)) as source_db,
+        _close_backup_connection(sqlite3.connect(destination / DATABASE_FILENAME)) as target_db,
+    ):
+        source_db.backup(target_db, pages=128, progress=check_deadline, sleep=0.05)

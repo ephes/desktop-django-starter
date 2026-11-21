@@ -194,7 +194,7 @@ Expected persistence rules:
 - older state directories are kept for rollback: going back to an older version reopens that version's own directory with its data as that version left it; changes made in the newer version do not travel back. State from a newer version is never imported into an older one, so a rollback to a version that never ran on this machine starts empty and logs a warning
 - predecessor selection uses public SemVer parsing plus the narrow Positron a/b/rc mapping described in {ref}`the release guide <upgrades-and-rollbacks>`: `0.2.0-rc.2 < 0.2.0-rc.10 < 0.2.0`; unsupported current or candidate versions stop startup with recovery guidance
 - SQLite sources open through an escaped read-only URI; a disappeared or invalid source fails initialization without recreating it or publishing state
-- SQLite backup has a total monotonic 30-second startup budget, including busy retries and page copying; failure closes connections and removes only unpublished staging
+- SQLite backup has a total monotonic 30-second startup budget, including busy retries and page copying. Startup attempts to close both connections, preserves the first failure, and removes only unpublished staging on failure.
 - the `unversioned` build/local fallback has no release ordering and only imports legacy root state
 
 - old state directories are not pruned automatically; the secret key (`secret_key`) and the shell session file stay in the app-data root
@@ -551,7 +551,9 @@ ownership evidence are never automatically removed.
 Owner metadata is flushed before copying. After SQLite closes its backup target,
 all payload files are flushed, child directories then parent directories are
 synced, the completion marker is written/flushed, and the stage directory is
-synced before rename. POSIX syncs the state root after rename; macOS additionally
+synced. The initializer validates the staged marker and layout against the
+intended version before rename and validates the published paths again after
+rename and sync. POSIX syncs the state root after rename. macOS additionally
 uses `F_FULLFSYNC` for files. A prepublication error retains the predecessor;
 post-rename sync failure retains the visible complete generation and explicitly
 reports uncertain durability. No cleanup restores old bytes over it.

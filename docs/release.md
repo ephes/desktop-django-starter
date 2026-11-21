@@ -714,7 +714,7 @@ That means a normal reinstall or manual update should replace the installed appl
 - **Rollback:** an older version reopens its own `state/<old version>/` with the data and schema it had. Changes made while the newer version ran are not carried back; that is the price of never running old code against new migrations. If the older version never ran on this machine, it starts empty (state from newer versions is never imported) and logs a warning.
 - **Version ordering:** release and prerelease versions use SemVer (`rc.2` before `rc.10`, candidates before stable). Positron also accepts canonical Python `X.Y.ZaN`, `X.Y.ZbN`, `X.Y.ZrcN`, mapped to SemVer `alpha.N`, `beta.N`, `rc.N` precedence while keeping original directory names. Python dev/post/epoch forms are unsupported. Equivalent spellings are not predecessors; if multiple equivalent older directories exist, the lexicographically greatest directory name wins. Unsupported current or candidate versions stop startup with a diagnostic. Check the build version or move an unsupported directory aside while the app is closed, keeping a backup. The `unversioned` build/local fallback has no release ordering and only imports legacy root state.
 - **Source reads:** the SQLite backup source opens read-only using an escaped file URI. A missing or invalid source stops initialization, removes only unpublished staging, and never creates an empty replacement source. Restore the previous database from backup before retrying. WAL-backed databases remain supported, including escaped local and Windows UNC paths. A crashed non-WAL database with a hot rollback journal cannot be recovered through the read-only source connection: with all app processes closed, back up the source and journal, recover it using SQLite tooling, then retry startup.
-- **Backup recovery:** SQLite backup has a total 30-second monotonic startup budget, including lock waits and copying. On expiry, startup stops and removes only unpublished staging. Close other app processes and retry. A database too large or slow to copy within this budget needs support to increase `BACKUP_TIMEOUT_SECONDS` in the build before retrying. Keep the previous state for retry and rollback.
+- **Backup recovery:** SQLite backup has a total 30-second monotonic startup budget, including lock waits and copying. On expiry, startup stops and removes only unpublished staging. Close other app processes and retry. A database too large or slow to copy within this budget needs support to increase `BACKUP_TIMEOUT_SECONDS` in the build before retrying. If closing either SQLite connection also fails, startup still reports the backup error. A close failure after a successful backup also stops startup. Keep the previous state for retry and rollback.
 
 - **Disk use:** old state directories are kept and not pruned automatically. Removing `state/<version>/` for versions you will not roll back to is safe while the app is closed.
 - `state/<version>/state.json` records when the directory was created and what it was copied from.
@@ -846,8 +846,11 @@ procedure above. A scan-budget error requires reducing confirmed abandoned
 entries offline before retrying. No PID age or filename alone authorizes cleanup.
 
 Before publication the initializer flushes the backup database, media files and
-owner record, syncs directories, then writes/flushes `state.json` and renames the
-stage. POSIX syncs the parent after rename; macOS also requests full file flushes.
+owner record, syncs directories, then writes/flushes `state.json`. It validates
+the staged marker and layout for the intended version before renaming the stage
+and validates the published generation again after rename and sync. A failed
+staged validation keeps the predecessor and leaves the final version path free
+for retry. POSIX syncs the parent after rename. macOS also requests full file flushes.
 A reported post-rename sync failure means the new complete generation is already
 visible but power-loss durability is uncertain: retain both generations, inspect
 and retry startup; do not overwrite the new version with its predecessor merely

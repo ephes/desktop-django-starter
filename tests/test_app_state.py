@@ -2,6 +2,7 @@ import json
 import shutil
 import sqlite3
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
@@ -189,6 +190,41 @@ else:
         connection.close()
     state_dir = prepare_versioned_state(tmp_path, "0.2.0")
     assert read_markers(state_dir / "app.sqlite3") == ["locked"]
+
+
+@pytest.mark.parametrize("backup_times_out", [True, False])
+def test_backup_preserves_first_error_when_both_closes_fail(
+    monkeypatch, tmp_path: Path, backup_times_out: bool
+) -> None:
+    from desktop_django_starter import app_state
+
+    source = tmp_path / "state" / "0.1.0" / "app.sqlite3"
+    make_database(source, "previous")
+    connections = Mock()
+    connections.target.close.side_effect = sqlite3.OperationalError("target close failed")
+    connections.source.close.side_effect = sqlite3.OperationalError("source close failed")
+    monkeypatch.setattr(
+        app_state.sqlite3, "connect", Mock(side_effect=[connections.source, connections.target])
+    )
+    if backup_times_out:
+        monkeypatch.setattr(app_state, "BACKUP_TIMEOUT_SECONDS", 0)
+
+        def expire_backup(target, *, pages, progress, sleep):
+            progress(sqlite3.SQLITE_BUSY, 1, 1)
+
+        connections.source.backup.side_effect = expire_backup
+        error_type = ImproperlyConfigured
+        message = "Timed out copying the previous app database"
+    else:
+        error_type = sqlite3.OperationalError
+        message = "target close failed"
+
+    with pytest.raises(error_type, match=message):
+        prepare_versioned_state(tmp_path, "0.2.0")
+
+    connections.target.close.assert_called_once_with()
+    connections.source.close.assert_called_once_with()
+    assert not (tmp_path / "state" / "0.2.0").exists()
 
 
 def test_unversioned_state_is_not_ordered_as_a_release(tmp_path: Path) -> None:
