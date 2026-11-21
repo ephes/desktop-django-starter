@@ -11,7 +11,7 @@ import sys
 import time
 import uuid
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -188,29 +188,40 @@ def _retire_stage(
     # Detach from the discoverable name before recursive deletion. A failed
     # identity check after rename leaves the detached bytes for inspection.
     retirement = root / f".dds-retired-{uuid.uuid4().hex}"
-    os.mkdir(retirement if parent_fd is None else retirement.name, mode=0o700, dir_fd=parent_fd)
-    with directory_guard(retirement, parent_fd=parent_fd) as retirement_fd:
-        if (
-            identity(admit(root, directory=True)) != parent_identity
-            or identity(admit(stage, directory=True)) != stage_identity
-        ):
-            raise state_error("abandoned stage or parent changed before detaching")
-        detached = retirement / stage.name
-        os.rename(
-            stage if parent_fd is None else stage.name,
-            detached if retirement_fd is None else stage.name,
-            src_dir_fd=parent_fd,
-            dst_dir_fd=retirement_fd,
-        )
-        detached_info = (
-            admit(detached, directory=True)
-            if retirement_fd is None
-            else os.stat(stage.name, dir_fd=retirement_fd, follow_symlinks=False)
-        )
-        if identity(detached_info) != stage_identity:
-            raise state_error("detached abandoned stage changed before removal")
-        shutil.rmtree(detached if retirement_fd is None else stage.name, dir_fd=retirement_fd)
-    os.rmdir(retirement if parent_fd is None else retirement.name, dir_fd=parent_fd)
+    retirement_name = retirement if parent_fd is None else retirement.name
+    os.mkdir(retirement_name, mode=0o700, dir_fd=parent_fd)
+    detached_moved = False
+    try:
+        with directory_guard(retirement, parent_fd=parent_fd) as retirement_fd:
+            if (
+                identity(admit(root, directory=True)) != parent_identity
+                or identity(admit(stage, directory=True)) != stage_identity
+            ):
+                raise state_error("abandoned stage or parent changed before detaching")
+            detached = retirement / stage.name
+            os.rename(
+                stage if parent_fd is None else stage.name,
+                detached if retirement_fd is None else stage.name,
+                src_dir_fd=parent_fd,
+                dst_dir_fd=retirement_fd,
+            )
+            detached_moved = True
+            detached_info = (
+                admit(detached, directory=True)
+                if retirement_fd is None
+                else os.stat(stage.name, dir_fd=retirement_fd, follow_symlinks=False)
+            )
+            if identity(detached_info) != stage_identity:
+                raise state_error("detached abandoned stage changed before removal")
+            shutil.rmtree(detached if retirement_fd is None else stage.name, dir_fd=retirement_fd)
+    except BaseException:
+        if not detached_moved:
+            # Nothing was detached yet; drop the still-empty retirement entry so
+            # retried recoveries do not accumulate discovery entries.
+            with suppress(OSError):
+                os.rmdir(retirement_name, dir_fd=parent_fd)
+        raise
+    os.rmdir(retirement_name, dir_fd=parent_fd)
 
 
 def recover_stages(root: Path) -> None:

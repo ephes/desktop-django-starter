@@ -823,8 +823,9 @@ are invalid, even if their values agree or names use JSON escapes; nested
 objects are checked too. Ambiguous owner claims retain the entire stage.
 Recovery rechecks the state root and stage identities before detaching the stage
 into a private `.dds-retired-<uuid>` directory and verifies its identity again
-before removal. A replacement or interrupted retirement can leave bytes under
-either hidden directory name. Inspect these directories offline before cleanup.
+before removal. A failure before detaching removes the empty retirement
+directory. A replacement or interrupted retirement can leave bytes under either
+hidden directory name. Inspect these directories offline before cleanup.
 Ambiguous completion markers stop reuse or import and leave the published
 generation untouched. Back up and inspect these records with all app processes
 closed; do not discard an earlier claim merely because a later claim looks valid.

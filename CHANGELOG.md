@@ -6,7 +6,8 @@
   changes during copying. Preserve the predecessor for retry.
 
 - Recheck the state root and inspected abandoned stage before detaching it for
-  removal. Retain stages with uncertain identity for offline inspection.
+  removal. Retain stages with uncertain identity for offline inspection and
+  remove the empty retirement directory when detaching fails.
 
 - Preserve the retryable routine queue response after rollback if diagnostics fail.
 - Fail restored routines with unencodable results or results over 1024 UTF-8

@@ -520,7 +520,9 @@ scans at most 1024 root entries and 16 stage candidates, validating at most
 regular trees with the exact owner record and known top-level entries qualify
 for deletion. Recovery rechecks the admitted state root and stage before
 renaming the stage into a private `.dds-retired-<uuid>` directory. It verifies
-the detached identity before recursive removal. POSIX uses directory-relative
+the detached identity before recursive removal. If a check or the rename fails
+before the stage is detached, the still-empty retirement directory is removed
+so retries do not accumulate root entries. POSIX uses directory-relative
 rename and removal; Windows rechecks named entries. Live cooperating
 initializers hold the same lock. Inspect retained ambiguous stages and leftover
 retirement directories with the app closed. Old-style hidden stages without

@@ -133,3 +133,36 @@ def test_recovery_retains_replacement_after_stage_inspection(monkeypatch, tmp_pa
     assert (stage / "unrelated").read_bytes() == b"synthetic replacement"
     assert (saved / ".stage-owner.json").is_file()
     assert "Retained ambiguous abandoned state stage" in caplog.text
+
+
+def test_recovery_removes_empty_retirement_when_stage_changes_before_detach(
+    monkeypatch, tmp_path, caplog
+):
+    app_state.prepare_versioned_state(tmp_path, "1.0.0")
+    root = tmp_path / "state"
+    stage = root / (".dds-stage-" + "d" * 32)
+    stage.mkdir()
+    (stage / ".stage-owner.json").write_text(
+        json.dumps({"schema": 1, "stage": stage.name, "kind": "dds-state-initialization"})
+    )
+    guard = state_staging.directory_guard
+    saved = tmp_path / "inspected"
+
+    @contextmanager
+    def replace_after_retirement_created(path, **kwargs):
+        if path.name.startswith(".dds-retired-") and stage.exists() and not saved.exists():
+            stage.rename(saved)
+            stage.mkdir()
+            (stage / "unrelated").write_bytes(b"synthetic replacement")
+        with guard(path, **kwargs) as descriptor:
+            yield descriptor
+
+    monkeypatch.setattr(state_staging, "directory_guard", replace_after_retirement_created)
+
+    app_state.prepare_versioned_state(tmp_path, "2.0.0")
+    app_state.prepare_versioned_state(tmp_path, "2.0.0")
+
+    assert (stage / "unrelated").read_bytes() == b"synthetic replacement"
+    assert (saved / ".stage-owner.json").is_file()
+    assert not [entry for entry in root.iterdir() if entry.name.startswith(".dds-retired-")]
+    assert "Retained ambiguous abandoned state stage" in caplog.text
