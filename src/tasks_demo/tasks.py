@@ -159,6 +159,8 @@ def reconcile_task_with_backend(
 
     try:
         backend_result = (result_loader or run_simulated_task.get_result)(backend_task_id)
+        if not _matches_routine_argument(task_row.pk, backend_result.args, backend_result.kwargs):
+            raise TaskResultMismatch("Routine argument does not match")
     except (TaskResultDoesNotExist, TaskResultMismatch):
         # Missing queue metadata cannot prove that a claimed worker has stopped.
         # Startup reconciliation retires abandoned claims after a restart.
@@ -199,6 +201,16 @@ def reconcile_task_with_backend(
         )
 
     return _mark_task_failed(task_row, backend_task_id, UNEXPECTED_BACKEND_RESULT)
+
+
+def _matches_routine_argument(task_id: int, args: object, kwargs: object) -> bool:
+    return (
+        isinstance(args, list)
+        and len(args) == 1
+        and type(args[0]) is int
+        and args[0] == task_id
+        and kwargs == {}
+    )
 
 
 def _validated_completion(payload: object) -> tuple[str, str, float, datetime]:

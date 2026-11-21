@@ -17,7 +17,11 @@ from django_tasks_db.models import DBTaskResult
 
 from tasks_demo.apps import TasksDemoConfig
 from tasks_demo.models import SimulatedTask
-from tasks_demo.tasks import SimulatedTaskFailure, run_simulated_task
+from tasks_demo.tasks import (
+    SimulatedTaskFailure,
+    reconcile_task_with_backend,
+    run_simulated_task,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -363,6 +367,38 @@ class TestTaskViews:
         assert task.completed_at == completed_at
         assert data["tasks"][0]["status"] == "DONE"
 
+    @pytest.mark.parametrize("loader", ["poll", "single"])
+    @pytest.mark.parametrize("status", [SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING])
+    def test_reconciliation_rejects_another_routines_completion(self, client, loader, status):
+        owner = SimulatedTask.objects.create(label="Owner")
+        backend = enqueue_demo_task(owner)
+        backend.set_successful(
+            {
+                "status": SimulatedTask.Status.DONE,
+                "result": "Owner's completion",
+                "duration": 2.0,
+                "completed_at": timezone.now().isoformat(),
+            }
+        )
+        other = SimulatedTask.objects.create(
+            label="Stale reference", status=status, backend_task_id=str(backend.pk)
+        )
+
+        if loader == "poll":
+            rows = client.get(reverse("tasks_demo:task-status")).json()["tasks"]
+            assert {row["id"]: row["result"] for row in rows}[owner.pk] == "Owner's completion"
+        else:
+            reconcile_task_with_backend(other)
+
+        other.refresh_from_db()
+        if status == SimulatedTask.Status.PENDING:
+            assert other.status == SimulatedTask.Status.FAILED
+            assert other.result == "Task result could not be found."
+        else:
+            assert other.status == SimulatedTask.Status.RUNNING
+            assert other.result is None
+            assert other.completed_at is None
+
     def test_task_status_marks_missing_backend_results_failed(self, client):
         task = SimulatedTask.objects.create(
             label="Missing backend task",
@@ -692,6 +728,8 @@ def test_reconciliation_preserves_worker_finalized_row(worker_status, backend_ou
         if backend_outcome == "missing":
             raise TaskResultDoesNotExist
         return SimpleNamespace(
+            args=[task.pk],
+            kwargs={},
             status={
                 "failed": TaskResultStatus.FAILED,
                 "successful": TaskResultStatus.SUCCESSFUL,
