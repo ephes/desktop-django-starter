@@ -256,6 +256,47 @@ def test_media_membership_change_in_already_copied_directory_refuses_publication
     )
 
 
+def test_in_place_edit_to_already_copied_media_file_refuses_publication(monkeypatch, tmp_path):
+    old = previous(tmp_path)
+    media = old / "media"
+    original = b"synthetic media"
+    edited = b"synthetic MEDIA"
+    for name in ("one", "two"):
+        upload = media / name
+        upload.write_bytes(original)
+        os.utime(upload, (1_600_000_000, 1_600_000_000))
+    before = media.stat()
+    reader = state_files.regular_reader
+    copied_files = []
+
+    @contextmanager
+    def edit_earlier_file_during_copy(path, **kwargs):
+        with reader(path, **kwargs) as stream:
+            if copied_files:
+                with copied_files[0].open("r+b") as writer:
+                    writer.write(edited)
+            yield stream
+        copied_files.append(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(state_files, "regular_reader", edit_earlier_file_during_copy)
+        with pytest.raises(ImproperlyConfigured, match="media.*copy failed") as error:
+            app_state.prepare_versioned_state(tmp_path, "2.0.0")
+
+    assert "media file changed during copy" in str(error.value.__cause__)
+    first, second = copied_files
+    after = media.stat()
+    assert (after.st_mtime_ns, after.st_ctime_ns) == (before.st_mtime_ns, before.st_ctime_ns)
+    assert sorted(p.name for p in old.parent.iterdir()) == [".initialize.lock", "1.0.0"]
+    assert app_state.prepare_versioned_state(tmp_path, "1.0.0") == old
+    assert first.read_bytes() == edited
+    assert second.read_bytes() == original
+
+    copied = app_state.prepare_versioned_state(tmp_path, "2.0.0")
+    assert (copied / "media" / first.name).read_bytes() == edited
+    assert (copied / "media" / second.name).read_bytes() == original
+
+
 def test_valid_nested_media_copies_only_files_and_leaves_cache(tmp_path):
     old = previous(tmp_path)
     (old / "media" / "nested").mkdir()

@@ -799,9 +799,9 @@ removes unpublished staging; repair the synthetic/imported tree or adjust the
 budget with enough free disk space, then retry. Each file is read only to its
 initial size. A short destination write stops the upgrade and retains the
 predecessor for retry. Detected identity, size, mtime or ctime changes during
-copying also refuse publication, including same-size in-place edits. Directory
-metadata is rechecked after traversal to detect media entries added, removed
-or renamed during copying. Close media writers and retry from the retained
+copying also refuse publication, including same-size in-place edits. The final
+metadata check covers directories and copied files, catching changes to earlier
+entries while a sibling is copied. Close media writers and retry from the retained
 predecessor. Change detection uses the available filesystem metadata. Media and
 SQLite can reflect different points in time. Cache is never imported.
 
