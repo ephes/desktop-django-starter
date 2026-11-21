@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refuse to replace a release checksum manifest when an input artifact changes
+  during hashing or before publication.
+
 - Validate a new desktop state generation before and after publishing it. An
   invalid staged copy leaves the final version path free for a retry.
 

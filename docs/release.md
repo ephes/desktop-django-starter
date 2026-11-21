@@ -542,8 +542,11 @@ resolve to the output manifest, including symlink and hard-link aliases. Exclude
 the manifest from rerun globs. Artifact basenames must be unique across all input
 directories and cannot contain newlines, carriage returns, or backslashes. The basename-only format
 remains compatible with downloaded platform artifact sets. All hashes are computed
-before a complete manifest is atomically replaced; failed validation or hashing
-preserves an existing manifest.
+from regular-file handles, reading at most the size recorded at open. The helper
+checks for changes to each open file and verifies that each input path, including
+any symlink used in the manifest, still identifies the hashed generation before
+replacing the manifest. Keep build outputs stable until this step completes. A
+detected change or hash failure preserves an existing manifest.
 Existing manifest permissions and output symlinks are preserved; new manifests use the process umask.
 
 

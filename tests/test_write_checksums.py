@@ -1,4 +1,5 @@
 import hashlib
+import importlib.util
 import os
 import stat
 import subprocess
@@ -8,6 +9,14 @@ from pathlib import Path
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "scripts/write-checksums.py"
+
+
+@pytest.fixture
+def checksum_script():
+    spec = importlib.util.spec_from_file_location("write_checksums", SCRIPT)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def run_manifest(output, *patterns):
@@ -58,6 +67,91 @@ def test_normal_manifest_is_verifiable_and_deterministic(tmp_path):
     assert output.read_text().splitlines() == [
         f"{hashlib.sha256(name.encode()).hexdigest()}  {name}" for name in ("app.dmg", "app.zip")
     ]
+
+
+def test_stable_artifact_symlink_keeps_its_manifest_name(tmp_path):
+    source = tmp_path / "app.zip"
+    source.write_bytes(b"artifact")
+    alias = tmp_path / "alias.zip"
+    try:
+        alias.symlink_to(source)
+    except OSError:
+        pytest.skip("symlink creation unavailable")
+
+    output = tmp_path / "checksums.txt"
+    result = run_manifest(output, alias, source)
+    assert result.returncode == 0, result.stderr
+    assert output.read_text() == f"{hashlib.sha256(b'artifact').hexdigest()}  alias.zip\n"
+
+
+def test_glob_ignores_symlink_loop_alongside_regular_artifact(tmp_path):
+    source = tmp_path / "app.zip"
+    source.write_bytes(b"artifact")
+    loop = tmp_path / "loop.zip"
+    try:
+        loop.symlink_to(loop.name)
+    except OSError:
+        pytest.skip("symlink creation unavailable")
+
+    output = tmp_path / "checksums.txt"
+    result = run_manifest(output, tmp_path / "*.zip")
+    assert result.returncode == 0, result.stderr
+    assert output.read_text() == f"{hashlib.sha256(b'artifact').hexdigest()}  app.zip\n"
+
+
+@pytest.mark.skipif(os.name == "nt", reason="Windows prevents replacing an open source file")
+def test_refuses_artifact_replaced_during_hash(tmp_path, monkeypatch, checksum_script):
+    source = tmp_path / "app.zip"
+    source.write_bytes(b"artifact")
+    replacement = tmp_path / "new.zip"
+    replacement.write_bytes(b"new data")
+    output = tmp_path / "checksums.txt"
+    output.write_bytes(b"previous manifest\n")
+    digest = hashlib.sha256()
+
+    class ReplacingDigest:
+        def update(self, chunk):
+            digest.update(chunk)
+            replacement.replace(source)
+
+        hexdigest = digest.hexdigest
+
+    monkeypatch.setattr(checksum_script.hashlib, "sha256", ReplacingDigest)
+    monkeypatch.setattr(sys, "argv", [str(SCRIPT), "--glob", str(source), "--output", str(output)])
+    with pytest.raises(SystemExit, match="Artifact changed"):
+        checksum_script.main()
+    assert output.read_bytes() == b"previous manifest\n"
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["app.zip", "checksums.txt"]
+
+
+def test_refuses_earlier_artifact_changed_during_later_hash(tmp_path, monkeypatch, checksum_script):
+    first = tmp_path / "a.zip"
+    first.write_bytes(b"first")
+    second = tmp_path / "b.zip"
+    second.write_bytes(b"second")
+    output = tmp_path / "checksums.txt"
+    output.write_bytes(b"previous manifest\n")
+    sha256 = hashlib.sha256
+
+    class UpdatingDigest:
+        def __init__(self):
+            self.digest = sha256()
+
+        def update(self, chunk):
+            self.digest.update(chunk)
+            if chunk == b"second":
+                first.write_bytes(b"updated first")
+
+        def hexdigest(self):
+            return self.digest.hexdigest()
+
+    monkeypatch.setattr(checksum_script.hashlib, "sha256", UpdatingDigest)
+    monkeypatch.setattr(
+        sys, "argv", [str(SCRIPT), "--glob", str(tmp_path / "*.zip"), "--output", str(output)]
+    )
+    with pytest.raises(SystemExit, match="Artifact changed"):
+        checksum_script.main()
+    assert output.read_bytes() == b"previous manifest\n"
 
 
 @pytest.mark.skipif(os.name == "nt", reason="POSIX file modes and filenames")
