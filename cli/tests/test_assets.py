@@ -18,7 +18,7 @@ from threading import Event
 
 import pytest
 import sync_assets
-from asset_lock import ASSET_MARKER
+from asset_lock import ASSET_MARKER, asset_lock, mark_asset_replacement, recover_asset_replacement
 from hatchling.build import build_sdist, build_wheel
 from sync_assets import CANONICAL_ASSETS
 
@@ -252,6 +252,114 @@ def test_success_replaces_stale_assets(asset_tree: tuple[Path, Path]) -> None:
     assert set(assets.parent.iterdir()) == {assets, assets.parent / ".assets-sync-lock"}
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX barrier")
+@pytest.mark.parametrize("operation", ["publish", "restore", "rollback"])
+def test_namespace_barrier_failure_preserves_recoverable_generations(
+    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    repo, assets = asset_tree
+    previous = tree_bytes(assets)
+    replacement = {**tree_bytes(repo), ".gitkeep": b"placeholder"}
+    marker = assets.parent / ASSET_MARKER
+    fsync = os.fsync
+    rename = Path.rename
+    promotion_attempted = False
+
+    def recover() -> None:
+        with asset_lock(assets.parent):
+            recover_asset_replacement(assets)
+
+    def fail_rollback_publication(src: Path, dst: Path) -> Path:
+        nonlocal promotion_attempted
+        if src.name == "staged":
+            promotion_attempted = True
+            raise OSError("promotion failed")
+        return rename(src, dst)
+
+    def fail_namespace_sync(fd: int) -> None:
+        if os.path.samestat(os.fstat(fd), assets.parent.stat()) and assets.exists():
+            if operation == "publish" and not list(assets.parent.glob(".assets-sync-*/staged")):
+                raise OSError("namespace flush failed")
+            if operation == "restore" or promotion_attempted:
+                raise OSError("namespace flush failed")
+        fsync(fd)
+
+    if operation == "restore":
+        work = assets.parent / ".assets-sync-interrupt"
+        shutil.copytree(repo, work / "staged")
+        (work / "staged" / ".gitkeep").write_bytes(b"placeholder")
+        with asset_lock(assets.parent):
+            mark_asset_replacement(assets, work)
+            assets.rename(work / "previous")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "fsync", fail_namespace_sync)
+        if operation == "rollback":
+            patch.setattr(Path, "rename", fail_rollback_publication)
+            with pytest.raises(OSError, match="promotion failed") as caught:
+                sync_assets.sync()
+            assert "namespace flush failed" in "".join(traceback.format_exception(caught.value))
+        else:
+            with pytest.raises(OSError, match="namespace flush failed"):
+                (recover if operation == "restore" else sync_assets.sync)()
+
+    assert marker.is_file()
+    (work,) = assets.parent.glob(".assets-sync-*/")
+    if operation == "publish":
+        assert tree_bytes(work / "previous") == previous
+        expected = replacement
+    else:
+        assert tree_bytes(work / "staged") == replacement
+        expected = previous
+    assert tree_bytes(assets) == expected
+    recover()
+    assert tree_bytes(assets) == expected
+    assert not marker.exists()
+    assert not work.exists()
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX barrier")
+def test_journal_unlink_is_flushed_before_discarding_backup(
+    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, assets = asset_tree
+    marker = assets.parent / ASSET_MARKER
+    previous = tree_bytes(assets)
+    replacement = {**tree_bytes(repo), ".gitkeep": b"placeholder"}
+    fsync = os.fsync
+    unlink = Path.unlink
+    record = b""
+
+    def capture_marker(path: Path, *args, **kwargs) -> None:
+        nonlocal record
+        if path == marker:
+            record = path.read_bytes()
+        unlink(path, *args, **kwargs)
+
+    def fail_retirement_sync(fd: int) -> None:
+        if record and os.path.samestat(os.fstat(fd), assets.parent.stat()):
+            raise OSError("journal retirement flush failed")
+        fsync(fd)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", capture_marker)
+        patch.setattr(os, "fsync", fail_retirement_sync)
+        with pytest.raises(OSError, match="journal retirement flush failed"):
+            sync_assets.sync()
+
+    assert not marker.exists()
+    (work,) = assets.parent.glob(".assets-sync-*/")
+    assert tree_bytes(work / "previous") == previous
+    assert tree_bytes(assets) == replacement
+    # Model a restart that lost the unsynced journal unlink.
+    marker.write_bytes(record)
+    with asset_lock(assets.parent):
+        recover_asset_replacement(assets)
+    assert tree_bytes(assets) == replacement
+    assert not marker.exists()
+    assert not work.exists()
+
+
 def test_parallel_publications_preserve_placeholder(
     asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -310,17 +418,14 @@ def test_first_sync_creates_assets(asset_tree: tuple[Path, Path]) -> None:
     assert set(assets.parent.iterdir()) == {assets, assets.parent / ".assets-sync-lock"}
 
 
-@pytest.mark.parametrize("cleanup_fails", [False, True])
 def test_rollback_failure_retains_previous_tree(
     asset_tree: tuple[Path, Path],
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture,
-    cleanup_fails: bool,
 ) -> None:
-    _, assets = asset_tree
+    repo, assets = asset_tree
     before = tree_bytes(assets)
     rename = Path.rename
-    remove = sync_assets.shutil.rmtree
     calls = []
     publish_error = OSError("promotion failed")
 
@@ -332,25 +437,19 @@ def test_rollback_failure_retains_previous_tree(
             raise OSError("restore failed")
         return rename(src, dst)
 
-    def fail_cleanup(path: Path, **kwargs) -> None:
-        if path.name == "staged" and cleanup_fails:
-            raise OSError("staging cleanup failed")
-        remove(path, **kwargs)
-
     monkeypatch.setattr(Path, "rename", fail_restore)
-    monkeypatch.setattr(sync_assets.shutil, "rmtree", fail_cleanup)
     with pytest.raises(OSError, match="promotion failed") as caught:
         sync_assets.sync()
     assert caught.value is publish_error
     assert calls == ["_assets", "staged", "previous"]
     (work,) = [path for path in assets.parent.iterdir() if path.is_dir()]
     assert tree_bytes(work / "previous") == before
-    assert (work / "staged").exists() == cleanup_fails
+    assert tree_bytes(work / "staged") == {**tree_bytes(repo), ".gitkeep": b"placeholder"}
+    assert (assets.parent / ASSET_MARKER).is_file()
 
     diagnostics = "".join(traceback.format_exception(caught.value))
     assert "restore failed" in diagnostics
     assert str(work / "previous") in diagnostics
-    assert ("staging cleanup failed" in diagnostics) == cleanup_fails
     assert str(work / "previous") in capsys.readouterr().out
 
 

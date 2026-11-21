@@ -20,6 +20,7 @@ from asset_lock import (
     asset_lock,
     mark_asset_replacement,
     recover_asset_replacement,
+    retire_asset_replacement,
     sync_directory,
     sync_staged_assets,
 )
@@ -86,7 +87,7 @@ def sync() -> None:
     # Keep the publication lock through rollback and its cleanup. A later
     # process may take ownership of the work directory as soon as we unlock.
     with ExitStack() as lock:
-        pending = False
+        journaled = False
         try:
             staged.mkdir()
             for rel, expected in sources.items():
@@ -111,39 +112,41 @@ def sync() -> None:
                 try:
                     mark_asset_replacement(ASSETS_DIR, work)
                 finally:
-                    pending = marker.exists()
+                    journaled = marker.exists()
+                sync_directory(work)
+                sync_directory(ASSETS_DIR.parent)
+
+                ASSETS_DIR.rename(backup)
+                # Make the predecessor reachable from its recovery path before promotion.
                 sync_directory(work)
                 sync_directory(ASSETS_DIR.parent)
 
             try:
-                if pending:
-                    ASSETS_DIR.rename(backup)
                 staged.rename(ASSETS_DIR)
             except BaseException as publish_error:
-                try:
-                    if backup.exists():
-                        backup.rename(ASSETS_DIR)
-                    if pending:
-                        marker.unlink(missing_ok=True)
-                        pending = False
-                except BaseException as restore_error:
-                    recovery = RuntimeError(f"Previous assets retained at {backup}")
-                    recovery.__cause__ = restore_error
-                    raise publish_error from recovery
+                if journaled:
+                    try:
+                        recover_asset_replacement(ASSETS_DIR)
+                    except BaseException as restore_error:
+                        recovery = RuntimeError(
+                            f"Asset recovery incomplete. Inspect {marker} and {work}. "
+                            f"Previous assets may be at {backup}."
+                        )
+                        recovery.__cause__ = restore_error
+                        raise publish_error from recovery
                 raise
-            if pending:
-                marker.unlink()
+            if journaled:
+                retire_asset_replacement(ASSETS_DIR, work)
+            else:
+                sync_directory(ASSETS_DIR.parent)
         except BaseException as primary:
             try:
-                if pending:
-                    if backup.exists():
-                        print(f"Previous assets retained at {backup}")
-                        if staged.exists():
-                            shutil.rmtree(staged)
-                else:
+                if not journaled:
                     shutil.rmtree(work)
+                elif backup.exists():
+                    print(f"Previous assets retained at {backup}")
             except BaseException as cleanup_error:
-                # Keep any rollback diagnostics in the chain under the primary error.
+                # Keep recovery diagnostics under the primary error.
                 cleanup_error.__cause__ = primary.__cause__
                 raise primary from cleanup_error
             raise

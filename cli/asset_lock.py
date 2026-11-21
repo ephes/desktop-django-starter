@@ -76,6 +76,16 @@ def mark_asset_replacement(assets: Path, work: Path) -> None:
     marker.replace(assets.parent / ASSET_MARKER)
 
 
+def retire_asset_replacement(assets: Path, work: Path) -> None:
+    """Make the selected generation and then journal removal durable."""
+    package = assets.parent
+    sync_directory(package)
+    sync_directory(work)
+    (package / ASSET_MARKER).unlink()
+    # If the unlink is lost on restart, recovery still needs the work tree.
+    sync_directory(package)
+
+
 def recover_asset_replacement(assets: Path) -> None:
     """Reconcile a pending publication while the caller holds the asset lock."""
     marker = assets.parent / ASSET_MARKER
@@ -110,7 +120,7 @@ def recover_asset_replacement(assets: Path) -> None:
         backup.rename(assets)
     elif (backup_id, current_id) not in {(None, previous_id), (previous_id, staged_id)}:
         raise RuntimeError(error)
-    marker.unlink()
+    retire_asset_replacement(assets, work)
     shutil.rmtree(work)
 
 
