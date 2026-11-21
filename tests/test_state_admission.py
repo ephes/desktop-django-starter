@@ -4,7 +4,7 @@ import errno
 import json
 import os
 import sqlite3
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from pathlib import Path
 
 import pytest
@@ -330,6 +330,44 @@ def test_in_place_edit_to_already_copied_media_file_refuses_publication(monkeypa
     copied = app_state.prepare_versioned_state(tmp_path, "2.0.0")
     assert (copied / "media" / first.name).read_bytes() == edited
     assert (copied / "media" / second.name).read_bytes() == original
+
+
+@pytest.mark.parametrize("legacy", [False, True], ids=["versioned-media", "absent-legacy-media"])
+def test_media_change_after_database_backup_refuses_publication(monkeypatch, tmp_path, legacy):
+    if legacy:
+        old = tmp_path
+        with closing(sqlite3.connect(old / "app.sqlite3")) as connection, connection:
+            connection.execute("CREATE TABLE sentinel (value TEXT)")
+            connection.execute("INSERT INTO sentinel VALUES ('synthetic')")
+    else:
+        old = previous(tmp_path)
+    upload = old / "media" / "upload"
+    if not legacy:
+        upload.write_bytes(b"synthetic")
+        os.utime(upload, (1_600_000_000, 1_600_000_000))
+    backup = app_state._copy_database
+
+    def backup_then_commit_attachment_edit(source, destination):
+        backup(source, destination)
+        with closing(sqlite3.connect(old / "app.sqlite3")) as writer, writer:
+            writer.execute("UPDATE sentinel SET value = 'SYNTHETIC'")
+            upload.parent.mkdir(exist_ok=True)
+            upload.write_bytes(b"SYNTHETIC")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(app_state, "_copy_database", backup_then_commit_attachment_edit)
+        with pytest.raises(ImproperlyConfigured, match="media"):
+            app_state.prepare_versioned_state(tmp_path, "2.0.0")
+
+    state_root = tmp_path / "state"
+    assert not (state_root / "2.0.0").exists()
+    assert not list(state_root.glob(".dds-stage-*"))
+    assert upload.read_bytes() == b"SYNTHETIC"
+
+    copied = app_state.prepare_versioned_state(tmp_path, "2.0.0")
+    assert (copied / "media" / "upload").read_bytes() == b"SYNTHETIC"
+    with closing(sqlite3.connect(copied / "app.sqlite3")) as reader:
+        assert reader.execute("SELECT value FROM sentinel").fetchone() == ("SYNTHETIC",)
 
 
 def test_valid_nested_media_copies_only_files_and_leaves_cache(tmp_path):

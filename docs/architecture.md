@@ -250,7 +250,13 @@ Current launcher contract:
 - Electron and Tauri packaged mode resolve the interpreter from `backend/runtime-manifest.json`
 - Electron and Tauri then run `manage.py` from `backend/` for both `runserver` and `db_worker`
 - packaged settings still rely on runtime environment variables for writable app data, bundle dir, localhost host/port, an optional secret-key override, and unbuffered Python output
-- existing secret keys are read once through a descriptor, with final symlinks/reparse points refused, regular-file and size checks (4096 bytes maximum), and POSIX ownership and descriptor permission checks; Windows uses `CreateFileW` with `FILE_FLAG_OPEN_REPARSE_POINT` and relies on app-data ACLs
+- existing secret keys are read through one descriptor, with final symlinks/reparse points refused, regular-file and size checks (4096 bytes maximum), and POSIX ownership and descriptor permission checks; Windows uses `CreateFileW` with `FILE_FLAG_OPEN_REPARSE_POINT` and relies on app-data ACLs
+- the key read must match the admitted byte count and the descriptor's identity,
+  size, mtime and ctime must agree before and after reading. When only ctime
+  changes as the link count drops from two to one, a concurrent creator may
+  have removed its temporary link. A single bounded reread must return the
+  same bytes with stable metadata. POSIX permission repair runs on the
+  verified descriptor after these checks.
 - no shell injects a `DJANGO_SECRET_KEY`; when the environment does not provide one, packaged settings generate a per-install `DJANGO_SECRET_KEY` in the app-data directory (`secret_key`, created once with `secrets.token_urlsafe(50)` and owner-only `0600` permissions on POSIX) and reuse it on later starts, so every install signs sessions, CSRF tokens, and password-reset links with its own key; an explicit `DJANGO_SECRET_KEY` environment variable still wins
 - packaged Django settings keep SQLite in per-user app data and now add desktop-oriented SQLite tuning with `transaction_mode=IMMEDIATE`, a 20-second timeout, `PRAGMA journal_mode=WAL;`, `PRAGMA synchronous=NORMAL;`, and modest cache/mmap settings
 - My Ponies uses 20-row database pages, ordered by update time, creation time
@@ -509,11 +515,12 @@ fail the copy before the staged tree is synced. Admission, opened-descriptor
 and final named-file metadata must agree on device/inode, size, nanosecond
 mtime and ctime.
 Detected in-place edits, growth, truncation or replacement refuse publication.
-At the end of traversal, each visited directory and copied file is checked
-again for matching identity, size, mtime and ctime. This detects membership
-changes and in-place edits to earlier entries while a sibling is copied. The
-checks use platform filesystem metadata. Media and SQLite may reflect different
-points in time, and hostile same-account mutation is outside the contract.
+After copying media, startup backs up SQLite, then checks each visited directory
+and copied file again for matching identity, size, mtime and ctime. This detects
+membership changes and in-place edits spanning traversal and the backup. An
+absent legacy media root must still be absent after the backup. Change detection
+uses platform filesystem metadata. Close all writers before upgrade for a
+quiescent source.
 Cache is disposable and never copied. Refusal removes only the private
 unpublished stage and preserves the predecessor. See the release guide for
 configurable limits and recovery.

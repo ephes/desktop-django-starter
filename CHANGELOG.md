@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Check source media across the SQLite backup during packaged upgrades. Refuse
+  publication on detected drift and keep the predecessor available for retry.
+
+- Refuse startup when a packaged secret key changes during reading. Repair
+  POSIX key permissions on the verified descriptor after the stability check.
+
 - Show native file-manager errors in the renderer when opening the app data
   folder fails.
 
