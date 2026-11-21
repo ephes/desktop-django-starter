@@ -18,7 +18,13 @@ from threading import Event
 
 import pytest
 import sync_assets
-from asset_lock import ASSET_MARKER, asset_lock, mark_asset_replacement, recover_asset_replacement
+from asset_lock import (
+    ASSET_MARKER,
+    asset_lock,
+    mark_asset_replacement,
+    recover_asset_replacement,
+    sync_staged_assets,
+)
 from hatchling.build import build_sdist, build_wheel
 from sync_assets import CANONICAL_ASSETS
 
@@ -243,6 +249,50 @@ def test_journal_barrier_failure_prevents_tree_renames(
     assert renamed == []
     assert tree_bytes(assets) == before
     assert marker.exists() == (barrier == "package directory")
+
+
+@pytest.mark.skipif(os.name == "nt", reason="POSIX barrier")
+@pytest.mark.parametrize("barrier", ["work directory", "package directory"])
+def test_vacant_assets_barrier_failure_restores_predecessor(
+    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, barrier: str
+) -> None:
+    _, assets = asset_tree
+    before = tree_bytes(assets)
+    marker = assets.parent / ASSET_MARKER
+    fsync = os.fsync
+
+    def fail_vacant_sync(fd: int) -> None:
+        backups = list(assets.parent.glob(".assets-sync-*/previous"))
+        if backups and not assets.exists():
+            target = backups[0].parent if barrier == "work directory" else assets.parent
+            if os.path.samestat(os.fstat(fd), target.stat()):
+                raise OSError("vacant flush failed")
+        fsync(fd)
+
+    monkeypatch.setattr(os, "fsync", fail_vacant_sync)
+    with pytest.raises(OSError, match="vacant flush failed"):
+        sync_assets.sync()
+    assert tree_bytes(assets) == before
+    assert not marker.exists()
+    assert set(assets.parent.iterdir()) == {assets, assets.parent / ".assets-sync-lock"}
+
+
+@pytest.mark.skipif(
+    os.name == "nt" or os.geteuid() == 0, reason="needs POSIX permission checks"
+)
+def test_windows_staged_flush_accepts_read_only_copies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    staged = tmp_path / "staged"
+    staged.mkdir()
+    placeholder = staged / ".gitkeep"
+    placeholder.write_bytes(b"")
+    placeholder.chmod(0o444)
+    monkeypatch.setattr(os, "name", "nt")
+    with pytest.warns(RuntimeWarning, match="unavailable on Windows"):
+        sync_staged_assets(staged)
+    monkeypatch.undo()
+    assert placeholder.stat().st_mode & 0o777 == 0o444
 
 
 def test_success_replaces_stale_assets(asset_tree: tuple[Path, Path]) -> None:

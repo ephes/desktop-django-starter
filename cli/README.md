@@ -156,7 +156,8 @@ files and reports that directory sync and power-loss guarantees for renames
 are unavailable. After a process stops mid-publication, the next sync or build
 restores the recorded predecessor if the bundle path is vacant, or keeps the
 completed replacement if promotion already finished. On POSIX, sync flushes the
-predecessor's move to the recovery directory before promotion. Publication and
+predecessor's move to the recovery directory before promotion and restores the
+predecessor if that flush fails. Publication and
 recovery flush the selected directory entry before removing the journal, then
 flush the journal removal before discarding the work directory. A failed
 namespace flush keeps the recorded generations and journal available for retry.

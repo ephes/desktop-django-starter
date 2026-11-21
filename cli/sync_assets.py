@@ -117,11 +117,13 @@ def sync() -> None:
                 sync_directory(ASSETS_DIR.parent)
 
                 ASSETS_DIR.rename(backup)
-                # Make the predecessor reachable from its recovery path before promotion.
-                sync_directory(work)
-                sync_directory(ASSETS_DIR.parent)
 
             try:
+                if journaled:
+                    # Make the predecessor reachable from its recovery path before
+                    # promotion. A failed barrier restores it like a failed rename.
+                    sync_directory(work)
+                    sync_directory(ASSETS_DIR.parent)
                 staged.rename(ASSETS_DIR)
             except BaseException as publish_error:
                 if journaled:

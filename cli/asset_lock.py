@@ -56,8 +56,20 @@ def sync_staged_assets(root: Path) -> None:
     for path in root.iterdir():
         if path.is_dir():
             sync_staged_assets(path)
+        elif os.name == "nt":
+            # Windows needs a writable handle for fsync, but copy2 keeps the
+            # read-only attribute of the source. Restore it after the flush.
+            mode = stat.S_IMODE(path.stat().st_mode)
+            if not mode & stat.S_IWRITE:
+                path.chmod(mode | stat.S_IWRITE)
+            try:
+                with path.open("r+b") as handle:
+                    sync_descriptor(handle.fileno(), path)
+            finally:
+                if not mode & stat.S_IWRITE:
+                    path.chmod(mode)
         else:
-            with path.open("r+b" if os.name == "nt" else "rb") as handle:
+            with path.open("rb") as handle:
                 sync_descriptor(handle.fileno(), path)
     sync_directory(root)
 

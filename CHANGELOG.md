@@ -8,6 +8,9 @@
 - Flush promoted or restored CLI asset paths before removing the publication
   journal. Retain the work directory until journal removal is durable.
 
+- Restore the previous CLI asset tree when flushing its move into the
+  recovery directory fails. Flush read-only staged asset copies on Windows.
+
 - Keep release checksum write and replacement errors visible when staging-file
   cleanup also fails, and report the retained staging filename.
 
