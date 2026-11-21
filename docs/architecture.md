@@ -297,7 +297,7 @@ Current launcher contract:
 - both the task page and polling endpoint show all pending/running rows and at
   most 100 terminal rows, selected by newest completion time (then creation time
   and ID). Active queue results are loaded with the backend's public
-  `DBTaskResult` model and `task_result` property in parameter-safe bulk batches,
+  `DBTaskResult` model and `task_result` property in parameter-safe bulk batches.
   Both bulk polling and single-result reconciliation require the matching task
   function and the routine's integer ID as the sole positional argument, as
   written by Start Routine. An argument mismatch follows the missing-result
