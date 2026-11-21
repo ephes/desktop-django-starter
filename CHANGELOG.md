@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Clear Finished Routines also retires verified, exclusively owned terminal
+  database queue results in the same batches as their routine history.
+
 - Require a backend result to carry the routine's own ID before reconciling it.
   Stale references follow the missing-result recovery policy.
 

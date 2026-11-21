@@ -307,6 +307,14 @@ Current launcher contract:
   response omits it; a routine whose backend result still reports it queued or
   running keeps its polled snapshot until the next poll.
   Older terminal rows remain until Clear Finished Routines deletes them.
+  Clearing uses batches of up to 100 routine rows in primary-key order.
+  Each batch commits its history deletion and verified backend deletions in the
+  same SQLite transaction. A backend result qualifies if it has terminal status,
+  matches the demo task path, backend and queue, carries the routine's integer
+  ID as its sole argument, and has a single routine reference. UUID spellings
+  are normalized when checking for sharing, and references found shared stay
+  protected across batches within the clear. Active jobs and unrecognized
+  results remain in the queue database.
   History pagination is outside this teaching demo.
   SQLite partial indexes cover active creation ordering and terminal completion,
   creation and ID ordering. The ORM uses OR equality predicates matching those

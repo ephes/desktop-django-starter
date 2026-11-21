@@ -12,7 +12,7 @@ from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from .models import SimulatedTask
-from .tasks import TASK_LABELS, run_simulated_task, visible_tasks
+from .tasks import TASK_LABELS, clear_finished_routines, run_simulated_task, visible_tasks
 
 logger = logging.getLogger(__name__)
 ACTIVE_ROUTINE_LIMIT = 16
@@ -61,9 +61,7 @@ def task_create(request):
 
 @require_POST
 def task_clear(request):
-    SimulatedTask.objects.filter(
-        status__in=[SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED]
-    ).delete()
+    clear_finished_routines()
     return JsonResponse({"cleared": True})
 
 
