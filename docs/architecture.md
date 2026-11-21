@@ -486,6 +486,8 @@ name/identity rechecks, with ACLs as the authority boundary. SQLite's public
 backup API still opens a filename, and settings ultimately return writable
 paths: concurrent hostile mutation by the same account is outside this contract.
 Directory identity changes detected during initialization refuse publication.
+On POSIX, the directory guard preserves an active error if closing its
+descriptor also fails. A standalone close failure stops initialization.
 System parent aliases such as macOS `/tmp` are allowed.
 
 Media copies stream a direct tree and refuse all links (including internal
@@ -496,14 +498,14 @@ fail the copy before the staged tree is synced. Admission, opened-descriptor
 and final named-file metadata must agree on device/inode, size, nanosecond
 mtime and ctime.
 Detected in-place edits, growth, truncation or replacement refuse publication.
-At the end of traversal, each visited directory's identity, size, mtime and
-ctime must still match its admission metadata. This detects membership changes
-in an earlier subtree while another subtree is being copied. The checks use
-platform filesystem metadata. Media and SQLite may reflect different points in
-time, and hostile same-account mutation is outside the contract. Cache is
-disposable and never copied. Refusal removes only the private unpublished stage
-and preserves the predecessor. See the release guide for configurable limits
-and recovery.
+At the end of traversal, each visited directory and copied file is checked
+again for matching identity, size, mtime and ctime. This detects membership
+changes and in-place edits to earlier entries while a sibling is copied. The
+checks use platform filesystem metadata. Media and SQLite may reflect different
+points in time, and hostile same-account mutation is outside the contract.
+Cache is disposable and never copied. Refusal removes only the private
+unpublished stage and preserves the predecessor. See the release guide for
+configurable limits and recovery.
 
 ### Interrupted and competing state initialization
 

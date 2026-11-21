@@ -51,9 +51,9 @@ Important constraints:
 - `src/tasks_demo/`: Background task visualization demo ("Stable Routines") with animated pulse-ring indicators, polling-based live updates, and a SQLite-backed `django.tasks` plus `django_tasks_db` worker flow (optional post-v1 extension).
 
 - Version upgrades read each media file only to its initial size and compare
-  identity, size, mtime and ctime around the copy. Detected changes refuse
-  publication; close writers and retry from the retained predecessor. This is
-  per-file change detection, not a snapshot across the database and media tree.
+  identity, size, mtime and ctime during each read and after traversal. Detected
+  changes refuse publication. Close writers and retry from the retained
+  predecessor. Media and SQLite can reflect different points in time.
 
 - Completion and stage-owner JSON markers reject duplicate decoded members at
   every depth, including escaped names and equal values. Ambiguous owner records

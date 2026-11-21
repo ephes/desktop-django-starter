@@ -64,6 +64,41 @@ def test_regular_reader_closes_descriptor_if_stream_construction_fails(
                 real_close(descriptor)
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Only POSIX directory guards own a descriptor")
+@pytest.mark.parametrize("directory_changed", [False, True])
+def test_directory_guard_close_failure_preserves_primary_refusal(
+    monkeypatch, tmp_path, directory_changed
+):
+    directory = tmp_path / "state"
+    directory.mkdir()
+    real_close = os.close
+    close_error = OSError("injected directory close failure")
+    closed = []
+    guarded_fd = None
+
+    def fail_guard_close(descriptor):
+        if descriptor == guarded_fd:
+            closed.append(descriptor)
+            real_close(descriptor)
+            raise close_error
+        real_close(descriptor)
+
+    expected = ImproperlyConfigured if directory_changed else OSError
+    message = "directory changed during initialization" if directory_changed else str(close_error)
+    with monkeypatch.context() as patch:
+        patch.setattr(os, "close", fail_guard_close)
+        with pytest.raises(expected, match=message) as error:
+            with state_files.directory_guard(directory) as guarded_fd:
+                assert guarded_fd is not None
+                if directory_changed:
+                    directory.rename(tmp_path / "original")
+                    directory.mkdir()
+
+    assert closed == [guarded_fd]
+    if not directory_changed:
+        assert error.value is close_error
+
+
 @pytest.mark.parametrize("damage", ["missing", "json", "version", "database", "media", "cache"])
 def test_existing_incomplete_generation_refuses_without_replacement(tmp_path, damage):
     previous(tmp_path)
@@ -254,6 +289,47 @@ def test_media_membership_change_in_already_copied_directory_refuses_publication
         sorted(p.relative_to(copied / "media") for p in (copied / "media").glob("*/*"))
         == source_files
     )
+
+
+def test_in_place_edit_to_already_copied_media_file_refuses_publication(monkeypatch, tmp_path):
+    old = previous(tmp_path)
+    media = old / "media"
+    original = b"synthetic media"
+    edited = b"synthetic MEDIA"
+    for name in ("one", "two"):
+        upload = media / name
+        upload.write_bytes(original)
+        os.utime(upload, (1_600_000_000, 1_600_000_000))
+    before = media.stat()
+    reader = state_files.regular_reader
+    copied_files = []
+
+    @contextmanager
+    def edit_earlier_file_during_copy(path, **kwargs):
+        with reader(path, **kwargs) as stream:
+            if copied_files:
+                with copied_files[0].open("r+b") as writer:
+                    writer.write(edited)
+            yield stream
+        copied_files.append(path)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(state_files, "regular_reader", edit_earlier_file_during_copy)
+        with pytest.raises(ImproperlyConfigured, match="media.*copy failed") as error:
+            app_state.prepare_versioned_state(tmp_path, "2.0.0")
+
+    assert "media file changed during copy" in str(error.value.__cause__)
+    first, second = copied_files
+    after = media.stat()
+    assert (after.st_mtime_ns, after.st_ctime_ns) == (before.st_mtime_ns, before.st_ctime_ns)
+    assert sorted(p.name for p in old.parent.iterdir()) == [".initialize.lock", "1.0.0"]
+    assert app_state.prepare_versioned_state(tmp_path, "1.0.0") == old
+    assert first.read_bytes() == edited
+    assert second.read_bytes() == original
+
+    copied = app_state.prepare_versioned_state(tmp_path, "2.0.0")
+    assert (copied / "media" / first.name).read_bytes() == edited
+    assert (copied / "media" / second.name).read_bytes() == original
 
 
 def test_valid_nested_media_copies_only_files_and_leaves_cache(tmp_path):

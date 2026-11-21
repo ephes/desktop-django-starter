@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Preserve the primary desktop state error when closing a guarded POSIX
+  directory also fails. A standalone close failure still stops initialization.
+
+- Recheck copied media files before completing the upgrade copy. Detected edits
+  to earlier files refuse publication and preserve the predecessor for retry.
+
 - Refuse desktop state publication when source media directory membership
   changes during copying. Preserve the predecessor for retry.
 

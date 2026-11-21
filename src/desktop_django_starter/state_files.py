@@ -63,7 +63,12 @@ def directory_guard(path: Path, *, parent_fd: int | None = None) -> Iterator[int
         yield descriptor
         if identity(admit(path, directory=True)) != identity(before):
             raise state_error("directory changed during initialization")
-    finally:
+    except BaseException:
+        if descriptor is not None:
+            with suppress(OSError):
+                os.close(descriptor)
+        raise
+    else:
         if descriptor is not None:
             os.close(descriptor)
 
@@ -126,6 +131,7 @@ def copy_media(source: Path, destination: Path) -> None:
     entries = 0
     source_bytes = 0
     directories: list[tuple[Path, tuple[int, ...]]] = []
+    files: list[tuple[Path, tuple[int, ...]]] = []
 
     def copy_directory(src: Path, dst: Path, depth: int, parent_fd: int | None = None) -> None:
         nonlocal entries, source_bytes
@@ -150,7 +156,8 @@ def copy_media(source: Path, destination: Path) -> None:
                             regular_reader(child, parent_fd=source_fd, stable=True) as reader,
                             target.open("xb") as writer,
                         ):
-                            remaining = os.fstat(reader.fileno()).st_size
+                            initial = os.fstat(reader.fileno())
+                            remaining = initial.st_size
                             if remaining > max_bytes - source_bytes:
                                 raise state_error("media byte budget exceeded")
                             while remaining:
@@ -161,13 +168,17 @@ def copy_media(source: Path, destination: Path) -> None:
                                 source_bytes += len(chunk)
                                 if writer.write(chunk) != len(chunk):
                                     raise state_error("short write while copying a media file")
+                        files.append((child, _generation(initial)))
 
     try:
         copy_directory(source, destination, 0)
-        # A previously visited directory can change while a sibling is copied.
-        # Keep one signature per admitted directory within the entry budget.
+        # Previously copied entries can change while a sibling is copied.
+        # The entry budget bounds the number of retained signatures plus the root.
         for directory, generation in reversed(directories):
             if _generation(admit(directory, directory=True)) != generation:
                 raise state_error("media directory changed during copy")
+        for file, generation in files:
+            if _generation(admit(file)) != generation:
+                raise state_error("media file changed during copy")
     except (OSError, ImproperlyConfigured) as error:
         raise state_error("media tree refused or copy failed") from error
