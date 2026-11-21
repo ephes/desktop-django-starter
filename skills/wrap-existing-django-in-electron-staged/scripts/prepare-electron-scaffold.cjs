@@ -17,7 +17,7 @@ const IGNORED_DIRS = new Set([
   "venv"
 ]);
 const STARTER_TEMPLATE_CHECKSUMS = {
-  "main.js": "ea376a6dce7b5778858ac255d2bc3ef7ed3e436f7c021f1f44a50e5600e0f4dc",
+  "main.js": "ff4f50575e4700aa868d9b028732834a327e8c85c50cbb4d6f1e9dbbe2dec73b",
   "scripts/electron-builder-config.cjs": "d273efe85f67cdffe611fd35b78cadd42457c665ebd8aec297d293b5fdb5680b",
   "scripts/launch-electron.cjs": "c383e90dc8ab279dcff53f4ba67375e17917bc7878df13a0a12e1b5244b9b0da",
   "scripts/stage-backend.cjs": "3a75fe18c59ced767bbfd7d00c664cd977e96a1bcaf352761289a678c9450999",
@@ -721,12 +721,10 @@ function updateLaunchScripts(electronRoot, targetConfig, slug) {
   );
   mainSource = replaceRequired(
     mainSource,
-    '  // Start the worker only after Django is healthy so startup failures are\n'
-      + '  // surfaced against a known-good migrated app database.\n'
-      + '  await startTaskWorker(port, runtimeMode, backendRoot, authToken);',
-    '  if (process.env.DESKTOP_DJANGO_ENABLE_TASK_WORKER === "1") {\n'
-      + '    await startTaskWorker(port, runtimeMode, backendRoot, authToken);\n'
-      + '  }',
+    '    await startTaskWorker(port, runtimeMode, backendRoot, authToken);',
+    '    if (process.env.DESKTOP_DJANGO_ENABLE_TASK_WORKER === "1") {\n'
+      + '      await startTaskWorker(port, runtimeMode, backendRoot, authToken);\n'
+      + '    }',
     mainPath
   );
   mainSource = replaceAllRequired(

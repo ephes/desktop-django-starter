@@ -145,7 +145,7 @@ The current implementation follows this sequence:
 4. Electron runs migrations using either the bundled runtime or a local development interpreter. In packaged mode, the first start of a new app version prepares that version's state directory first (see Data and Files).
 5. Electron completes any pending first-run demo seed, then starts Django.
 6. Django exposes a dedicated health endpoint.
-7. Electron polls that endpoint until it succeeds or times out (15 seconds).
+7. Electron polls that endpoint until it succeeds or times out (15 seconds). If that Django child exits, Electron cancels the pending request or retry delay and reports the exit as a startup failure.
 8. Electron starts the single `db_worker` process only after Django is healthy.
 9. Electron loads the main app window, then closes the splash window once the main window is ready to show.
 10. When the user closes the window or quits while background tasks are running or queued (`/desktop/activity/`), Electron asks first. Quitting then stops both child processes; on Windows with explicit forced process-tree termination (`taskkill /t /f`) rather than a graceful drain. Electron marks the session finished only after confirmed child exit and confirmed orphan recovery; uncertainty retains dirty evidence.

@@ -5,6 +5,7 @@ const fs = require("node:fs");
 const http = require("node:http");
 const net = require("node:net");
 const path = require("node:path");
+const { setTimeout: delay } = require("node:timers/promises");
 
 const {
   getRuntimeManifestPath,
@@ -253,12 +254,12 @@ function getOpenPort() {
   });
 }
 
-function getHealthStatus(url, authToken = "") {
+function getHealthStatus(url, authToken, signal) {
   return new Promise((resolve, reject) => {
     const healthUrl = new URL("/health/", url);
     const request = http.get(
       healthUrl,
-      { headers: buildDesktopAuthHeaders(authToken) },
+      { headers: buildDesktopAuthHeaders(authToken), signal },
       (response) => {
         response.resume();
         resolve(response.statusCode);
@@ -304,23 +305,25 @@ function getActivity(url, authToken = "") {
   });
 }
 
-async function waitForDjango(url, authToken = "", timeoutMs = STARTUP_TIMEOUT_MS) {
-  const deadline = Date.now() + timeoutMs;
+async function waitForDjango(url, authToken, signal) {
+  const deadline = Date.now() + STARTUP_TIMEOUT_MS;
 
-  while (Date.now() < deadline) {
-    try {
-      const statusCode = await getHealthStatus(url, authToken);
+  try {
+    signal.throwIfAborted();
+    while (Date.now() < deadline) {
+      // A connection or request timeout is retryable while Django is starting.
+      const statusCode = await getHealthStatus(url, authToken, signal).catch(() => null);
       if (statusCode === 200) {
         return;
       }
-    } catch (_error) {
-      // Poll until Django is ready or the timeout expires.
+      await delay(POLL_INTERVAL_MS, undefined, { signal });
     }
 
-    await sleep(POLL_INTERVAL_MS);
+    throw new Error(`Django did not become ready within ${STARTUP_TIMEOUT_MS}ms.`);
+  } finally {
+    // Report the process exit in place of a request or timer abort error.
+    signal.throwIfAborted();
   }
-
-  throw new Error(`Django did not become ready within ${timeoutMs}ms.`);
 }
 
 function getDjangoEnvironment(port, runtimeMode, backendRoot, authToken = "") {
@@ -517,13 +520,14 @@ function runManageCommand(args, port, runtimeMode, backendRoot, authToken) {
   });
 }
 
-function startDjangoServer(port, runtimeMode, backendRoot, authToken) {
+function startDjangoServer(port, runtimeMode, backendRoot, authToken, onStartupExit) {
   return startManagedProcess({
     processName: "django",
     port,
     runtimeMode,
     backendRoot,
     authToken,
+    onStartupExit,
     manageArgs: ["runserver", `${HOST}:${port}`, "--noreload"],
     exitTitle: "Django exited",
     exitMessage: (code, signal) => (
@@ -557,7 +561,8 @@ function startManagedProcess({
   authToken,
   manageArgs,
   exitTitle,
-  exitMessage
+  exitMessage,
+  onStartupExit
 }) {
   const invocation = buildManageInvocation(runtimeMode, backendRoot, manageArgs);
 
@@ -595,6 +600,9 @@ function startManagedProcess({
 
     child.once("exit", (code, signal) => {
       clearManagedProcess(processName, child);
+      if (onStartupExit?.(exitMessage(code, signal))) {
+        return;
+      }
       if (!shouldShowManagedProcessExitDialog({
         quitting,
         spawnFailed,
@@ -837,12 +845,24 @@ async function bootstrap() {
 
   const runCommand = args => runManageCommand(args, port, runtimeMode, backendRoot, authToken);
   await migrateDatabase(runtimeMode, runCommand);
-  await startDjangoServer(port, runtimeMode, backendRoot, authToken);
-  await waitForDjango(baseUrl, authToken);
-  // Start the worker only after Django is healthy so startup failures are
-  // surfaced against a known-good migrated app database.
-  await startTaskWorker(port, runtimeMode, backendRoot, authToken);
-  createWindow(baseUrl, authToken);
+
+  const startup = new AbortController();
+  let starting = true;
+  try {
+    await startDjangoServer(port, runtimeMode, backendRoot, authToken, message => {
+      if (!starting) return false;
+      startup.abort(new Error(message));
+      return true;
+    });
+    await waitForDjango(baseUrl, authToken, startup.signal);
+    // Start the worker only after Django is healthy so startup failures are
+    // surfaced against a known-good migrated app database.
+    await startTaskWorker(port, runtimeMode, backendRoot, authToken);
+    startup.signal.throwIfAborted();
+    createWindow(baseUrl, authToken);
+  } finally {
+    starting = false;
+  }
 }
 
 async function prepareForUpdateInstall() {
@@ -875,7 +895,10 @@ ipcMain.handle("desktop:open-app-data-directory", async (event) => {
   }
 
   const folderPath = app.getPath("userData");
-  await shell.openPath(folderPath);
+  const openError = await shell.openPath(folderPath);
+  if (openError) {
+    throw new Error(openError);
+  }
   return { path: folderPath };
 });
 
@@ -959,6 +982,7 @@ app.whenReady()
       }));
       await bootstrap();
     } catch (error) {
+      if (quitting || updateInstallInProgress) return;
       closeSplashWindow();
       dialog.showErrorBox(
         "Startup failed",
