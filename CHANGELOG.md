@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Reject saved and explicit unapproved OpenAI model selections before Codex
+  or Pi launches. Report how to select an approved model.
+  `dds init` re-prompts for an unapproved OpenAI model instead of saving or
+  keeping it, and `scripts/wrap --run --agent pi` launches
+  `openai-codex/gpt-6.2-sol`.
+
+- Default the packaged Pi wrapper to `openai-codex/gpt-6.2-sol` and show that
+  model in setup, help and preflight.
+
 - Flush staged CLI assets and their replacement journal before moving the
   previous asset tree. Report when the platform lacks directory sync.
 

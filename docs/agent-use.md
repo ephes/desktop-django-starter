@@ -67,7 +67,7 @@ The packaged CLI can be run without a local starter checkout:
 ```bash
 uvx desktop-django-starter init
 uvx desktop-django-starter wrap --run
-uvx desktop-django-starter wrap --run --harness pi --model openai-codex/gpt-5.4
+uvx desktop-django-starter wrap --run --harness pi --model openai-codex/gpt-6.2-sol
 ```
 
 `dds init` saves a user-level default harness plus an optional freeform default
@@ -88,10 +88,22 @@ Use `--harness` and `--model` to choose the agent harness and model. `--agent`
 remains available as a backward-compatible alias.
 
 Saved models apply only to the harness they were saved with. An explicit
-`--model` always wins; overriding the harness without a model uses that harness's
-default (Pi uses `openai-codex/gpt-5.4`). Changing harness during `dds init`
-starts the optional model prompt with no saved model; keeping the harness keeps
-its model.
+`--model` takes precedence over a saved model. If you switch harnesses without
+a model, Pi uses `openai-codex/gpt-6.2-sol` and the other harnesses use their
+CLI defaults. Switching harnesses during `dds init` starts the optional model
+prompt empty. Keeping the harness pre-fills its saved model.
+
+For Codex and Pi, `dds wrap --run` checks the selected OpenAI model before
+launch. The approved IDs are `gpt-6.2-sol` and `gpt-6.2-astra`. The check
+applies to recognized bare OpenAI IDs and `openai/` or `openai-codex/`
+references. To replace an older saved model, run `dds init` or pass
+`--model gpt-6.2-sol` for Codex or `--model openai-codex/gpt-6.2-sol` for Pi.
+Other provider references and the native Codex default follow the harness's
+own model configuration.
+`dds init` applies the same check. It re-prompts for an unapproved OpenAI
+model and does not keep an unapproved saved model when you press Enter.
+The source-checkout `scripts/wrap --run --agent pi` also launches
+`openai-codex/gpt-6.2-sol`.
 
 `dds wrap --emit-prompt` is an offline, read-only path that bypasses setup,
 saved config, discovery and tool checks, including when combined with `--run`.

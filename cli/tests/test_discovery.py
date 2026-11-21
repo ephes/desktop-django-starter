@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from dds import wrap
 from dds.cli import main
+from dds.config import WrapperConfig, default_config_path, save_wrapper_config
 
 EXCLUDED = (
     ".git",
@@ -111,6 +112,148 @@ def test_multiple_projects_remain_inspectable(preflight, capsys, harness):
     assert output.out.index(expected[0]) < output.out.index(expected[1])
     assert "Preflight passed." in output.out
     assert launches == [harness]
+
+
+@pytest.mark.parametrize("mode", ["launch", "help", "manual", "setup"])
+def test_pi_default_model_is_used_and_advertised(preflight, capsys, monkeypatch, mode):
+    root, _, _ = preflight
+    plant(root, ["manage.py"])
+    approved_model = "openai-codex/gpt-6.2-sol"
+
+    if mode == "launch":
+        commands = []
+        monkeypatch.setattr(wrap.os, "execvp", lambda name, argv: commands.append(argv))
+        main(["wrap", "--run", "--harness", "pi"])
+        assert commands[0][:3] == ["pi", "--model", approved_model]
+    elif mode == "help":
+        monkeypatch.setenv("COLUMNS", "200")
+        with pytest.raises(SystemExit) as error:
+            main(["wrap", "--help"])
+        assert error.value.code == 0
+        assert f"pi defaults to {approved_model}" in " ".join(capsys.readouterr().out.split())
+    elif mode == "manual":
+        main(["wrap"])
+        assert f"dds wrap --run --harness pi --model {approved_model}" in capsys.readouterr().out
+    else:
+        prompts = []
+
+        def answer(prompt):
+            prompts.append(prompt)
+            return ""
+
+        monkeypatch.setattr(wrap, "detect_installed_harnesses", lambda: {"pi": "/fake/pi"})
+        monkeypatch.setattr("builtins.input", answer)
+        wrap._run_setup_flow(existing_config=None, config_path=wrap.default_config_path())
+        assert approved_model in prompts[-1]
+        assert f"Default model: {approved_model}" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("source", ["saved", "explicit"])
+@pytest.mark.parametrize(
+    ("harness", "model", "replacement"),
+    [
+        ("codex", "gpt-5.4", "gpt-6.2-sol"),
+        ("codex", "o3", "gpt-6.2-sol"),
+        ("pi", "openai-codex/gpt-5.4", "openai-codex/gpt-6.2-sol"),
+        ("pi", " OpenAI / gpt-6.1-sol:high ", "openai-codex/gpt-6.2-sol"),
+        ("pi", "gpt-5.4-mini", "openai-codex/gpt-6.2-sol"),
+    ],
+)
+def test_disallowed_openai_model_stops_before_launch(
+    preflight, capsys, source, harness, model, replacement
+):
+    root, git_calls, launches = preflight
+    plant(root, ["manage.py"])
+    config_path = default_config_path()
+    saved = WrapperConfig(harness, model if source == "saved" else replacement)
+    save_wrapper_config(saved, config_path)
+    args = ["wrap", "--run", "--force"]
+    if source == "explicit":
+        args += ["--model", model]
+
+    with pytest.raises(SystemExit) as error:
+        main(args)
+
+    assert error.value.code == 1
+    diagnostic = capsys.readouterr().err
+    assert repr(model) in diagnostic
+    assert f"--model {replacement}" in diagnostic
+    assert ("dds init" in diagnostic) is (source == "saved")
+    assert not git_calls
+    assert not launches
+    assert wrap.load_wrapper_config(config_path) == saved
+
+
+@pytest.mark.parametrize(
+    ("harness", "approved", "saved"),
+    [
+        ("codex", "gpt-6.2-sol", "gpt-5.4"),
+        ("codex", "gpt-6.2-astra", "gpt-5.4"),
+        ("codex", "qwen3-coder", None),
+        ("pi", "openai/gpt-6.2-sol:high", "openai/gpt-5.4"),
+        ("pi", "ollama/gpt-5.4", "openai-codex/gpt-5.4"),
+        ("pi", "gpt-oss-120b", "openai-codex/gpt-5.4"),
+        ("claude", "claude-opus-4-6", None),
+    ],
+)
+def test_selected_model_is_passed_through(preflight, monkeypatch, harness, approved, saved):
+    root, _, _ = preflight
+    plant(root, ["manage.py"])
+    save_wrapper_config(WrapperConfig(harness, saved), default_config_path())
+    selected_models = []
+
+    def record_exec(name, argv):
+        assert name == harness
+        selected_models.append(argv[argv.index("--model") + 1])
+
+    monkeypatch.setattr(wrap.os, "execvp", record_exec)
+    monkeypatch.setattr(
+        wrap, "_run_claude", lambda prompt, assets, model: selected_models.append(model)
+    )
+    main(["wrap", "--run", "--model", approved])
+
+    assert selected_models == [approved]
+
+
+@pytest.mark.parametrize(
+    ("harness", "saved", "answers", "expected"),
+    [
+        ("codex", None, ["gpt-5.4", "gpt-6.2-sol"], "gpt-6.2-sol"),
+        ("pi", None, ["openai-codex/gpt-5.4:high", ""], None),
+        ("codex", "gpt-5.4", ["gpt-6.2-astra"], "gpt-6.2-astra"),
+        ("pi", "openai-codex/gpt-5.4", [""], None),
+        ("pi", "openai-codex/gpt-5.4", ["-"], None),
+        ("codex", "qwen3-coder", [""], "qwen3-coder"),
+    ],
+)
+def test_setup_rejects_unapproved_openai_models(
+    preflight, monkeypatch, capsys, harness, saved, answers, expected
+):
+    config_path = default_config_path()
+    existing = WrapperConfig(harness, saved) if saved else None
+    pending = iter([""] + answers)
+    prompts = []
+
+    def answer(prompt):
+        prompts.append(prompt)
+        return next(pending)
+
+    monkeypatch.setattr(wrap, "detect_installed_harnesses", lambda: {harness: f"/fake/{harness}"})
+    monkeypatch.setattr("builtins.input", answer)
+    config = wrap._run_setup_flow(existing_config=existing, config_path=config_path)
+
+    assert config == WrapperConfig(harness, expected)
+    assert wrap.load_wrapper_config(config_path) == config
+    assert len(prompts) == len(answers) + 1
+    output = capsys.readouterr().out
+    unapproved = [a for a in [saved, *answers] if a and a != "-" and a != expected]
+    for model in unapproved:
+        assert f"{model!r}" in output
+        assert "outside the approved GPT-6.2 model list" in output
+    if not unapproved:
+        assert "outside the approved" not in output
+    if saved and saved != expected:
+        assert f"[{saved}]" not in "".join(prompts)
 
 
 @pytest.mark.parametrize("run", [False, True])

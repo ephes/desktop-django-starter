@@ -6,6 +6,7 @@ import argparse
 import sys
 
 from dds import __version__
+from dds.config import DEFAULT_PI_MODEL
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -46,7 +47,8 @@ def main(argv: list[str] | None = None) -> None:
             "Overrides any saved default model. "
             "When omitted, a saved model is used only for its matching harness; "
             "otherwise the harness CLI default is used; "
-            "pi defaults to openai-codex/gpt-5.4."
+            f"pi defaults to {DEFAULT_PI_MODEL}. "
+            "Configured OpenAI models for Codex and Pi must be on the approved GPT-6.2 list."
         ),
     )
     wrap_parser.add_argument(

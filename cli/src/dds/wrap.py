@@ -18,6 +18,8 @@ from typing import BinaryIO
 
 from dds import __version__
 from dds.config import (
+    DEFAULT_PI_MODEL,
+    OPENAI_MODEL_EXAMPLE,
     SUPPORTED_HARNESSES,
     ConfigError,
     WrapperConfig,
@@ -34,10 +36,13 @@ SKILL_PATH = ASSETS_PATH / "skills" / "wrap-existing-django-in-electron" / "SKIL
 # The token in prompt.md that references the starter repo.  The CLI replaces
 # it with the absolute path to the installed assets so the agent can read files.
 _STARTER_TOKEN = "../desktop-django-starter/"
-DEFAULT_PI_MODEL = "openai-codex/gpt-5.4"
 _CLAUDE_TERMINATION_GRACE = 5.0
 _CLAUDE_MAX_EVENT_BYTES = 1024 * 1024
 _CLAUDE_DISPLAY_BYTES = 4096
+_OPENAI_PROVIDERS = frozenset({"openai", "openai-codex"})
+_APPROVED_OPENAI_MODELS = frozenset({OPENAI_MODEL_EXAMPLE, "gpt-6.2-astra"})
+_BARE_OPENAI_MODEL = re.compile(r"^(?:gpt-(?!oss(?:-|$))|chatgpt-|codex-|o[1-9](?:-|$))")
+_PI_THINKING_LEVELS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh", "max"})
 
 
 def _summarize_claude_tool_use(content: dict[str, object]) -> str | None:
@@ -368,7 +373,7 @@ def _model_prompt_hint(harness: str) -> str:
     if harness == "pi":
         return f" for example {DEFAULT_PI_MODEL}"
     if harness == "codex":
-        return " for example gpt-5.4"
+        return f" for example {OPENAI_MODEL_EXAMPLE}"
     return ""
 
 
@@ -389,23 +394,37 @@ def _prompt_for_harness(options: list[str], default: str) -> str:
 
 def _prompt_for_model(current_model: str | None, harness: str) -> str | None:
     current = current_model or ""
-    if current:
-        prompt = (
-            "Default model (optional; press Enter to keep current, '-' to clear"
-            f"{_model_prompt_hint(harness)}) [{current}]: "
-        )
-    else:
-        prompt = (
-            "Default model (optional; press Enter to use the harness default"
-            f"{_model_prompt_hint(harness)}): "
-        )
+    while True:
+        if current and _is_unapproved_openai_model(harness, current):
+            print(
+                f"The saved model {_bounded_text(repr(current), 200)} is outside the approved "
+                f"GPT-6.2 model list. Enter an approved model such as "
+                f"{_approved_model_replacement(harness)}, or press Enter to use the harness "
+                "default."
+            )
+            current = ""
+        if current:
+            prompt = (
+                "Default model (optional; press Enter to keep current, '-' to clear"
+                f"{_model_prompt_hint(harness)}) [{current}]: "
+            )
+        else:
+            prompt = (
+                "Default model (optional; press Enter to use the harness default"
+                f"{_model_prompt_hint(harness)}): "
+            )
 
-    answer = input(prompt).strip()
-    if not answer:
-        return current_model
-    if answer == "-":
-        return None
-    return answer
+        answer = input(prompt).strip()
+        if not answer:
+            return current or None
+        if answer == "-":
+            return None
+        if not _is_unapproved_openai_model(harness, answer):
+            return answer
+        print(
+            f"{_bounded_text(repr(answer), 200)} is outside the approved GPT-6.2 model list. "
+            f"Enter an approved model such as {_approved_model_replacement(harness)}."
+        )
 
 
 def _run_setup_flow(*, existing_config: WrapperConfig | None, config_path: Path) -> WrapperConfig:
@@ -446,6 +465,8 @@ def _run_setup_flow(*, existing_config: WrapperConfig | None, config_path: Path)
     print(f"Saved wrapper defaults to {saved_path}")
     if config.model:
         print(f"Default model: {config.model}")
+    elif harness == "pi":
+        print(f"Default model: {DEFAULT_PI_MODEL}")
     else:
         print("Default model: use each harness CLI default")
     print()
@@ -470,6 +491,48 @@ def _describe_model_source(resolved: _ResolvedRunConfig) -> str:
     if resolved.model_source is None:
         return "harness default"
     return resolved.model_source
+
+
+def _is_unapproved_openai_model(harness: str, model: str | None) -> bool:
+    if not model or harness not in ("codex", "pi"):
+        return False
+
+    reference = model.strip()
+    if harness == "pi":
+        base, _, suffix = reference.rpartition(":")
+        if suffix in _PI_THINKING_LEVELS:
+            reference = base
+
+    provider, separator, model_id = reference.lower().partition("/")
+    if separator:
+        if provider.strip() not in _OPENAI_PROVIDERS:
+            return False
+        model_id = model_id.strip()
+    else:
+        model_id = provider
+        if not _BARE_OPENAI_MODEL.match(model_id):
+            return False
+
+    return model_id not in _APPROVED_OPENAI_MODELS
+
+
+def _approved_model_replacement(harness: str) -> str:
+    return DEFAULT_PI_MODEL if harness == "pi" else OPENAI_MODEL_EXAMPLE
+
+
+def _validate_openai_model(resolved: _ResolvedRunConfig) -> None:
+    if not _is_unapproved_openai_model(resolved.harness, resolved.model):
+        return
+
+    replacement = _approved_model_replacement(resolved.harness)
+    instruction = f"Pass `--model {replacement}`"
+    if resolved.model_source == "config":
+        instruction += " or update the saved model with `dds init`"
+    raise HarnessResolutionError(
+        f"{resolved.harness} OpenAI model {_bounded_text(repr(resolved.model), 200)} "
+        f"({_describe_model_source(resolved)}) is outside the approved GPT-6.2 model list. "
+        f"{instruction}."
+    )
 
 
 def _resolve_run_config(agent: str | None, model: str | None) -> _ResolvedRunConfig:
@@ -586,6 +649,7 @@ def run_wrap(
     if run_agent:
         try:
             resolved_run = _resolve_run_config(agent, model)
+            _validate_openai_model(resolved_run)
         except HarnessResolutionError as exc:
             print(f"error: {exc}", file=sys.stderr)
             sys.exit(1)
@@ -597,6 +661,8 @@ def run_wrap(
         print(f"  harness: {resolved_run.harness} ({_describe_harness_source(resolved_run)})")
         if resolved_run.model:
             print(f"  model: {resolved_run.model} ({_describe_model_source(resolved_run)})")
+        elif resolved_run.harness == "pi":
+            print(f"  model: {DEFAULT_PI_MODEL} (wrapper default)")
         else:
             print("  model: harness default")
     print()
@@ -710,7 +776,7 @@ def run_wrap(
         print()
         print("With a specific model:")
         print()
-        print("  dds wrap --run --harness pi --model openai-codex/gpt-5.4")
+        print(f"  dds wrap --run --harness pi --model {DEFAULT_PI_MODEL}")
         print()
         print("Or generate the resolved prompt for manual use:")
         print()

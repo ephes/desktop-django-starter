@@ -19,7 +19,7 @@ dds init
 dds wrap
 dds wrap --run
 dds wrap --run --agent codex
-dds wrap --run --harness pi --model openai-codex/gpt-5.4
+dds wrap --run --harness pi --model openai-codex/gpt-6.2-sol
 ```
 
 ## Commands
@@ -47,10 +47,22 @@ Claude works. Older `dds` builds delegated to Claude's default text output,
 which could look idle until the agent finished.
 
 Saved models apply only to the harness they were saved with. An explicit
-`--model` always wins; overriding the harness without a model uses that harness's
-default (Pi uses `openai-codex/gpt-5.4`). Changing harness during `dds init`
-starts the optional model prompt with no saved model; keeping the harness keeps
-its model.
+`--model` takes precedence over a saved model. If you switch harnesses without
+a model, Pi uses `openai-codex/gpt-6.2-sol` and the other harnesses use their
+CLI defaults. Switching harnesses during `dds init` starts the optional model
+prompt empty. Keeping the harness pre-fills its saved model.
+
+For Codex and Pi, `dds wrap --run` checks the selected OpenAI model before
+launch. The approved IDs are `gpt-6.2-sol` and `gpt-6.2-astra`. The check
+applies to recognized bare OpenAI IDs and `openai/` or `openai-codex/`
+references. To replace an older saved model, run `dds init` or pass
+`--model gpt-6.2-sol` for Codex or `--model openai-codex/gpt-6.2-sol` for Pi.
+Other provider references and the native Codex default follow the harness's
+own model configuration.
+`dds init` applies the same check. It re-prompts for an unapproved OpenAI
+model and does not keep an unapproved saved model when you press Enter.
+The source-checkout `scripts/wrap --run --agent pi` also launches
+`openai-codex/gpt-6.2-sol`.
 
 Preflight requires a successful `git status`. A failed inspection blocks wrapping
 even with `--force`; that flag permits known uncommitted changes and an existing
