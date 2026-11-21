@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refuse startup when a packaged secret key changes during reading. Repair
+  POSIX key permissions on the verified descriptor after the stability check.
+
 - Show native file-manager errors in the renderer when opening the app data
   folder fails.
 

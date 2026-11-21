@@ -108,11 +108,32 @@ def _read_secret_key(key_path: Path) -> str | None:
         ):
             raise ValueError("expected a small, owner-held regular file")
         # Bounded even if the file grows after fstat. No pathname is reopened.
-        with os.fdopen(descriptor, "rb") as key_file:
+        with os.fdopen(descriptor, "rb", buffering=0) as key_file:
             descriptor = None
             raw_key = key_file.read(SECRET_KEY_MAX_BYTES + 1)
             if len(raw_key) > SECRET_KEY_MAX_BYTES:
                 raise ValueError("key file is too large")
+            after = os.fstat(key_file.fileno())
+            if (
+                after.st_ctime_ns != info.st_ctime_ns
+                and info.st_nlink == 2
+                and after.st_nlink == 1
+                and _key_content_generation(after) == _key_content_generation(info)
+            ):
+                # The creator may have removed its temporary hard link.
+                # Require identical bytes and a stable descriptor on a single reread.
+                key_file.seek(0)
+                if key_file.read(SECRET_KEY_MAX_BYTES + 1) == raw_key:
+                    info, after = after, os.fstat(key_file.fileno())
+            if (
+                len(raw_key) != info.st_size
+                or _key_content_generation(after) != _key_content_generation(info)
+                or after.st_ctime_ns != info.st_ctime_ns
+            ):
+                raise ImproperlyConfigured(
+                    f"The packaged secret key file {key_path} changed while being read. "
+                    "Close other app processes and finish any key maintenance before retrying."
+                )
             key = raw_key.decode("ascii").strip()
             if not key:
                 raise ValueError("key is empty")
@@ -130,3 +151,7 @@ def _read_secret_key(key_path: Path) -> str | None:
     finally:
         if descriptor is not None:
             os.close(descriptor)
+
+
+def _key_content_generation(info: os.stat_result) -> tuple[int, int, int, int]:
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns

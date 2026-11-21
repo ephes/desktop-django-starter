@@ -746,6 +746,9 @@ Release artifacts do not contain a Django `SECRET_KEY`, and none of the shells i
 - Deleting `secret_key` (or the whole app-data directory) generates a new key on the next start and signs out existing sessions.
 - Existing keys must be regular files of at most 4096 ASCII bytes. Final symlinks (including dangling ones), Windows reparse points, directories, FIFOs and oversized files stop startup with a configuration error before reading. POSIX keys must belong to the current user and permissions are tightened on the open descriptor; Windows opens the entry itself and relies on per-user app-data ACLs. Replace an unsafe entry with an owned regular key file, or remove only that entry to generate a new key and sign out existing sessions.
 - An empty or non-ASCII `secret_key` file stops startup with `ImproperlyConfigured` instead of silently replacing the key; delete it to regenerate.
+- Startup also refuses a short read or a change in the open key's identity, size
+  or timestamps during the read. Finish key maintenance with the app closed
+  before retrying startup.
 - Builds made before this change shipped a shared, public fallback key. Upgrading such an install generates a new per-install key once, which signs users out of the local app a single time.
 - The build-time `stage-backend` step still uses a stage-only placeholder key for `collectstatic` and similar commands, so staging never writes a `secret_key` file into build output.
 

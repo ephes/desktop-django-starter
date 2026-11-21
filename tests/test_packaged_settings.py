@@ -234,6 +234,32 @@ def test_secret_key_read_is_bounded_if_file_grows(monkeypatch, tmp_path: Path) -
         load_or_create_secret_key(tmp_path)
 
 
+@pytest.mark.parametrize("replacement", [b"edited-secret", b"short"])
+def test_secret_key_refuses_in_place_changes_during_read(
+    monkeypatch, tmp_path: Path, replacement: bytes
+) -> None:
+    key_path = tmp_path / SECRET_KEY_FILENAME
+    key_path.write_bytes(b"stable-secret")
+    assert load_or_create_secret_key(tmp_path) == "stable-secret"
+    original_fdopen = os.fdopen
+    original_info = key_path.stat()
+
+    def edit_before_read(descriptor, mode, **kwargs):
+        key_path.write_bytes(replacement)
+        os.utime(
+            key_path,
+            ns=(original_info.st_atime_ns, original_info.st_mtime_ns - 2_000_000_000),
+        )
+        return original_fdopen(descriptor, mode, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(runtime_secret.os, "fdopen", edit_before_read)
+        with pytest.raises(ImproperlyConfigured, match="changed while being read"):
+            load_or_create_secret_key(tmp_path)
+
+    assert load_or_create_secret_key(tmp_path) == replacement.decode("ascii")
+
+
 def test_windows_secret_open_preserves_reparse_points(monkeypatch, tmp_path: Path) -> None:
     import ctypes
     from types import SimpleNamespace
@@ -258,6 +284,7 @@ def test_windows_secret_open_preserves_reparse_points(monkeypatch, tmp_path: Pat
     assert calls[0][5] & 0x00200000  # FILE_FLAG_OPEN_REPARSE_POINT
 
 
+@pytest.mark.skipif(os.name == "nt", reason="Only POSIX repairs permissions on the descriptor")
 def test_secret_key_permissions_follow_descriptor_after_path_replacement(
     monkeypatch, tmp_path: Path
 ) -> None:
@@ -268,18 +295,19 @@ def test_secret_key_permissions_follow_descriptor_after_path_replacement(
     unrelated.write_text("unrelated")
     unrelated.chmod(0o644)
     unrelated_mode = unrelated.stat().st_mode
-    original_fdopen = os.fdopen
+    original_fchmod = os.fchmod
     changed = []
 
-    def replace_path(descriptor, mode):
+    def replace_path_and_repair(descriptor, mode):
         key_path.rename(tmp_path / "saved-key")
         key_path.symlink_to(unrelated)
         changed.append(True)
-        return original_fdopen(descriptor, mode)
+        original_fchmod(descriptor, mode)
 
-    monkeypatch.setattr(runtime_secret.os, "fdopen", replace_path)
+    monkeypatch.setattr(runtime_secret.os, "fchmod", replace_path_and_repair)
     assert load_or_create_secret_key(tmp_path) == "original-key"
     assert changed == [True]
+    assert stat.S_IMODE((tmp_path / "saved-key").stat().st_mode) == 0o600
     assert unrelated.stat().st_mode == unrelated_mode
     assert unrelated.read_text() == "unrelated"
 
@@ -292,3 +320,20 @@ def test_concurrent_secret_creators_read_one_complete_key(tmp_path: Path) -> Non
     assert len(set(keys)) == 1
     assert len(keys[0]) >= 50
     assert [p.name for p in tmp_path.iterdir()] == [SECRET_KEY_FILENAME]
+
+
+def test_secret_key_read_survives_creator_retiring_its_temp_link(
+    monkeypatch, tmp_path: Path
+) -> None:
+    key_path = tmp_path / SECRET_KEY_FILENAME
+    temp_path = tmp_path / ".secret_key.synthetic.tmp"
+    temp_path.write_bytes(b"published-key")
+    os.link(temp_path, key_path)
+    original_fdopen = os.fdopen
+
+    def retire_temp_link(descriptor, mode, **kwargs):
+        temp_path.unlink()
+        return original_fdopen(descriptor, mode, **kwargs)
+
+    monkeypatch.setattr(runtime_secret.os, "fdopen", retire_temp_link)
+    assert load_or_create_secret_key(tmp_path) == "published-key"
