@@ -19,7 +19,7 @@ dds init
 dds wrap
 dds wrap --run
 dds wrap --run --agent codex
-dds wrap --run --harness pi --model openai-codex/gpt-5.4
+dds wrap --run --harness pi --model openai-codex/gpt-6.2-sol
 ```
 
 ## Commands
@@ -48,7 +48,7 @@ which could look idle until the agent finished.
 
 Saved models apply only to the harness they were saved with. An explicit
 `--model` always wins; overriding the harness without a model uses that harness's
-default (Pi uses `openai-codex/gpt-5.4`). Changing harness during `dds init`
+default (Pi uses `openai-codex/gpt-6.2-sol`). Changing harness during `dds init`
 starts the optional model prompt with no saved model; keeping the harness keeps
 its model.
 

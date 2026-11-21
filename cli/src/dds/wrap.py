@@ -18,6 +18,8 @@ from typing import BinaryIO
 
 from dds import __version__
 from dds.config import (
+    DEFAULT_PI_MODEL,
+    OPENAI_MODEL_EXAMPLE,
     SUPPORTED_HARNESSES,
     ConfigError,
     WrapperConfig,
@@ -34,7 +36,6 @@ SKILL_PATH = ASSETS_PATH / "skills" / "wrap-existing-django-in-electron" / "SKIL
 # The token in prompt.md that references the starter repo.  The CLI replaces
 # it with the absolute path to the installed assets so the agent can read files.
 _STARTER_TOKEN = "../desktop-django-starter/"
-DEFAULT_PI_MODEL = "openai-codex/gpt-5.4"
 _CLAUDE_TERMINATION_GRACE = 5.0
 _CLAUDE_MAX_EVENT_BYTES = 1024 * 1024
 _CLAUDE_DISPLAY_BYTES = 4096
@@ -368,7 +369,7 @@ def _model_prompt_hint(harness: str) -> str:
     if harness == "pi":
         return f" for example {DEFAULT_PI_MODEL}"
     if harness == "codex":
-        return " for example gpt-5.4"
+        return f" for example {OPENAI_MODEL_EXAMPLE}"
     return ""
 
 
@@ -446,6 +447,8 @@ def _run_setup_flow(*, existing_config: WrapperConfig | None, config_path: Path)
     print(f"Saved wrapper defaults to {saved_path}")
     if config.model:
         print(f"Default model: {config.model}")
+    elif harness == "pi":
+        print(f"Default model: {DEFAULT_PI_MODEL}")
     else:
         print("Default model: use each harness CLI default")
     print()
@@ -597,6 +600,8 @@ def run_wrap(
         print(f"  harness: {resolved_run.harness} ({_describe_harness_source(resolved_run)})")
         if resolved_run.model:
             print(f"  model: {resolved_run.model} ({_describe_model_source(resolved_run)})")
+        elif resolved_run.harness == "pi":
+            print(f"  model: {DEFAULT_PI_MODEL} (wrapper default)")
         else:
             print("  model: harness default")
     print()
@@ -710,7 +715,7 @@ def run_wrap(
         print()
         print("With a specific model:")
         print()
-        print("  dds wrap --run --harness pi --model openai-codex/gpt-5.4")
+        print(f"  dds wrap --run --harness pi --model {DEFAULT_PI_MODEL}")
         print()
         print("Or generate the resolved prompt for manual use:")
         print()

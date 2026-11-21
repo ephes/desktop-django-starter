@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Default the packaged Pi wrapper to `openai-codex/gpt-6.2-sol` and show that
+  model in setup, help and preflight.
+
 - Flush staged CLI assets and their replacement journal before moving the
   previous asset tree. Report when the platform lacks directory sync.
 

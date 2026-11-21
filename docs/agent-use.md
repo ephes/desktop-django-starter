@@ -67,7 +67,7 @@ The packaged CLI can be run without a local starter checkout:
 ```bash
 uvx desktop-django-starter init
 uvx desktop-django-starter wrap --run
-uvx desktop-django-starter wrap --run --harness pi --model openai-codex/gpt-5.4
+uvx desktop-django-starter wrap --run --harness pi --model openai-codex/gpt-6.2-sol
 ```
 
 `dds init` saves a user-level default harness plus an optional freeform default
@@ -89,7 +89,7 @@ remains available as a backward-compatible alias.
 
 Saved models apply only to the harness they were saved with. An explicit
 `--model` always wins; overriding the harness without a model uses that harness's
-default (Pi uses `openai-codex/gpt-5.4`). Changing harness during `dds init`
+default (Pi uses `openai-codex/gpt-6.2-sol`). Changing harness during `dds init`
 starts the optional model prompt with no saved model; keeping the harness keeps
 its model.
 

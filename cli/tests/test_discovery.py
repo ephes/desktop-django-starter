@@ -113,6 +113,40 @@ def test_multiple_projects_remain_inspectable(preflight, capsys, harness):
     assert launches == [harness]
 
 
+@pytest.mark.parametrize("mode", ["launch", "help", "manual", "setup"])
+def test_pi_default_model_is_used_and_advertised(preflight, capsys, monkeypatch, mode):
+    root, _, _ = preflight
+    plant(root, ["manage.py"])
+    approved_model = "openai-codex/gpt-6.2-sol"
+
+    if mode == "launch":
+        commands = []
+        monkeypatch.setattr(wrap.os, "execvp", lambda name, argv: commands.append(argv))
+        main(["wrap", "--run", "--harness", "pi"])
+        assert commands[0][:3] == ["pi", "--model", approved_model]
+    elif mode == "help":
+        monkeypatch.setenv("COLUMNS", "200")
+        with pytest.raises(SystemExit) as error:
+            main(["wrap", "--help"])
+        assert error.value.code == 0
+        assert f"pi defaults to {approved_model}" in " ".join(capsys.readouterr().out.split())
+    elif mode == "manual":
+        main(["wrap"])
+        assert f"dds wrap --run --harness pi --model {approved_model}" in capsys.readouterr().out
+    else:
+        prompts = []
+
+        def answer(prompt):
+            prompts.append(prompt)
+            return ""
+
+        monkeypatch.setattr(wrap, "detect_installed_harnesses", lambda: {"pi": "/fake/pi"})
+        monkeypatch.setattr("builtins.input", answer)
+        wrap._run_setup_flow(existing_config=None, config_path=wrap.default_config_path())
+        assert approved_model in prompts[-1]
+        assert f"Default model: {approved_model}" in capsys.readouterr().out
+
+
 @pytest.mark.parametrize("run", [False, True])
 def test_missing_tools_warn_only_in_print_mode(preflight, monkeypatch, capsys, run):
     root, _, launches = preflight

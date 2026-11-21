@@ -172,7 +172,7 @@ def test_pi_command_uses_default_or_custom_model() -> None:
     assert _pi_command("prompt", None) == [
         "pi",
         "--model",
-        "openai-codex/gpt-5.4",
+        "openai-codex/gpt-6.2-sol",
         "--thinking",
         "high",
         "-p",

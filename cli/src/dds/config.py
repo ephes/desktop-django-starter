@@ -20,6 +20,8 @@ else:
     import tomli as tomllib
 
 SUPPORTED_HARNESSES = ("claude", "pi", "codex")
+OPENAI_MODEL_EXAMPLE = "gpt-6.2-sol"
+DEFAULT_PI_MODEL = f"openai-codex/{OPENAI_MODEL_EXAMPLE}"
 _WRAP_SECTION = "wrap"
 # Windows refuses to replace a file while another process or thread is replacing
 # or reading it, and refuses to open one that is being replaced, so a concurrent
