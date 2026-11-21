@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Count only work on queues served by the shell worker when deciding whether
+  to confirm a quit. Apply the new activity index with `just migrate` in
+  development. Packaged shells migrate automatically.
+
 - Recover abandoned demo routines during desktop shell startup after the
   previous worker has stopped. Django setup, management checks and standalone
   worker startup leave active routines alone.

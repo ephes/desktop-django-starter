@@ -226,7 +226,7 @@ class DesktopDjangoStarterPositron(toga.App):
         from django_tasks_db.management.commands.db_worker import Worker
 
         self._task_worker = Worker(
-            queue_names=["default"],
+            queue_names=settings.DESKTOP_DJANGO_WORKER_QUEUES.split(","),
             interval=1.0,
             batch=False,
             backend_name=DEFAULT_TASK_BACKEND_ALIAS,

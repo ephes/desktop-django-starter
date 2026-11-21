@@ -17,7 +17,7 @@ const IGNORED_DIRS = new Set([
   "venv"
 ]);
 const STARTER_TEMPLATE_CHECKSUMS = {
-  "main.js": "50f9ae6826fdd20e8d54cc3276331493b442ba846283d993794818128f3720d9",
+  "main.js": "475df445e31ef7a06703f0b534acbd90334391ba866ff75affa50a44830431fe",
   "scripts/electron-builder-config.cjs": "d273efe85f67cdffe611fd35b78cadd42457c665ebd8aec297d293b5fdb5680b",
   "scripts/launch-electron.cjs": "c383e90dc8ab279dcff53f4ba67375e17917bc7878df13a0a12e1b5244b9b0da",
   "scripts/stage-backend.cjs": "3a75fe18c59ced767bbfd7d00c664cd977e96a1bcaf352761289a678c9450999",
@@ -715,8 +715,8 @@ function updateLaunchScripts(electronRoot, targetConfig, slug) {
   );
   mainSource = replaceRequired(
     mainSource,
-    '    manageArgs: ["db_worker", "--queue-name", "default", "--worker-id", "desktop-django-starter"],',
-    `    manageArgs: ["db_worker", "--queue-name", "default", "--worker-id", "${slug}"],`,
+    '    manageArgs: ["db_worker", "--queue-name=" + queueNames, "--worker-id", "desktop-django-starter"],',
+    `    manageArgs: ["db_worker", "--queue-name=" + queueNames, "--worker-id", "${slug}"],`,
     mainPath
   );
   mainSource = replaceRequired(

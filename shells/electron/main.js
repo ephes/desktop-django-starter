@@ -538,13 +538,14 @@ function startDjangoServer(port, runtimeMode, backendRoot, authToken, onStartupE
 }
 
 function startTaskWorker(port, runtimeMode, backendRoot, authToken) {
+  const queueNames = process.env.DESKTOP_DJANGO_WORKER_QUEUES || "default";
   return startManagedProcess({
     processName: "worker",
     port,
     runtimeMode,
     backendRoot,
     authToken,
-    manageArgs: ["db_worker", "--queue-name", "default", "--worker-id", "desktop-django-starter"],
+    manageArgs: ["db_worker", "--queue-name=" + queueNames, "--worker-id", "desktop-django-starter"],
     exitTitle: "Task worker exited",
     exitMessage: (code, signal) => (
       "The background task worker stopped before the desktop app finished.\n\n"

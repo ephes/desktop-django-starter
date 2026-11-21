@@ -39,9 +39,9 @@ Runnable starter slices:
   recently completed routines. Older history stays in SQLite until Clear Finished
   Routines removes it; the demo has no history pagination. SQLite indexes bound
   routine polling work to active rows and the history window. Shell activity
-  filters to queued/running backend rows before counting, excluding retained
-  terminal results. Run `just migrate` after updating development checkouts;
-  packaged startup applies the index migrations automatically before serving.
+  counts queued and running tasks on queues served by the shell worker.
+  Run `just migrate` after updating a development checkout. Packaged startup
+  applies the index migrations before serving.
 - Electron 45 shell under `shells/electron/`
 - Tauri 2 shell under `shells/tauri/` for local experiment scope, using the same staged backend contract and child-process worker model
 - Positron shell under `shells/positron/` for local experiment scope, running Django plus the optional task worker in-process inside a Toga web view
@@ -373,7 +373,7 @@ The shell-neutral staging build now lives in `scripts/stage-backend.cjs`, which 
 Electron and Tauri now supervise two backend commands from that staged bundle:
 
 - `manage.py runserver ...` for the local web app
-- `manage.py db_worker --queue-name default ...` for the `/tasks/` demo worker
+- `manage.py db_worker` for the `/tasks/` demo worker, with queues selected by the shell
 
 `just packaged-stage` installs the runtime dependencies from `uv.lock` (exported with hashes and installed with `--require-hashes`), then the project wheel without dependencies, so packaged builds ship the versions CI tested. A wrapped project without a `uv.lock` falls back to resolving from the index and prints a warning. Dependencies are installed into the staged runtime under `backend/python/lib/python3.14/site-packages` on the current macOS/Linux path. On Windows, the same contract is expected to resolve inside the staged `python/` tree rather than the repo environment.
 
@@ -383,6 +383,11 @@ Packaged mode still sets a small runtime environment at launch time:
 - `DESKTOP_DJANGO_APP_DATA_DIR` for writable SQLite/app data
 - `DESKTOP_DJANGO_BUNDLE_DIR` for bundle-relative assets
 - `DESKTOP_DJANGO_HOST` and `DESKTOP_DJANGO_PORT` for localhost startup
+- `DESKTOP_DJANGO_WORKER_QUEUES` selects the queues served by the worker and
+  counted on quit. It defaults to `default`. Use comma-separated names or
+  `*` for all queues on the default backend. Keep `default` in the list to
+  serve the routine demo, and declare additional enqueue targets in Django's
+  `TASKS["default"]["QUEUES"]`.
 - `DESKTOP_DJANGO_APP_VERSION` for the version-isolated state directory (`state/<version>/`)
 - `DESKTOP_DJANGO_AUTH_TOKEN` for the per-session shell-to-Django token; packaged settings refuse every request when it is missing, so a shell that forgets to pass it fails closed
 - `PYTHONUNBUFFERED=1`

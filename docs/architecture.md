@@ -327,21 +327,24 @@ Current launcher contract:
   indexes: a bound `IN` predicate cannot imply a literal partial-index `IN`
   condition in SQLite. Routine polling therefore visits active rows and the
   bounded history window without sorting or scanning all retained history.
-- Shell activity counts queued and running backend tasks in one conditional
-  aggregate statement on the database alias Django routes task writes to. A
-  READY-to-RUNNING transition cannot fall between two counter reads and falsely
-  report idle. An outer READY/RUNNING filter excludes
-  terminal backend history before aggregation, using the application's ordinary
-  `dds_backend_status_idx` status index. Apps without the backend still report
-  zero without a database query. The HTTP activity endpoint sends
+- Shell activity counts queued and running tasks served by the shell worker
+  in one conditional aggregate on the database alias Django routes task
+  writes to. A READY-to-RUNNING transition cannot fall between two counter
+  reads and falsely report idle. The worker and the count on the default
+  task backend share `DESKTOP_DJANGO_WORKER_QUEUES` (default `default`, comma
+  separated, or `*` for all queues). The ordinary
+  `dds_backend_activity_idx` index covers status, backend and queue, keeping
+  terminal history and unserved queues out of the aggregate. Apps without
+  the backend report zero without a database query. The HTTP activity endpoint sends
   `Cache-Control: no-store` even without shell authentication so each quit
   check reads fresh counts. Positron calls the count function directly.
 - Apply `tasks_demo.0003_routine_poll_indexes` and
-  `tasks_demo.0004_backend_activity_index` with `just migrate` in
-  development; packaged startup applies them before starting the web/worker
+  `tasks_demo.0004_backend_activity_index` plus
+  `tasks_demo.0005_backend_activity_queues` with `just migrate` in
+  development. Packaged startup applies them before starting the web and worker
   processes, including to copied version state. Index creation may briefly lock
-  a large local SQLite database. Both migrations reverse without deleting task
-  rows. The backend index uses Django's public schema-editor API and the
+  a large local SQLite database. The migrations reverse without deleting task
+  rows. The backend indexes use Django's public schema-editor API and the
   historical model from the pinned django-tasks-db 0.13.0 migration
   `django_tasks_database.0021_conditional_partial_index_ordering`; dependency
   upgrades must recheck that schema. The dependency's model and worker index

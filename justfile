@@ -39,7 +39,7 @@ backend-dev:
 
 task-worker:
     just migrate
-    uv run python manage.py db_worker --queue-name default --worker-id desktop-django-starter
+    uv run python manage.py db_worker --queue-name="${DESKTOP_DJANGO_WORKER_QUEUES:-default}" --worker-id desktop-django-starter
 
 electron-install:
     npm --prefix shells/electron install

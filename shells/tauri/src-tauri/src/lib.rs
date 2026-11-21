@@ -1218,6 +1218,10 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
         return Err(error);
     }
 
+    let queue_names = env::var("DESKTOP_DJANGO_WORKER_QUEUES")
+        .ok()
+        .filter(|names| !names.is_empty())
+        .unwrap_or_else(|| "default".to_string());
     let worker = start_managed_process(
         app,
         runtime_mode,
@@ -1226,8 +1230,7 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
         &auth_token,
         &[
             "db_worker",
-            "--queue-name",
-            "default",
+            &format!("--queue-name={queue_names}"),
             "--worker-id",
             "desktop-django-starter-tauri",
         ],
