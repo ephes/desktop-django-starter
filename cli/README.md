@@ -144,15 +144,25 @@ payload from that snapshot, so a sync can publish during archive creation.
 Leave the lock file in place. On Windows, retry the sync or build if the OS
 times out acquiring the lock. A complete tree replaces the old bundle,
 removing stale files while preserving an existing `.gitkeep` and its contents.
-Copy failures leave the old bundle intact. Publication failures restore it.
-If restoration fails, sync raises the original publication error. Its traceback
-includes the restoration error and the retained previous tree's recovery path
-under `cli/src/dds/.assets-sync-*/`. Cleanup errors during a failed sync are
-also included in the traceback.
-The publication marker records the directory identities before the two
-renames. After a process stops mid-publication, the next sync or build restores
-the recorded predecessor if the bundle path is vacant, or keeps the completed
-replacement if promotion already finished. An ambiguous marker or directory
+Copy failures leave the old bundle intact. A failed promotion attempts recovery
+under the same lock. If recovery fails, sync raises the original promotion
+error with the recovery error and paths under `cli/src/dds/.assets-sync-*/`.
+Cleanup errors during a failed sync are also included in the traceback.
+Before renaming either tree, sync flushes the staged files and records and
+flushes the directory identities in the publication marker. On POSIX it also
+flushes the staged directories, work directory and marker's parent directory.
+A failed barrier stops publication before either tree moves. Windows flushes
+files and reports that directory sync and power-loss guarantees for renames
+are unavailable. After a process stops mid-publication, the next sync or build
+restores the recorded predecessor if the bundle path is vacant, or keeps the
+completed replacement if promotion already finished. On POSIX, sync flushes the
+predecessor's move to the recovery directory before promotion and restores the
+predecessor if that flush fails. Publication and
+recovery flush the selected directory entry before removing the journal, then
+flush the journal removal before discarding the work directory. A failed
+namespace flush keeps the recorded generations and journal available for retry.
+If the flush after journal removal fails, the work directory remains available
+in case the journal reappears after restart. An ambiguous marker or directory
 stops the operation. Inspect the retained paths with syncs and builds stopped.
 Git and the build configuration exclude the lock, marker and work directories.
 If old-tree cleanup fails after publication, sync reports the cleanup failure
