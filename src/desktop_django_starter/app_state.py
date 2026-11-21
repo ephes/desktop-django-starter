@@ -290,12 +290,10 @@ def _readonly_database_uri(database: PurePath) -> str:
 def _copy_state(source: Path, destination: Path) -> None:
     with directory_guard(source), directory_guard(destination):
         with regular_reader(source / DATABASE_FILENAME):
-            for suffix in ("-wal", "-shm", "-journal"):
-                optional_file(source / (DATABASE_FILENAME + suffix))
-            _copy_database(source, destination)
-        source_media = source / MEDIA_DIRNAME
-        if os.path.lexists(source_media):
-            copy_media(source_media, destination / MEDIA_DIRNAME)
+            with copy_media(source / MEDIA_DIRNAME, destination / MEDIA_DIRNAME):
+                for suffix in ("-wal", "-shm", "-journal"):
+                    optional_file(source / (DATABASE_FILENAME + suffix))
+                _copy_database(source, destination)
 
 
 def _copy_database(source: Path, destination: Path) -> None:

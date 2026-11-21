@@ -114,8 +114,24 @@ def optional_file(path: Path) -> bool:
     return True
 
 
-def copy_media(source: Path, destination: Path) -> None:
-    """Copy a finite direct tree; links and special entries are never followed."""
+@contextmanager
+def copy_media(source: Path, destination: Path) -> Iterator[None]:
+    """Stage bounded media before the database backup and verify it afterwards."""
+    try:
+        source.lstat()
+    except FileNotFoundError:
+        has_media = False
+    else:
+        has_media = True
+    if not has_media:
+        # The legacy layout may start without a media directory.
+        yield
+        try:
+            source.lstat()
+        except FileNotFoundError:
+            return
+        raise state_error("media tree appeared during database backup")
+
     limits = []
     for suffix, default in [("ENTRIES", 100_000), ("BYTES", 2 * 1024**3), ("DEPTH", 64)]:
         try:
@@ -172,7 +188,13 @@ def copy_media(source: Path, destination: Path) -> None:
 
     try:
         copy_directory(source, destination, 0)
-        # Previously copied entries can change while a sibling is copied.
+    except (OSError, ImproperlyConfigured) as error:
+        raise state_error("media tree refused or copy failed") from error
+
+    yield
+
+    try:
+        # Earlier entries can change during traversal or the database backup.
         # The entry budget bounds the number of retained signatures plus the root.
         for directory, generation in reversed(directories):
             if _generation(admit(directory, directory=True)) != generation:

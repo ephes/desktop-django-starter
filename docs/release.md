@@ -802,11 +802,13 @@ removes unpublished staging; repair the synthetic/imported tree or adjust the
 budget with enough free disk space, then retry. Each file is read only to its
 initial size. A short destination write stops the upgrade and retains the
 predecessor for retry. Detected identity, size, mtime or ctime changes during
-copying also refuse publication, including same-size in-place edits. The final
-metadata check covers directories and copied files, catching changes to earlier
-entries while a sibling is copied. Close media writers and retry from the retained
-predecessor. Change detection uses the available filesystem metadata. Media and
-SQLite can reflect different points in time. Cache is never imported.
+copying also refuse publication, including same-size in-place edits. Startup
+copies media before taking the SQLite backup and checks source files and
+directories again afterwards, including whether a previously absent legacy
+media directory appeared. Detected drift stops publication and retains the
+previous state. These checks rely on filesystem metadata. Close the previous
+app and any external media writers to keep the source quiescent before upgrading
+or retrying. Cache is never imported.
 
 ### Interrupted upgrade recovery and durability
 

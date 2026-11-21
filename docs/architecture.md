@@ -515,11 +515,12 @@ fail the copy before the staged tree is synced. Admission, opened-descriptor
 and final named-file metadata must agree on device/inode, size, nanosecond
 mtime and ctime.
 Detected in-place edits, growth, truncation or replacement refuse publication.
-At the end of traversal, each visited directory and copied file is checked
-again for matching identity, size, mtime and ctime. This detects membership
-changes and in-place edits to earlier entries while a sibling is copied. The
-checks use platform filesystem metadata. Media and SQLite may reflect different
-points in time, and hostile same-account mutation is outside the contract.
+After copying media, startup backs up SQLite, then checks each visited directory
+and copied file again for matching identity, size, mtime and ctime. This detects
+membership changes and in-place edits spanning traversal and the backup. An
+absent legacy media root must still be absent after the backup. Change detection
+uses platform filesystem metadata. Close all writers before upgrade for a
+quiescent source.
 Cache is disposable and never copied. Refusal removes only the private
 unpublished stage and preserves the predecessor. See the release guide for
 configurable limits and recovery.
