@@ -18,6 +18,7 @@ from threading import Event
 
 import pytest
 import sync_assets
+from asset_lock import ASSET_MARKER
 from hatchling.build import build_sdist, build_wheel
 from sync_assets import CANONICAL_ASSETS
 
@@ -191,6 +192,57 @@ def test_publication_failure_restores_assets(
     assert len(failed) == 1
     assert tree_bytes(assets) == before
     assert set(assets.parent.iterdir()) == {assets, assets.parent / ".assets-sync-lock"}
+
+
+@pytest.mark.parametrize(
+    "barrier",
+    [
+        "record",
+        pytest.param(
+            "package directory", marks=pytest.mark.skipif(os.name == "nt", reason="POSIX barrier")
+        ),
+    ],
+)
+def test_journal_barrier_failure_prevents_tree_renames(
+    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, barrier: str
+) -> None:
+    _, assets = asset_tree
+    before = tree_bytes(assets)
+    marker = assets.parent / ASSET_MARKER
+    fsync = os.fsync
+    rename = Path.rename
+    flushed = set()
+    renamed = []
+
+    def fail_journal_sync(fd: int) -> None:
+        info = os.fstat(fd)
+        flushed.add((info.st_dev, info.st_ino))
+        record = next(assets.parent.glob(".assets-sync-*/pending"), marker)
+        target = record if barrier == "record" else assets.parent
+        if target.exists() and os.path.samestat(info, target.stat()):
+            (staged,) = assets.parent.glob(".assets-sync-*/staged")
+            for name in ("first.txt", "nested/last.txt", ".gitkeep"):
+                payload = (staged / name).stat()
+                assert (payload.st_dev, payload.st_ino) in flushed
+            if barrier == "package directory":
+                assert marker.is_file()
+                for path in (marker, staged / "nested", staged, staged.parent):
+                    entry = path.stat()
+                    assert (entry.st_dev, entry.st_ino) in flushed
+            raise OSError("journal flush failed")
+        fsync(fd)
+
+    def record_rename(src: Path, dst: Path) -> Path:
+        renamed.append(src)
+        return rename(src, dst)
+
+    monkeypatch.setattr(os, "fsync", fail_journal_sync)
+    monkeypatch.setattr(Path, "rename", record_rename)
+    with pytest.raises(OSError, match="journal flush failed"):
+        sync_assets.sync()
+    assert renamed == []
+    assert tree_bytes(assets) == before
+    assert marker.exists() == (barrier == "package directory")
 
 
 def test_success_replaces_stale_assets(asset_tree: tuple[Path, Path]) -> None:

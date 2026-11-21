@@ -15,7 +15,14 @@ from contextlib import ExitStack
 from pathlib import Path
 
 from asset_inventory import CANONICAL_ASSETS
-from asset_lock import ASSET_MARKER, asset_lock, mark_asset_replacement, recover_asset_replacement
+from asset_lock import (
+    ASSET_MARKER,
+    asset_lock,
+    mark_asset_replacement,
+    recover_asset_replacement,
+    sync_directory,
+    sync_staged_assets,
+)
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 ASSETS_DIR = Path(__file__).resolve().parent / "src" / "dds" / "_assets"
@@ -98,11 +105,18 @@ def sync() -> None:
             placeholder = ASSETS_DIR / ".gitkeep"
             if placeholder.is_file():
                 shutil.copy2(placeholder, staged / ".gitkeep")
+            sync_staged_assets(staged)
+            if ASSETS_DIR.exists() or ASSETS_DIR.is_symlink():
+                # Keep the recorded work directory even if a journal barrier fails.
+                try:
+                    mark_asset_replacement(ASSETS_DIR, work)
+                finally:
+                    pending = marker.exists()
+                sync_directory(work)
+                sync_directory(ASSETS_DIR.parent)
 
             try:
-                if ASSETS_DIR.exists() or ASSETS_DIR.is_symlink():
-                    pending = True
-                    mark_asset_replacement(ASSETS_DIR, work)
+                if pending:
                     ASSETS_DIR.rename(backup)
                 staged.rename(ASSETS_DIR)
             except BaseException as publish_error:

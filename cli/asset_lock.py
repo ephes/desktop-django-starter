@@ -4,6 +4,8 @@ import os
 import re
 import shutil
 import stat
+import sys
+import warnings
 from collections.abc import Iterator
 from contextlib import contextmanager
 from pathlib import Path
@@ -23,6 +25,43 @@ def directory_identity(path: Path) -> str | None:
     return f"{info.st_dev}:{info.st_ino}"
 
 
+def sync_descriptor(fd: int, path: Path) -> None:
+    try:
+        os.fsync(fd)
+        if sys.platform == "darwin":
+            import fcntl
+
+            fcntl.fcntl(fd, fcntl.F_FULLFSYNC)
+    except OSError as error:
+        raise OSError(f"Cannot sync packaged asset path {path}: {error}") from error
+
+
+def sync_directory(path: Path) -> None:
+    if os.name == "nt":
+        warnings.warn(
+            "Packaged asset directory sync is unavailable on Windows. "
+            "Power-loss recovery of directory renames is not guaranteed.",
+            RuntimeWarning,
+        )
+        return
+    fd = os.open(path, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        sync_descriptor(fd, path)
+    finally:
+        os.close(fd)
+
+
+def sync_staged_assets(root: Path) -> None:
+    """Flush the private staged tree from the files up to its root."""
+    for path in root.iterdir():
+        if path.is_dir():
+            sync_staged_assets(path)
+        else:
+            with path.open("r+b" if os.name == "nt" else "rb") as handle:
+                sync_descriptor(handle.fileno(), path)
+    sync_directory(root)
+
+
 def mark_asset_replacement(assets: Path, work: Path) -> None:
     """Record the two exact generations before moving either directory."""
     marker = work / "pending"
@@ -30,7 +69,10 @@ def mark_asset_replacement(assets: Path, work: Path) -> None:
         f"{work.name} {directory_identity(work)} {directory_identity(assets)} "
         f"{directory_identity(work / 'staged')}\n"
     )
-    marker.write_bytes(record.encode("ascii"))
+    with marker.open("wb") as handle:
+        handle.write(record.encode("ascii"))
+        handle.flush()
+        sync_descriptor(handle.fileno(), marker)
     marker.replace(assets.parent / ASSET_MARKER)
 
 

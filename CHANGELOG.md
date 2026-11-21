@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Flush staged CLI assets and their replacement journal before moving the
+  previous asset tree. Report when the platform lacks directory sync.
+
 - Keep release checksum write and replacement errors visible when staging-file
   cleanup also fails, and report the retained staging filename.
 

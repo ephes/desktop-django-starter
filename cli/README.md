@@ -149,8 +149,12 @@ If restoration fails, sync raises the original publication error. Its traceback
 includes the restoration error and the retained previous tree's recovery path
 under `cli/src/dds/.assets-sync-*/`. Cleanup errors during a failed sync are
 also included in the traceback.
-The publication marker records the directory identities before the two
-renames. After a process stops mid-publication, the next sync or build restores
+Before renaming either tree, sync flushes the staged files and records and
+flushes the directory identities in the publication marker. On POSIX it also
+flushes the staged directories, work directory and marker's parent directory.
+A failed barrier stops publication before either tree moves. Windows flushes
+files and reports that directory sync and power-loss guarantees for renames
+are unavailable. After a process stops mid-publication, the next sync or build restores
 the recorded predecessor if the bundle path is vacant, or keeps the completed
 replacement if promotion already finished. An ambiguous marker or directory
 stops the operation. Inspect the retained paths with syncs and builds stopped.
