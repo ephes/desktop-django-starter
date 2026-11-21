@@ -47,10 +47,7 @@ directory = Path(directory)
 os.environ['DJANGO_SETTINGS_MODULE'] = 'desktop_django_starter.settings.' + mode
 os.environ['DESKTOP_DJANGO_APP_DATA_DIR'] = str(directory / 'app-data')
 settings.DATABASES['default']['NAME'] = directory / 'admission.sqlite3'
-# Model two request processes in one running session, not app restarts.
-from unittest.mock import patch
-with patch('tasks_demo.apps.TasksDemoConfig.reconcile_stale_tasks'):
-    django.setup()
+django.setup()
 from django.core.management import call_command
 from django.test import RequestFactory
 from django_tasks_db.models import DBTaskResult

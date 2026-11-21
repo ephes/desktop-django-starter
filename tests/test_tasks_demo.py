@@ -1,13 +1,17 @@
 import json
+import os
 import sqlite3
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
+from pathlib import Path
 from threading import Event
 from unittest import mock
 from uuid import UUID
 
 import pytest
+from django.core.management import call_command
 from django.db import OperationalError, ProgrammingError, close_old_connections
 from django.db.models import QuerySet
 from django.tasks import TaskResultStatus
@@ -15,7 +19,6 @@ from django.urls import reverse
 from django.utils import timezone
 from django_tasks_db.models import DBTaskResult
 
-from tasks_demo.apps import TasksDemoConfig
 from tasks_demo.models import SimulatedTask
 from tasks_demo.tasks import (
     SimulatedTaskFailure,
@@ -709,39 +712,64 @@ setImmediate(() => {
         assert client.get(reverse("tasks_demo:task-clear")).status_code == 405
 
 
-class TestStartupReconciliation:
-    @pytest.mark.parametrize(
-        ("django_error", "sqlite_error", "message", "expect_warning"),
-        [
-            (
-                OperationalError,
-                sqlite3.OperationalError,
-                "no such table: tasks_demo_simulatedtask",
-                False,
-            ),
-            (OperationalError, sqlite3.OperationalError, "database is locked", True),
-            (OperationalError, sqlite3.OperationalError, "no such table: other_table", True),
-            (ProgrammingError, sqlite3.ProgrammingError, "synthetic driver detail", True),
-        ],
-    )
-    def test_only_missing_routine_table_is_expected(
-        self, caplog, django_error, sqlite_error, message, expect_warning
-    ):
-        error = django_error(message)
-        error.__cause__ = sqlite_error(message)
+def test_only_owned_restart_reconciles_active_routines(tmp_path):
+    root = Path(__file__).resolve().parents[1]
+    env = {
+        **os.environ,
+        "DJANGO_SETTINGS_MODULE": "desktop_django_starter.settings.packaged",
+        "DESKTOP_DJANGO_APP_DATA_DIR": str(tmp_path),
+        "DESKTOP_DJANGO_APP_VERSION": "1.0.0",
+    }
 
-        with mock.patch.object(QuerySet, "update", side_effect=error):
-            TasksDemoConfig.reconcile_stale_tasks()
+    def manage(*args):
+        result = subprocess.run(
+            [sys.executable, str(root / "manage.py"), *args],
+            cwd=root,
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        assert result.returncode == 0, result.stderr
+
+    manage("migrate", "--noinput", "--verbosity", "0")
+    manage(
+        "shell",
+        "--verbosity",
+        "0",
+        "-c",
+        "from tasks_demo.models import SimulatedTask; "
+        "from tasks_demo.tasks import run_simulated_task; "
+        "task = SimulatedTask.objects.create(label='Synthetic pending'); "
+        "task.backend_task_id = run_simulated_task.enqueue(task.pk).id; "
+        "task.save(update_fields=['backend_task_id']); "
+        "SimulatedTask.objects.create(label='Synthetic running', status='RUNNING')",
+    )
+    manage("check")
+    with sqlite3.connect(tmp_path / "state" / "1.0.0" / "app.sqlite3") as connection:
+        query = "SELECT status, completed_at FROM tasks_demo_simulatedtask ORDER BY id"
+        assert connection.execute(query).fetchall() == [("PENDING", None), ("RUNNING", None)]
+
+        manage("recover_stale_routines")
+        rows = connection.execute(query).fetchall()
+        assert len(rows) == 2
+        assert all(status == "FAILED" and completed_at for status, completed_at in rows)
+
+
+class TestStartupReconciliation:
+    @pytest.mark.parametrize("error_type", [OperationalError, ProgrammingError])
+    def test_database_failures_log_a_fixed_warning(self, caplog, error_type):
+        with mock.patch.object(QuerySet, "update", side_effect=error_type("synthetic detail")):
+            call_command("recover_stale_routines")
 
         diagnostics = [
-            record.getMessage() for record in caplog.records if record.name == "tasks_demo.apps"
+            record.getMessage()
+            for record in caplog.records
+            if record.name.endswith(".recover_stale_routines")
         ]
-        expected = (
-            ["Routine startup recovery failed. Abandoned routines may remain active."]
-            if expect_warning
-            else []
-        )
-        assert diagnostics == expected
+        assert diagnostics == [
+            "Routine startup recovery failed. Abandoned routines may remain active."
+        ]
 
     def test_stale_pending_tasks_marked_failed(self):
         task = SimulatedTask.objects.create(
@@ -750,7 +778,7 @@ class TestStartupReconciliation:
             status=SimulatedTask.Status.PENDING,
         )
 
-        TasksDemoConfig.reconcile_stale_tasks()
+        call_command("recover_stale_routines")
 
         task.refresh_from_db()
         assert task.status == SimulatedTask.Status.FAILED
@@ -764,7 +792,7 @@ class TestStartupReconciliation:
             status=SimulatedTask.Status.RUNNING,
         )
 
-        TasksDemoConfig.reconcile_stale_tasks()
+        call_command("recover_stale_routines")
 
         task.refresh_from_db()
         assert task.status == SimulatedTask.Status.FAILED
@@ -781,7 +809,7 @@ class TestStartupReconciliation:
             completed_at=completed_at,
         )
 
-        TasksDemoConfig.reconcile_stale_tasks()
+        call_command("recover_stale_routines")
 
         task.refresh_from_db()
         assert task.status == SimulatedTask.Status.DONE

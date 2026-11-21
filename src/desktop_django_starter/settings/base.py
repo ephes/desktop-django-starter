@@ -67,6 +67,9 @@ DATABASES = {
     }
 }
 
+# Also passed to db_worker by the subprocess shells.
+DESKTOP_DJANGO_WORKER_QUEUES = os.environ.get("DESKTOP_DJANGO_WORKER_QUEUES") or "default"
+
 TASKS = {
     "default": {
         "BACKEND": "django_tasks_db.DatabaseBackend",

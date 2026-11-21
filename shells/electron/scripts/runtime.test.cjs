@@ -7,6 +7,9 @@ const { createRequire } = require("node:module");
 const vm = require("node:vm");
 const test = require("node:test");
 
+const inStarter = path.basename(path.resolve(__dirname, "../..")) === "shells";
+const recoveryCommands = inStarter ? ["recover_stale_routines"] : [];
+
 function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), cleanup, overrides = {}) {
   const app = Object.assign(new EventEmitter(), {
     requestSingleInstanceLock: () => true,
@@ -80,7 +83,7 @@ test("Django exit cancels a pending startup probe before the worker or window st
           return django;
         }
         const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
-        queueMicrotask(() => command === "migrate" ? child.emit("exit", 0) : child.emit("spawn"));
+        queueMicrotask(() => child.emit("exit", 0));
         return child;
       }
     },
@@ -108,14 +111,14 @@ test("Django exit cancels a pending startup probe before the worker or window st
   await assert.rejects(startup, /Django process stopped[\s\S]*Code: 7/);
   assert.equal(probeAborted, true);
   assert.equal(probeCount, 1);
-  assert.deepEqual(commands, ["migrate", "runserver"]);
+  assert.deepEqual(commands, ["migrate", ...recoveryCommands, "runserver"]);
   assert.equal(windowOpened, false);
   assert.deepEqual(errors, []);
 });
 
 test("the renderer shows an app-data folder error only when the native open fails", {
   // Wrapped projects have electron/ at their root and ship their own templates.
-  skip: path.basename(path.resolve(__dirname, "../..")) !== "shells" && "Requires the starter Django template"
+  skip: !inStarter && "Requires the starter Django template"
 }, async () => {
   const appData = "/synthetic/app-data";
   const paths = [];
@@ -257,7 +260,8 @@ for (const previous of ["absent", "clean", "dirty"]) {
     let starts = 0;
     control.startup(async () => { starts++; });
     await control.bootstrap();
-    assert.equal(starts, 3); // migrate, Django, worker
+    const startsWorker = inStarter || process.env.DESKTOP_DJANGO_ENABLE_TASK_WORKER === "1";
+    assert.equal(starts, 2 + recoveryCommands.length + Number(startsWorker));
     assert.equal(cleanups, previous === "dirty" ? 1 : 0);
   });
 }
@@ -322,20 +326,26 @@ test("packaged startup retries interrupted migration and seeding, then retires t
   // An intentionally emptied database still exists on the next launch.
   await launch(async command => { attempts.push(command); });
   assert.deepEqual(attempts, [
-    "migrate", "seed_demo_content", "migrate", "seed_demo_content", "migrate"
+    "migrate", "seed_demo_content",
+    "migrate", "seed_demo_content", ...recoveryCommands,
+    "migrate", ...recoveryCommands
   ]);
 });
 
 test("packaged startup leaves existing and copied legacy databases without demo content", async t => {
   const existing = packagedFixture(t);
   existing.writeMigratedState(null);
-  await existing.launch(async command => { assert.equal(command, "migrate"); });
+  const existingCommands = [];
+  await existing.launch(async command => { existingCommands.push(command); });
+  assert.deepEqual(existingCommands, ["migrate", ...recoveryCommands]);
 
   for (const predecessor of ["legacy", "0.1.5"]) {
     const copied = packagedFixture(t);
+    const copiedCommands = [];
     await copied.launch(async command => {
-      assert.equal(command, "migrate");
-      copied.writeMigratedState(predecessor);
+      copiedCommands.push(command);
+      if (command === "migrate") copied.writeMigratedState(predecessor);
     });
+    assert.deepEqual(copiedCommands, ["migrate", ...recoveryCommands]);
   }
 });

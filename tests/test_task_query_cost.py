@@ -112,19 +112,28 @@ def test_activity_aggregate_searches_active_statuses_before_counting():
                 for i in range(10_000)
             ]
         )
+        DBTaskResult.objects.bulk_create(
+            [backend_row(TaskResultStatus.READY, queue_name="unserved") for _ in range(10_000)]
+        )
         with capture_selects() as statements:
             assert background_task_counts() == expected
         assert len(statements) == 1
         sql, params = statements[0]
-        assert "WHERE" in sql and params[-2:] == (TaskResultStatus.READY, TaskResultStatus.RUNNING)
+        assert '"status" IN' in sql
+        assert params[2:] == (
+            "default",
+            TaskResultStatus.READY,
+            TaskResultStatus.RUNNING,
+            "default",
+        )
         plan, large_work = plan_and_work(statements[0])
-        assert "SEARCH" in plan and "dds_backend_status_idx" in plan, plan
+        assert "SEARCH" in plan and "dds_backend_activity_idx" in plan, plan
         assert "TEMP B-TREE" not in plan, plan
         assert large_work <= small_work + 500, (small_work, large_work)
         DBTaskResult.objects.all().delete()
 
 
-def backend_row(status):
+def backend_row(status, *, queue_name="default"):
     from django_tasks_db.models import DBTaskResult
 
     return DBTaskResult(
@@ -132,5 +141,6 @@ def backend_row(status):
         args_kwargs={"args": [], "kwargs": {}},
         task_path="tasks_demo.tasks.run_simulated_task",
         backend_name="default",
+        queue_name=queue_name,
         run_after=timezone.now(),
     )

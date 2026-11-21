@@ -105,10 +105,15 @@ this ownership. Native Windows process-tree acceptance remains required.
   retain the entire stage for offline inspection; ambiguous completion records
   stop reuse/import without rewriting the published generation.
 
+- Shell startup explicitly calls `recover_stale_routines` after migrations
+  and previous-worker retirement. Django app initialization is read-only
+  for routine rows.
 - Task polling uses partial active/history indexes and matching OR predicates.
-  Shell counts filter READY/RUNNING before one aggregate and use an app-owned
-  ordinary backend status index. Apply migrations after updating; packaged
-  startup migrates automatically. See architecture.md for schema pins/reversal.
+  Shell counts filter READY/RUNNING and match the worker's
+  `DESKTOP_DJANGO_WORKER_QUEUES` setting before one aggregate. The app owns
+  the index on backend status, backend name and queue name. Apply migrations
+  after updating a development checkout. Packaged startup migrates
+  automatically. See architecture.md for schema pins and reversal.
 
 - Electron installs both session permission handlers before loading Django. No
   renderer capabilities are enabled by default. Preserve this policy when

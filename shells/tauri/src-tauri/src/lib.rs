@@ -928,7 +928,7 @@ fn prepare_shell_session(app: &AppHandle) -> Result<(), String> {
     };
 
     if previous.as_ref().is_some_and(|session| session.running) {
-        stop_orphaned_processes(&app_key);
+        stop_orphaned_processes(&app_key)?;
     }
 
     write_shell_session(
@@ -1014,6 +1014,9 @@ fn list_processes(_app_key: &str) -> Result<String, String> {
         .args(["-axww", "-o", "pid=,command="])
         .output()
         .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err("Could not list backend processes from the previous run.".to_string());
+    }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
@@ -1023,7 +1026,7 @@ fn list_processes(app_key: &str) -> Result<String, String> {
     // contain "--app-key <key>"; the Rust-side match is the authoritative one.
     let script = format!(
         "$pattern = '*--app-' + 'key {app_key}*'; \
-         Get-CimInstance Win32_Process | \
+         Get-CimInstance Win32_Process -ErrorAction Stop | \
          Where-Object {{ $_.CommandLine -like $pattern }} | \
          ForEach-Object {{ \"$($_.ProcessId) $($_.CommandLine)\" }}"
     );
@@ -1031,6 +1034,9 @@ fn list_processes(app_key: &str) -> Result<String, String> {
         .args(["-NoProfile", "-NonInteractive", "-Command", &script])
         .output()
         .map_err(|error| error.to_string())?;
+    if !output.status.success() {
+        return Err("Could not list backend processes from the previous run.".to_string());
+    }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
@@ -1069,28 +1075,33 @@ fn terminate_processes(pids: &[u32]) {
 
 /// Stops backend processes a crashed earlier run left behind. They carry this
 /// install's app key on their command line (see `manage_command_args`).
-fn stop_orphaned_processes(app_key: &str) {
-    let listing = match list_processes(app_key) {
-        Ok(listing) => listing,
-        Err(error) => {
-            eprintln!("Could not list processes to clean up a previous run: {error}");
-            return;
-        }
-    };
+fn stop_orphaned_processes(app_key: &str) -> Result<(), String> {
+    let listing = list_processes(app_key)?;
     let orphans = find_orphan_processes(
         &parse_process_list(&listing),
         app_key,
         std::process::id(),
     );
     if orphans.is_empty() {
-        eprintln!("The previous run did not shut down cleanly; no leftover backend processes found.");
-        return;
+        return Ok(());
     }
     for (pid, command) in &orphans {
         eprintln!("Stopping leftover backend process {pid} from a previous run: {command}");
     }
     let pids = orphans.iter().map(|(pid, _)| *pid).collect::<Vec<_>>();
     terminate_processes(&pids);
+
+    let deadline = Instant::now() + Duration::from_millis(SHUTDOWN_GRACE_PERIOD_MS);
+    loop {
+        let listing = list_processes(app_key)?;
+        if find_orphan_processes(&parse_process_list(&listing), app_key, std::process::id()).is_empty() {
+            return Ok(());
+        }
+        if Instant::now() >= deadline {
+            return Err("Previous backend process exit was not confirmed.".to_string());
+        }
+        thread::sleep(Duration::from_millis(POLL_INTERVAL_MS));
+    }
 }
 
 fn build_bootstrap_url(base_url: &str, auth_token: &str) -> Result<String, String> {
@@ -1166,6 +1177,14 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
         &auth_token,
         &["migrate", "--noinput"],
     )?;
+    run_manage_command(
+        app,
+        runtime_mode,
+        &backend_root,
+        port,
+        &auth_token,
+        &["recover_stale_routines"],
+    )?;
 
     if should_seed_demo_content {
         run_manage_command(
@@ -1199,6 +1218,10 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
         return Err(error);
     }
 
+    let queue_names = env::var("DESKTOP_DJANGO_WORKER_QUEUES")
+        .ok()
+        .filter(|names| !names.is_empty())
+        .unwrap_or_else(|| "default".to_string());
     let worker = start_managed_process(
         app,
         runtime_mode,
@@ -1207,8 +1230,7 @@ fn bootstrap(app: &AppHandle, splash_shown_at: Instant) -> Result<(), String> {
         &auth_token,
         &[
             "db_worker",
-            "--queue-name",
-            "default",
+            &format!("--queue-name={queue_names}"),
             "--worker-id",
             "desktop-django-starter-tauri",
         ],

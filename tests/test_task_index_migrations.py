@@ -22,7 +22,8 @@ def test_task_indexes_upgrade_reverse_and_preserve_rows():
         run_after=timezone.now(),
     )
     routine_indexes = {"routine_active_created_idx", "routine_history_order_idx"}
-    backend_index = "dds_backend_status_idx"
+    old_backend_index = "dds_backend_status_idx"
+    backend_index = "dds_backend_activity_idx"
 
     def indexes(model):
         with connection.cursor() as cursor:
@@ -35,15 +36,21 @@ def test_task_indexes_upgrade_reverse_and_preserve_rows():
         executor.migrate(old)
         assert routine_indexes.isdisjoint(indexes(SimulatedTask))
         assert backend_index not in indexes(DBTaskResult)
+        assert old_backend_index not in indexes(DBTaskResult)
         MigrationExecutor(connection).migrate(latest)
         assert routine_indexes <= indexes(SimulatedTask).keys()
         constraints = indexes(DBTaskResult)
-        assert constraints[backend_index]["columns"] == ["status"]
+        assert old_backend_index not in constraints
+        assert constraints[backend_index]["columns"] == ["status", "backend_name", "queue_name"]
         assert constraints[backend_index]["index"]
         assert "tasks_db_new_ordering_idx" in constraints  # Dependency's worker index stays.
         with connection.cursor() as cursor:
             cursor.execute("SELECT sql FROM sqlite_master WHERE name = %s", [backend_index])
             assert "WHERE" not in cursor.fetchone()[0]  # Ordinary, includes RUNNING.
+        MigrationExecutor(connection).migrate([("tasks_demo", "0004_backend_activity_index")])
+        constraints = indexes(DBTaskResult)
+        assert backend_index not in constraints
+        assert constraints[old_backend_index]["columns"] == ["status"]
         assert SimulatedTask.objects.get(pk=routine.pk).status == "DONE"
         assert DBTaskResult.objects.get(pk=backend.pk).status == TaskResultStatus.SUCCESSFUL
     finally:

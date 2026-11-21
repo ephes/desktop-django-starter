@@ -1,3 +1,7 @@
+import json
+import subprocess
+from pathlib import Path
+
 import pytest
 from django.db import DEFAULT_DB_ALIAS, connections
 from django.tasks import TaskResultStatus
@@ -23,6 +27,70 @@ def test_activity_counts_running_and_queued_tasks(client) -> None:
     response = client.get("/desktop/activity/")
 
     assert response.json() == {"running_tasks": 1, "queued_tasks": 1}
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize("configured_queues", [None, "priority,desktop"])
+def test_only_served_queues_prompt_on_quit(client, settings, configured_queues):
+    served_queue = "default"
+    if configured_queues is not None:
+        settings.DESKTOP_DJANGO_WORKER_QUEUES = configured_queues
+        served_queue = "desktop"
+
+    active = [run_simulated_task.enqueue(i).id for i in range(4)]
+    for queue, (running, ready) in zip((served_queue, "unserved"), (active[:2], active[2:])):
+        DBTaskResult.objects.filter(pk=running).update(
+            queue_name=queue, status=TaskResultStatus.RUNNING
+        )
+        DBTaskResult.objects.filter(pk=ready).update(queue_name=queue)
+
+    busy = client.get("/desktop/activity/").json()
+    DBTaskResult.objects.filter(pk__in=active[:2]).update(status=TaskResultStatus.SUCCESSFUL)
+    idle = client.get("/desktop/activity/").json()
+    assert busy == {"running_tasks": 1, "queued_tasks": 1}
+    assert idle == {"running_tasks": 0, "queued_tasks": 0}
+
+    root = Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [
+            "node",
+            "-e",
+            """
+const assert = require("node:assert/strict");
+const { createQuitGuard } = require("./shells/electron/scripts/quit-guard.cjs");
+const [busy, idle] = JSON.parse(process.argv[1]);
+async function check() {
+  for (const [activity, expected] of [[busy, false], [idle, true]]) {
+    let prompts = 0;
+    const guard = createQuitGuard({
+      fetchActivity: async () => activity,
+      confirmQuit: async () => { prompts++; return false; },
+    });
+    assert.equal(await guard.shouldProceed(), expected);
+    assert.equal(prompts, expected ? 0 : 1);
+  }
+}
+check().catch(error => { console.error(error); process.exitCode = 1; });
+""",
+            json.dumps([busy, idle]),
+        ],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.django_db
+def test_activity_wildcard_serves_all_queues_on_the_default_backend(client, settings):
+    settings.DESKTOP_DJANGO_WORKER_QUEUES = "*"
+    served = run_simulated_task.enqueue(1)
+    other_backend = run_simulated_task.enqueue(2)
+    DBTaskResult.objects.filter(pk=served.id).update(queue_name="extra")
+    DBTaskResult.objects.filter(pk=other_backend.id).update(backend_name="other")
+
+    assert client.get("/desktop/activity/").json() == {"running_tasks": 0, "queued_tasks": 1}
 
 
 @pytest.mark.django_db

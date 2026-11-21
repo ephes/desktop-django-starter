@@ -68,7 +68,7 @@ Electron and Tauri start every backend process through `desktop_process_guard.py
 
 ## D-016: Ask before quitting while background tasks run
 
-Quitting interrupts a running `db_worker` task. The shells therefore ask before closing or quitting while `/desktop/activity/` (Positron: the same counts in-process) reports running or queued tasks. Queued tasks are not lost; they run on the next start. The check never blocks quitting when it fails, and it is skipped for update installs and smoke tests.
+Quitting interrupts a running `db_worker` task. The shells therefore ask before closing or quitting while `/desktop/activity/` (Positron: the same counts in-process) reports running or queued tasks on the shell worker's configured queues. Queued backend task entries persist across quits. The owned profile startup step marks abandoned demo routine rows failed, so a queued entry for a retired routine returns its stored terminal state without rerunning the demo workload. The check never blocks quitting when it fails, and it is skipped for update installs and smoke tests.
 
 ## D-017: Ordered and bounded state initialization
 
