@@ -17,7 +17,11 @@ from django_tasks_db.models import DBTaskResult
 
 from tasks_demo.apps import TasksDemoConfig
 from tasks_demo.models import SimulatedTask
-from tasks_demo.tasks import SimulatedTaskFailure, run_simulated_task
+from tasks_demo.tasks import (
+    SimulatedTaskFailure,
+    reconcile_task_with_backend,
+    run_simulated_task,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -363,6 +367,38 @@ class TestTaskViews:
         assert task.completed_at == completed_at
         assert data["tasks"][0]["status"] == "DONE"
 
+    @pytest.mark.parametrize("loader", ["poll", "single"])
+    @pytest.mark.parametrize("status", [SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING])
+    def test_reconciliation_rejects_another_routines_completion(self, client, loader, status):
+        owner = SimulatedTask.objects.create(label="Owner")
+        backend = enqueue_demo_task(owner)
+        backend.set_successful(
+            {
+                "status": SimulatedTask.Status.DONE,
+                "result": "Owner's completion",
+                "duration": 2.0,
+                "completed_at": timezone.now().isoformat(),
+            }
+        )
+        other = SimulatedTask.objects.create(
+            label="Stale reference", status=status, backend_task_id=str(backend.pk)
+        )
+
+        if loader == "poll":
+            rows = client.get(reverse("tasks_demo:task-status")).json()["tasks"]
+            assert {row["id"]: row["result"] for row in rows}[owner.pk] == "Owner's completion"
+        else:
+            reconcile_task_with_backend(other)
+
+        other.refresh_from_db()
+        if status == SimulatedTask.Status.PENDING:
+            assert other.status == SimulatedTask.Status.FAILED
+            assert other.result == "Task result could not be found."
+        else:
+            assert other.status == SimulatedTask.Status.RUNNING
+            assert other.result is None
+            assert other.completed_at is None
+
     def test_task_status_marks_missing_backend_results_failed(self, client):
         task = SimulatedTask.objects.create(
             label="Missing backend task",
@@ -440,6 +476,96 @@ class TestTaskClear:
             result = run_simulated_task.call(queued.pk)
         queued.refresh_from_db()
         assert queued.status == result["status"] == "DONE"
+
+    def test_clear_retires_only_owned_terminal_backend_results(self, client):
+        def routine(backend_status, **metadata):
+            task = SimulatedTask.objects.create(label="Finished", status="DONE")
+            backend = enqueue_demo_task(task)
+            DBTaskResult.objects.filter(pk=backend.pk).update(status=backend_status, **metadata)
+            return task, backend.pk
+
+        _, success_id = routine(TaskResultStatus.SUCCESSFUL, return_value="Synthetic payload")
+        failed, failed_id = routine(TaskResultStatus.FAILED, traceback="Synthetic diagnostic")
+        SimulatedTask.objects.filter(pk=failed.pk).update(
+            status="FAILED", backend_task_id=failed_id.hex
+        )
+        _, ready_id = routine(TaskResultStatus.READY)
+        _, running_id = routine(TaskResultStatus.RUNNING)
+        _, foreign_id = routine(TaskResultStatus.SUCCESSFUL, task_path="retired.tasks.other_task")
+        _, malformed_id = routine(TaskResultStatus.SUCCESSFUL, args_kwargs={"args": []})
+        stale, stale_id = routine(TaskResultStatus.SUCCESSFUL)
+        DBTaskResult.objects.filter(pk=stale_id).update(
+            args_kwargs={"args": [stale.pk + 1], "kwargs": {}}
+        )
+        active = SimulatedTask.objects.create(label="Active", status="RUNNING")
+        active_backend = enqueue_demo_task(active)
+        active_backend.claim("synthetic-worker")
+        _, shared_id = routine(TaskResultStatus.SUCCESSFUL)
+        active_alias = SimulatedTask.objects.create(
+            label="Legacy shared reference", backend_task_id=shared_id.hex.upper()
+        )
+        unrelated = run_simulated_task.enqueue(100_000)
+        DBTaskResult.objects.filter(pk=unrelated.id).update(status=TaskResultStatus.SUCCESSFUL)
+        SimulatedTask.objects.create(
+            label="Legacy history", status="FAILED", backend_task_id="bad-id"
+        )
+
+        response = client.post(reverse("tasks_demo:task-clear"))
+
+        assert response.status_code == 200
+        assert response.json() == {"cleared": True}
+        assert set(SimulatedTask.objects.values_list("pk", flat=True)) == {
+            active.pk,
+            active_alias.pk,
+        }
+        assert not DBTaskResult.objects.filter(pk__in=[success_id, failed_id]).exists()
+        assert set(DBTaskResult.objects.values_list("pk", flat=True)) == {
+            ready_id,
+            running_id,
+            foreign_id,
+            malformed_id,
+            stale_id,
+            active_backend.pk,
+            shared_id,
+            UUID(unrelated.id),
+        }
+
+    def test_clear_retains_a_shared_result_when_its_earlier_reference_is_cleared(self, client):
+        stale = SimulatedTask.objects.create(label="Earlier reference", status="FAILED")
+        owner = SimulatedTask.objects.create(label="Owner", status="DONE")
+        backend = enqueue_demo_task(owner)
+        backend.set_successful("Synthetic result")
+        SimulatedTask.objects.filter(pk=stale.pk).update(backend_task_id=str(backend.pk))
+
+        with mock.patch("tasks_demo.tasks.CLEAR_BATCH_SIZE", 1):
+            response = client.post(reverse("tasks_demo:task-clear"))
+
+        assert response.status_code == 200
+        assert not SimulatedTask.objects.exists()
+        assert DBTaskResult.objects.filter(pk=backend.pk).exists()
+
+    def test_clear_rolls_back_backend_deletion_if_history_deletion_fails(self, client):
+        task = SimulatedTask.objects.create(label="Finished", status="DONE")
+        backend = enqueue_demo_task(task)
+        backend.set_successful("Synthetic result")
+        delete = QuerySet.delete
+
+        def fail_history_deletion(queryset):
+            if queryset.model is SimulatedTask:
+                assert not DBTaskResult.objects.filter(pk=backend.pk).exists()
+                raise RuntimeError("History deletion failed")
+            return delete(queryset)
+
+        url = reverse("tasks_demo:task-clear")
+        with mock.patch.object(QuerySet, "delete", fail_history_deletion):
+            with pytest.raises(RuntimeError, match="History deletion failed"):
+                client.post(url)
+
+        assert SimulatedTask.objects.filter(pk=task.pk).exists()
+        assert DBTaskResult.objects.filter(pk=backend.pk).exists()
+        assert client.post(url).status_code == 200
+        assert not SimulatedTask.objects.filter(pk=task.pk).exists()
+        assert not DBTaskResult.objects.filter(pk=backend.pk).exists()
 
     @pytest.mark.django_db(transaction=True)
     @pytest.mark.parametrize("failed", [False, True])
@@ -692,6 +818,8 @@ def test_reconciliation_preserves_worker_finalized_row(worker_status, backend_ou
         if backend_outcome == "missing":
             raise TaskResultDoesNotExist
         return SimpleNamespace(
+            args=[task.pk],
+            kwargs={},
             status={
                 "failed": TaskResultStatus.FAILED,
                 "successful": TaskResultStatus.SUCCESSFUL,

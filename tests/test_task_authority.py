@@ -67,7 +67,11 @@ def test_status_rejects_invalid_success_payload(client, change):
         "task_result",
         new_callable=mock.PropertyMock,
         return_value=SimpleNamespace(
-            task=run_simulated_task, status=TaskResultStatus.SUCCESSFUL, return_value=payload
+            task=run_simulated_task,
+            args=[row.pk],
+            kwargs={},
+            status=TaskResultStatus.SUCCESSFUL,
+            return_value=payload,
         ),
     ):
         response = client.get(reverse("tasks_demo:task-status"))
@@ -156,6 +160,8 @@ def test_old_backend_completion_cannot_finalize_rebound_routine():
         assert backend_id == str(old_backend.pk)
         SimulatedTask.objects.filter(pk=row.pk).update(backend_task_id=replacement.id)
         return SimpleNamespace(
+            args=[row.pk],
+            kwargs={},
             status=TaskResultStatus.SUCCESSFUL,
             return_value={
                 "status": "DONE",

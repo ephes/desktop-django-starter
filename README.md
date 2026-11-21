@@ -19,7 +19,7 @@ Runnable starter slices:
 
 - Django 6.1.2 project under `src/desktop_django_starter/`
 - tiny server-rendered CRUD demo app under `src/example_app/`, themed as "My Ponies" in the Flying Stable presentation layer, with three starter ponies seeded on the first packaged launch for a brand-new per-user database in the current `v0.1.5+` line
-- background task visualization demo under `src/tasks_demo/`, themed as "Stable Routines", with animated pulse-ring indicators, polling-based live updates, and real execution through Django's built-in `django.tasks` with the `django_tasks_db` database backend on SQLite; Clear Finished Routines removes only done/failed history and keeps queued/running routines working
+- background task visualization demo under `src/tasks_demo/`, themed as "Stable Routines", with animated pulse-ring indicators, polling-based live updates, and real execution through Django's built-in `django.tasks` with the `django_tasks_db` database backend on SQLite; Clear Finished Routines removes done/failed history and its verified, exclusively owned terminal queue results while queued/running routines keep working
 - My Ponies shows 20 rows per page with native navigation. Edit and release
   confirmations detect changes made in another window; reload the current pony
   after a conflict. Edit conflicts keep your submitted input for comparison.

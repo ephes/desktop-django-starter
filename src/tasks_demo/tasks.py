@@ -7,8 +7,9 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID
 
-from django.db.models import Q
-from django.db.models.functions import Right
+from django.db import transaction
+from django.db.models import Count, F, Func, Q, Value
+from django.db.models.functions import Lower, Replace, Right
 from django.tasks import TaskResult, TaskResultStatus, task
 from django.tasks.exceptions import TaskResultDoesNotExist, TaskResultMismatch
 from django.utils import timezone
@@ -22,6 +23,7 @@ MISSING_BACKEND_RESULT = "Task result could not be found."
 INVALID_BACKEND_PAYLOAD = "Task returned an invalid completion payload."
 UNEXPECTED_BACKEND_RESULT = "Task exited before the demo row was finalized."
 TERMINAL_HISTORY_LIMIT = 100
+CLEAR_BATCH_SIZE = 100
 TRACEBACK_PREVIEW_LIMIT = 1024
 COMPLETION_RESULT_BYTE_LIMIT = 1024
 
@@ -147,6 +149,78 @@ def visible_tasks() -> list[SimulatedTask]:
     return sorted(active + history, key=lambda row: (row.created_at, row.pk), reverse=True)
 
 
+def clear_finished_routines() -> None:
+    last_id = SimulatedTask.objects.order_by("-pk").values_list("pk", flat=True).first()
+    if last_id is None:
+        return
+
+    history = SimulatedTask.objects.filter(
+        pk__lte=last_id, status__in=[SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED]
+    ).order_by("pk")
+    batch = history
+    shared_ids: set[UUID] = set()
+    while True:
+        with transaction.atomic():
+            # Serialize selection and deletion with queue writers on SQLite,
+            # including development connections with deferred transactions.
+            SimulatedTask.objects.filter(pk=0).update(status=F("status"))
+            rows = list(batch.values_list("pk", "backend_task_id")[:CLEAR_BATCH_SIZE])
+            if not rows:
+                return
+
+            routine_ids = {}
+            for pk, backend_id in rows:
+                try:
+                    routine_ids[UUID(backend_id)] = pk
+                except ValueError:
+                    pass  # Missing and malformed legacy IDs have no owned result.
+
+            # Remember shared IDs when one reference is cleared ahead of another.
+            # Check references in every state, including rows outside this batch.
+            shared_ids.update(_shared_backend_ids(routine_ids.keys() - shared_ids))
+            candidates = (
+                DBTaskResult.objects.filter(
+                    pk__in=routine_ids.keys() - shared_ids,
+                    status__in=[TaskResultStatus.SUCCESSFUL, TaskResultStatus.FAILED],
+                    task_path=run_simulated_task.module_path,
+                    backend_name=run_simulated_task.backend,
+                    queue_name=run_simulated_task.queue_name,
+                )
+                .order_by()
+                .values_list("pk", "args_kwargs")
+            )
+            owned_ids = [
+                result_id
+                for result_id, arguments in candidates
+                if isinstance(arguments, dict)
+                and _matches_routine_argument(
+                    routine_ids[result_id], arguments.get("args"), arguments.get("kwargs")
+                )
+            ]
+            DBTaskResult.objects.filter(pk__in=owned_ids).delete()
+            history.filter(pk__in=[pk for pk, _ in rows]).delete()
+        batch = history.filter(pk__gt=rows[-1][0])
+
+
+def _shared_backend_ids(result_ids: set[UUID]) -> set[UUID]:
+    if not result_ids:
+        return set()
+    # Account for UUID spellings that could resolve to the same backend row.
+    normalized: Func = Lower("backend_task_id")
+    for token in ("urn:", "uuid:", "{", "}", "-"):
+        normalized = Replace(normalized, Value(token), Value(""))
+    shared = (
+        SimulatedTask.objects.annotate(result_hex=normalized)
+        .filter(result_hex__in=[result_id.hex for result_id in result_ids])
+        .order_by()
+        .values("result_hex")
+        .annotate(reference_count=Count("pk"))
+        .filter(reference_count__gt=1)
+        .values_list("result_hex", flat=True)
+    )
+    return {UUID(result_hex) for result_hex in shared}
+
+
 def reconcile_task_with_backend(
     task_row: SimulatedTask, *, result_loader: Callable[[str], TaskResult] | None = None
 ) -> SimulatedTask | None:
@@ -159,6 +233,8 @@ def reconcile_task_with_backend(
 
     try:
         backend_result = (result_loader or run_simulated_task.get_result)(backend_task_id)
+        if not _matches_routine_argument(task_row.pk, backend_result.args, backend_result.kwargs):
+            raise TaskResultMismatch("Routine argument does not match")
     except (TaskResultDoesNotExist, TaskResultMismatch):
         # Missing queue metadata cannot prove that a claimed worker has stopped.
         # Startup reconciliation retires abandoned claims after a restart.
@@ -199,6 +275,16 @@ def reconcile_task_with_backend(
         )
 
     return _mark_task_failed(task_row, backend_task_id, UNEXPECTED_BACKEND_RESULT)
+
+
+def _matches_routine_argument(task_id: int, args: object, kwargs: object) -> bool:
+    return (
+        isinstance(args, list)
+        and len(args) == 1
+        and type(args[0]) is int
+        and args[0] == task_id
+        and kwargs == {}
+    )
 
 
 def _validated_completion(payload: object) -> tuple[str, str, float, datetime]:

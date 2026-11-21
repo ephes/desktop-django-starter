@@ -297,13 +297,24 @@ Current launcher contract:
 - both the task page and polling endpoint show all pending/running rows and at
   most 100 terminal rows, selected by newest completion time (then creation time
   and ID). Active queue results are loaded with the backend's public
-  `DBTaskResult` model and `task_result` property in parameter-safe bulk batches,
-  preserving task-function matching and the existing reconciliation guards.
+  `DBTaskResult` model and `task_result` property in parameter-safe bulk batches.
+  Both bulk polling and single-result reconciliation require the matching task
+  function and the routine's integer ID as the sole positional argument, as
+  written by Start Routine. An argument mismatch follows the missing-result
+  policy and preserves running claims.
   Fresh completions enter history in the same response. If reconciliation
   reloads a routine that was completed and cleared in the meantime, the
   response omits it; a routine whose backend result still reports it queued or
   running keeps its polled snapshot until the next poll.
   Older terminal rows remain until Clear Finished Routines deletes them.
+  Clearing uses batches of up to 100 routine rows in primary-key order.
+  Each batch commits its history deletion and verified backend deletions in the
+  same SQLite transaction. A backend result qualifies if it has terminal status,
+  matches the demo task path, backend and queue, carries the routine's integer
+  ID as its sole argument, and has a single routine reference. UUID spellings
+  are normalized when checking for sharing, and references found shared stay
+  protected across batches within the clear. Active jobs and unrecognized
+  results remain in the queue database.
   History pagination is outside this teaching demo.
   SQLite partial indexes cover active creation ordering and terminal completion,
   creation and ID ordering. The ORM uses OR equality predicates matching those
