@@ -7,8 +7,11 @@ import re
 import subprocess
 
 _NODE_MINIMUM = (22, 12)
-_NODE_VERSION_TIMEOUT = 2
-_NODE_VERSION = re.compile(rb"v([0-9]{1,10})\.([0-9]{1,10})\.[0-9]{1,10}")
+_NODE_VERSION_TIMEOUT = 5
+# Accept semver pre-release and build suffixes such as nightly or rc builds.
+_NODE_VERSION = re.compile(
+    rb"v([0-9]{1,10})\.([0-9]{1,10})\.[0-9]{1,10}(?:[-+][0-9A-Za-z.+-]{1,200})?"
+)
 
 
 class NodeVersionError(RuntimeError):
@@ -21,11 +24,30 @@ class NodeVersionError(RuntimeError):
         )
 
 
+def _in_absolute_path_entry(executable: str) -> bool:
+    """Whether the lookup result lies directly in an absolute PATH directory.
+
+    Relative hits come from the current directory (Windows checks it first) or
+    from empty or relative PATH entries. They are never run.
+    """
+    if not os.path.isabs(executable):
+        return False
+    parent = os.path.normcase(os.path.normpath(os.path.dirname(executable)))
+    return any(
+        entry and os.path.isabs(entry) and os.path.normcase(os.path.normpath(entry)) == parent
+        for entry in os.environ.get("PATH", "").split(os.pathsep)
+    )
+
+
 def probe_node_version(executable: str) -> str:
     """Return the reported version of the selected Node executable if supported."""
+    if not _in_absolute_path_entry(executable):
+        raise NodeVersionError(
+            "node resolves to the current directory or a relative PATH entry and was not run"
+        )
     try:
         result = subprocess.run(
-            [os.path.abspath(executable), "--version"],
+            [executable, "--version"],
             stdin=subprocess.DEVNULL,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,

@@ -4,6 +4,8 @@
 
 - Verify Node.js 22.12 or newer in `dds doctor` and `dds wrap` preflight
   before launching a wrapping harness. Report a warning in print-only mode.
+  Never run a `node` resolved from the current directory or a relative PATH
+  entry.
 
 - Flag refused saved OpenAI models in `dds doctor` and show how to select
   an approved model.

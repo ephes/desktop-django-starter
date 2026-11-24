@@ -65,7 +65,9 @@ The source-checkout `scripts/wrap --run --agent pi` also launches
 `openai-codex/gpt-6.2-sol`.
 
 `dds wrap` and `dds doctor` run a timed `node --version` check on the
-executable found on PATH. Node.js 22.12 or newer is required. Missing Node,
+executable found in an absolute PATH directory. A `node` resolved from the
+current directory or a relative PATH entry is reported and never run.
+Node.js 22.12 or newer is required. Missing Node,
 older versions and probe failures block `dds wrap --run` before agent launch.
 Plain `dds wrap` reports these as warnings.
 

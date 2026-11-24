@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from asset_inventory import CANONICAL_ASSETS, MANIFEST
-from dds import config, doctor, wrap
+from dds import config, doctor, prerequisites, wrap
 from dds.cli import main
 
 ASSETS = (
@@ -280,6 +280,8 @@ def test_saved_model_matches_wrap_preflight(
     [
         ("printf 'v22.12.0\\n'", "v22.12.0", True),
         ("printf 'v23.0.0\\n'", "v23.0.0", True),
+        ("printf 'v24.0.0-nightly20250101abc\\n'", "v24.0.0-nightly20250101abc", True),
+        ("printf 'v23.0.0-rc.1\\n'", "v23.0.0-rc.1", True),
         ("printf 'v22.11.99\\n'", "v22.11.99", False),
         ("printf 'unknown version\\n'", "unrecognized version", False),
         ("printf 'v23.0.0\\n'; exit 7", "exit 7", False),
@@ -290,6 +292,7 @@ def test_node_version_prerequisite(
     tool_installation, monkeypatch, capsys, mode, script, diagnostic, supported
 ):
     package, tools, _ = tool_installation
+    monkeypatch.setattr(prerequisites, "_NODE_VERSION_TIMEOUT", 1)
     node = tools["node"]
     node.write_text(f"#!/bin/sh\n{script}\n", encoding="utf-8")
     codex = node.with_name("codex")
@@ -337,3 +340,57 @@ def test_node_version_prerequisite(
         assert diagnostic in message
         assert "Node.js 22.12 or newer" in message
     assert launches == (["codex"] if supported and mode == "run" else [])
+
+
+@pytest.mark.skipif(os.name == "nt", reason="synthetic Node executable uses a POSIX shell")
+@pytest.mark.parametrize("mode", ["doctor", "print", "run"])
+@pytest.mark.parametrize("relative_entry", ["", "."])
+def test_node_from_current_directory_is_never_run(
+    tool_installation, monkeypatch, capsys, tmp_path, mode, relative_entry
+):
+    package, tools, _ = tool_installation
+    marker = tmp_path / "project node ran"
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "manage.py").touch()
+    local_node = project / "node"
+    local_node.write_text(f"#!/bin/sh\ntouch '{marker}'\nprintf 'v22.12.0\\n'\n")
+    local_node.chmod(0o755)
+    tools["node"].unlink()
+    tools["codex"] = tools["node"].with_name("codex")
+    tools["codex"].touch()
+    tools["codex"].chmod(0o755)
+    bin_dir = tools["npm"].parent
+    monkeypatch.setenv("PATH", os.pathsep.join([relative_entry, str(bin_dir)]))
+    monkeypatch.chdir(project)
+    monkeypatch.setattr(wrap, "SKILL_PATH", package / "_assets" / ASSETS[0])
+    monkeypatch.setattr(wrap, "PROMPT_TEMPLATE", package / "_assets" / ASSETS[1])
+    real_run = subprocess.run
+
+    def run_local_check(args, **kwargs):
+        if args[:1] == ["git"]:
+            assert mode != "doctor"
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return real_run(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", run_local_check)
+    launches = []
+    monkeypatch.setattr(os, "execvp", lambda name, argv: launches.append(name))
+
+    if mode == "doctor":
+        with pytest.raises(SystemExit) as exit_info:
+            main(["doctor"])
+        assert exit_info.value.code == 1
+    else:
+        args = ["wrap", "--force"] + (["--run", "--harness", "codex"] if mode == "run" else [])
+        if mode == "run":
+            with pytest.raises(SystemExit) as exit_info:
+                main(args)
+            assert exit_info.value.code == 1
+        else:
+            main(args)
+    out, err = capsys.readouterr()
+    message = out if mode == "print" else err
+    assert "current directory or a relative PATH entry" in message
+    assert not marker.exists()
+    assert launches == []

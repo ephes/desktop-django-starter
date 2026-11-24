@@ -133,8 +133,10 @@ The source-checkout `scripts/wrap --run --agent pi` also launches
 `openai-codex/gpt-6.2-sol`.
 
 `dds doctor` and `dds wrap` run a timed `node --version` check on the
-executable found on PATH. Node.js 22.12 or newer is required. A missing or
-unusable runtime fails Doctor's core checks and blocks `dds wrap --run`
+executable found in an absolute PATH directory. A `node` resolved from the
+current directory or a relative PATH entry is reported and never run.
+Node.js 22.12 or newer is required; pre-release suffixes such as `-rc.1` are
+accepted. A missing or unusable runtime fails Doctor's core checks and blocks `dds wrap --run`
 before harness launch. Plain `dds wrap` warns and prints the manual commands
 when its other checks pass.
 
