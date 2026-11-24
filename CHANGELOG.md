@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Resume a confirmed Electron quit only once. An app quit takes priority
+  when a window close is also pending.
+
 - Keep Electron open when the native quit confirmation fails. Log the error
   and let the user retry.
 

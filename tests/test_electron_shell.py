@@ -55,5 +55,6 @@ def test_electron_asks_before_quitting_with_running_tasks() -> None:
     runtime = (ROOT / "shells" / "electron" / "main.js").read_text()
 
     assert 'new URL("/desktop/activity/", url)' in runtime
-    assert "quitGuard.needsCheck()" in runtime
+    assert 'quitGuard.defer(event, "window",' in runtime
+    assert 'quitGuard.defer(event, "app",' in runtime
     assert 'message: "A background task is still running"' in runtime

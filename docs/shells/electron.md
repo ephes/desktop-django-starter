@@ -17,7 +17,14 @@ Current responsibilities:
 - start every backend process through `desktop_process_guard.py` with an open stdin pipe, so `runserver`, `db_worker` and their owned descendants terminate when Electron crashes or is killed; POSIX guards lead dedicated groups and retire them on pipe loss (SIGTERM/SIGINT only until the Django command installs its own handlers, as `db_worker` does); Electron signals the group on stop and SIGKILLs the rest of it as soon as a leader exits; on Windows the guard also holds a kill-on-close Job Object for the backend's process tree (`scripts/desktop_process_guard.py`)
 - record a session in `desktop-shell-session.json` and, after a run that did not shut down cleanly, stop leftover backend processes of this install before `migrate` (`scripts/orphan-processes.cjs`); a process only counts when its executable is Python or `uv` and its arguments name the guard and this install's random app key
 - run `recover_stale_routines` after migrations and confirmed previous-worker retirement, before starting Django and the new worker
-- ask before closing the window or quitting while `/desktop/activity/` reports running or queued background tasks (`scripts/quit-guard.cjs`). Update installs and the smoke test skip the activity check. If the activity check fails, quitting can proceed. If the native confirmation dialog fails, Electron logs the error, cancels the attempt and lets the user try again.
+- ask before closing the window or quitting while `/desktop/activity/` reports
+  running or queued background tasks (`scripts/quit-guard.cjs`). Update installs
+  and the smoke test skip the activity check. If the activity check fails,
+  quitting can proceed. If the native confirmation dialog fails, Electron logs
+  the error, cancels the attempt and lets the user try again.
+  Repeated requests share one confirmation. If both a window close and an app
+  quit are pending, confirmation resumes the app quit once. Cancel clears all
+  pending requests.
 - pass `DESKTOP_DJANGO_APP_VERSION` (`app.getVersion()`) so packaged settings keep this version's database, media and cache in `state/<version>/`
 - consume the shared staged backend from `.stage/backend/`
 - package desktop artifacts with `electron-builder`
