@@ -100,6 +100,8 @@ references. To replace an older saved model, run `dds init` or pass
 `--model gpt-6.2-sol` for Codex or `--model openai-codex/gpt-6.2-sol` for Pi.
 Other provider references and the native Codex default follow the harness's
 own model configuration.
+`dds doctor` flags any saved model that fails this check and shows how to
+replace it. This is setup advice when core checks pass.
 `dds init` applies the same check. It re-prompts for an unapproved OpenAI
 model and does not keep an unapproved saved model when you press Enter.
 The source-checkout `scripts/wrap --run --agent pi` also launches

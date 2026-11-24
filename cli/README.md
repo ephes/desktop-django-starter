@@ -105,8 +105,9 @@ the installed asset manifest. An incomplete bundle reports up to eight missing
 paths and the total count, with instructions to reinstall.
 Doctor is read-only: it never invokes a harness, saves preferences or stages assets.
 Missing required assets or tools exit with status 1; missing optional `uv`,
-invalid wrapper config and harness setup advice remain advisory (status 0
-when core checks pass).
+invalid wrapper config, refused saved models and harness setup advice remain
+advisory (status 0 when core checks pass). Doctor shows the refused model and
+how to replace it with an approved selection.
 
 ## What happens after wrapping
 

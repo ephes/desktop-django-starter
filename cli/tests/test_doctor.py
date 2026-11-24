@@ -194,3 +194,63 @@ def test_wrapper_resolution_matrix(
             f"harness {name}: /fake/{name}" if name in installed else f"harness {name}: not found"
         )
         assert expected in out
+
+
+@pytest.mark.parametrize(
+    ("harness", "model", "replacement"),
+    [
+        ("codex", "gpt-5.4", "gpt-6.2-sol"),
+        ("pi", "openai/gpt-6.1-sol:high", "openai-codex/gpt-6.2-sol"),
+        ("codex", "gpt-6.2-astra", None),
+        ("pi", "openai-codex/gpt-6.2-sol:high", None),
+        ("pi", "ollama/gpt-5.4", None),
+    ],
+)
+def test_saved_model_matches_wrap_preflight(
+    installation, monkeypatch, capsys, harness, model, replacement
+):
+    package, tools, _ = installation
+    executable = tools["git"].with_name(harness + tools["git"].suffix)
+    executable.write_bytes(b"synthetic harness; never execute")
+    executable.chmod(0o755)
+    saved = config.default_config_path()
+    saved.parent.mkdir(parents=True)
+    saved.write_text(f'[wrap]\nharness = "{harness}"\nmodel = "{model}"\n', encoding="utf-8")
+
+    code, out, err = invoke_readonly(installation, capsys)
+    assert code == 0
+    assert not err
+    assert ("needs setup attention" in out) is (replacement is not None)
+    assert ("All checks passed." in out) is (replacement is None)
+    assert ("will use saved default harness" in out) is (replacement is None)
+
+    if replacement:
+        with pytest.raises(SystemExit) as exit_info:
+            main(["wrap", "--run"])
+        assert exit_info.value.code == 1
+        wrap_err = capsys.readouterr().err
+        for message in (
+            repr(model),
+            "approved GPT-6.2 model list",
+            "dds init",
+            f"--model {replacement}",
+        ):
+            assert message in out
+            assert message in wrap_err
+        return
+
+    monkeypatch.chdir(package)
+    (package / "manage.py").touch()
+    monkeypatch.setattr(wrap, "SKILL_PATH", package / "_assets" / ASSETS[0])
+    monkeypatch.setattr(wrap, "PROMPT_TEMPLATE", package / "_assets" / ASSETS[1])
+    monkeypatch.setattr(
+        subprocess, "run", lambda args, **kwargs: subprocess.CompletedProcess(args, 0, "", "")
+    )
+    launches = []
+    monkeypatch.setattr(os, "execvp", lambda name, argv: launches.append((name, argv)))
+
+    main(["wrap", "--run"])
+
+    [(name, argv)] = launches
+    assert name == harness
+    assert argv[argv.index("--model") + 1] == model

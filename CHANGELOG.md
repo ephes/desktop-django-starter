@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Flag refused saved OpenAI models in `dds doctor` and show how to select
+  an approved model.
+
 - Resume a confirmed Electron quit only once. An app quit takes priority
   when a window close is also pending.
 
