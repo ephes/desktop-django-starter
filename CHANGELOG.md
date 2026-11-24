@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+- Show a restart dialog and exit when Positron loses its running local server.
+  An intentional shutdown closes the listener quietly.
+
+- Clean up the Positron listener and profile lock if the task worker cannot
+  start its thread, and show a startup error.
+
+- Release the Positron listener if WSGI setup fails after binding so teardown
+  can finish and release the profile lock.
+
+- Retry interrupted first-run demo seeding on the next Positron launch.
+  The pending-seed marker is flushed to disk before migration creates the
+  database. Existing profiles without a pending seed retain their data,
+  including empty stables.
+
 - Verify Node.js 22.12 or newer in `dds doctor` and `dds wrap` preflight
   before launching a wrapping harness. Report a warning in print-only mode.
   Never run a `node` resolved from the current directory or a relative PATH

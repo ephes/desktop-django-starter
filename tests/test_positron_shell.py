@@ -1,6 +1,8 @@
 import asyncio
 import importlib.util
 import os
+import socket
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -427,3 +429,335 @@ def test_positron_quit_owns_activity_probe_and_dialog(
                     await first
 
     asyncio.run(exercise_exit())
+
+
+@pytest.mark.parametrize("interruption", ["migrate", "seed_demo_content", "legacy"])
+def test_positron_packaged_seed_survives_interrupted_first_launch(tmp_path, interruption) -> None:
+    script = """
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+sys.modules["toga"] = SimpleNamespace(App=object)
+from desktop_django_starter_positron import app
+
+data, cache, action = sys.argv[1:]
+shell = app.DesktopDjangoStarterPositron()
+shell.paths = SimpleNamespace(data=Path(data), cache=Path(cache))
+shell.auth_token = "synthetic-test-token"
+shell.version = "1.0.0"
+shell.configure_django()
+
+from example_app.models import Item
+
+call_command = app.django_manage.call_command
+
+class Interrupted(Exception):
+    pass
+
+def interrupted_command(name, **kwargs):
+    if name == action == "seed_demo_content":
+        raise Interrupted
+    result = call_command(name, **kwargs)
+    if name == action == "migrate":
+        raise Interrupted
+    return result
+
+if action == "legacy":
+    call_command("migrate", interactive=False, verbosity=0)
+elif action in {"migrate", "seed_demo_content"}:
+    with patch.object(app.django_manage, "call_command", interrupted_command):
+        try:
+            shell.prepare_runtime()
+        except Interrupted:
+            pass
+        else:
+            raise AssertionError("the first launch did not reach the interruption")
+    assert Item.objects.count() == 0
+else:
+    shell.prepare_runtime()
+    if action == "edit":
+        assert Item.objects.count() == 3
+        Item.objects.filter(title="Skylark Comet").update(title="Edited pony")
+    elif action == "check":
+        assert set(Item.objects.values_list("title", flat=True)) == {
+            "Edited pony", "Marigold Drift", "Northwind Glimmer",
+        }
+        Item.objects.all().delete()
+    else:
+        assert Item.objects.count() == 0
+"""
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join((str(POSITRON_SRC), str(ROOT / "src"))),
+    }
+    actions = (
+        (interruption, "empty")
+        if interruption == "legacy"
+        else (interruption, "edit", "check", "empty")
+    )
+    for action in actions:
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(tmp_path / "data"), str(tmp_path / "cache"), action],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        assert result.returncode == 0, f"{action}: {result.stdout}\n{result.stderr}"
+
+
+def test_positron_seed_claim_is_durable_before_migrate(
+    positron_app_module, monkeypatch, tmp_path
+) -> None:
+    app_module = positron_app_module
+    database_path = tmp_path / "app.sqlite3"
+    marker = tmp_path / "app.demo-seed-pending"
+    synced: list[str] = []
+    real_fsync = os.fsync
+
+    def recording_fsync(fd: int) -> None:
+        synced.append("dir" if stat.S_ISDIR(os.fstat(fd).st_mode) else "file")
+        real_fsync(fd)
+
+    monkeypatch.setattr(app_module.os, "fsync", recording_fsync)
+
+    assert app_module.claim_pending_demo_seed(database_path) == marker
+    assert marker.is_file() and marker.stat().st_size == 0
+    assert synced[0] == "file"
+    if os.name != "nt":
+        assert synced[1:] == ["dir"]
+
+    # A retry reuses the durable claim even though migrate created the database.
+    database_path.touch()
+    assert app_module.claim_pending_demo_seed(database_path) == marker
+
+    # Without a claim, an existing database is already admitted.
+    marker.unlink()
+    assert app_module.claim_pending_demo_seed(database_path) is None
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize("kind", ["nonempty", "directory", "symlink"])
+def test_positron_seed_claim_rejects_invalid_marker(positron_app_module, tmp_path, kind) -> None:
+    database_path = tmp_path / "app.sqlite3"
+    marker = tmp_path / "app.demo-seed-pending"
+    if kind == "nonempty":
+        marker.write_text("x")
+    elif kind == "directory":
+        marker.mkdir()
+    else:
+        target = tmp_path / "target"
+        target.touch()
+        marker.symlink_to(target)
+
+    with pytest.raises(RuntimeError, match="Invalid pending demo seed marker"):
+        positron_app_module.claim_pending_demo_seed(database_path)
+
+
+@pytest.fixture
+def running_positron_shell(positron_app_module, monkeypatch, tmp_path):
+    app_module = positron_app_module
+    monkeypatch.setattr(app_module.toga, "WebView", Mock(), raising=False)
+    window = Mock(dialog=AsyncMock())
+    monkeypatch.setattr(app_module.toga, "MainWindow", Mock(return_value=window), raising=False)
+    monkeypatch.setattr(app_module.toga, "ErrorDialog", Mock(), raising=False)
+    app = app_module.DesktopDjangoStarterPositron()
+    app.paths = SimpleNamespace(data=tmp_path)
+    app.formal_name = "Synthetic Positron"
+    app.configure_django = Mock()
+    app.prepare_runtime = Mock()
+    return app
+
+
+def test_positron_closes_listener_when_handler_setup_fails(
+    monkeypatch, positron_app_module, running_positron_shell
+) -> None:
+    app_module = positron_app_module
+    app = running_positron_shell
+    servers = []
+
+    class BoundServer(app_module.ThreadedWSGIServer):
+        def __init__(self, *args):
+            super().__init__(*args)
+            self.address = self.socket.getsockname()
+            self.close_count = 0
+            servers.append(self)
+
+        def shutdown(self):
+            pytest.fail("cleanup called shutdown before the serve loop started")
+
+        def server_close(self):
+            self.close_count += 1
+            super().server_close()
+
+    error = RuntimeError("synthetic handler setup failure")
+    monkeypatch.setattr(app_module, "ThreadedWSGIServer", BoundServer)
+    monkeypatch.setattr(app_module, "WSGIHandler", Mock(side_effect=error))
+
+    async def exercise():
+        app.loop = asyncio.get_running_loop()
+        app.startup()
+        try:
+            with pytest.raises(RuntimeError, match="synthetic handler setup failure"):
+                await asyncio.wait_for(app.server_ready, timeout=2)
+            assert await asyncio.wait_for(asyncio.to_thread(app.cleanup), timeout=2)
+            assert app._instance_lock is None
+            (server,) = servers
+            assert server.close_count == 1
+            with socket.socket() as listener:
+                listener.bind(server.address)
+        finally:
+            for server in servers:
+                if server.socket.fileno() >= 0:
+                    server.server_close()
+            if app._instance_lock is not None:
+                app_module.release_instance_lock(app._instance_lock)
+
+    asyncio.run(exercise())
+
+
+def test_positron_worker_start_failure_keeps_cleanup_available(
+    monkeypatch, positron_app_module, running_positron_shell
+) -> None:
+    from django_tasks_db.management.commands import db_worker
+
+    app_module = positron_app_module
+    app = running_positron_shell
+    app.exit = Mock()
+    monkeypatch.setattr(app_module, "WSGIHandler", Mock())
+    worker = Mock()
+    monkeypatch.setattr(db_worker, "Worker", Mock(return_value=worker))
+    worker_thread = Mock()
+    worker_thread.start.side_effect = RuntimeError("synthetic worker start failure")
+    worker_thread.join.side_effect = RuntimeError("cannot join an unstarted thread")
+
+    async def exercise():
+        app.loop = asyncio.get_running_loop()
+        app.startup()
+        try:
+            port = await asyncio.wait_for(app.server_ready, timeout=2)
+            monkeypatch.setattr(app_module, "Thread", Mock(return_value=worker_thread))
+            try:
+                await asyncio.wait_for(app.on_running(), timeout=2)
+            except RuntimeError:
+                app.cleanup()
+                raise
+            worker_thread.start.assert_called_once()
+            worker_thread.join.assert_not_called()
+            assert app._instance_lock is None
+            assert not app.server_thread.is_alive()
+            with socket.socket() as listener:
+                listener.bind((app_module.HOST, port))
+            app.main_window.dialog.assert_awaited_once()
+            app.exit.assert_called_once()
+        finally:
+            # The real listener must also stop if a regression restores the
+            # broken worker ownership and the test fails above.
+            app._task_worker_thread = None
+            app.cleanup()
+
+    asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("outcome", ["raises", "returns", "before_ready", "shutdown"])
+def test_positron_reports_unexpected_server_exit_on_ui_thread(
+    monkeypatch, positron_app_module, running_positron_shell, outcome
+) -> None:
+    from threading import Event, get_ident
+
+    app_module = positron_app_module
+    app = running_positron_shell
+    app.start_task_worker = Mock()
+    app.exit = Mock()
+    monkeypatch.setattr(app_module, "WSGIHandler", Mock())
+    finish = Event()
+    servers = []
+
+    class RunningServer(app_module.ThreadedWSGIServer):
+        def __init__(self, *args):
+            super().__init__(*args)
+            self.address = self.socket.getsockname()
+            self.close_count = 0
+            servers.append(self)
+
+        def serve_forever(self):
+            if outcome == "shutdown":
+                super().serve_forever(poll_interval=0.01)
+                return
+            if outcome == "before_ready":
+                return
+            if not finish.wait(timeout=5):
+                raise AssertionError("test did not trigger the serve loop exit")
+            if outcome == "raises":
+                raise RuntimeError("synthetic serve loop failure")
+
+        def shutdown(self):
+            assert outcome == "shutdown", "cleanup tried to shut down a finished serve loop"
+            super().shutdown()
+
+        def server_close(self):
+            self.close_count += 1
+            super().server_close()
+
+    monkeypatch.setattr(app_module, "ThreadedWSGIServer", RunningServer)
+
+    async def exercise():
+        ui_thread = get_ident()
+        app.loop = asyncio.get_running_loop()
+        app.startup()
+        dialog_shown = asyncio.Event()
+
+        async def show_dialog(dialog):
+            assert get_ident() == ui_thread
+            assert dialog is app_module.toga.ErrorDialog.return_value
+            dialog_shown.set()
+
+        app.main_window.dialog.side_effect = show_dialog
+
+        try:
+            if outcome == "before_ready":
+                # Let the server close before the UI can process its queued callback.
+                app.server_thread.join(timeout=2)
+                assert not app.server_thread.is_alive()
+            await asyncio.wait_for(app.on_running(), timeout=2)
+            if outcome == "before_ready":
+                app.start_task_worker.assert_not_called()
+                app_module.toga.ErrorDialog.assert_called_once_with(
+                    "Startup failed",
+                    "The local service could not start. Quit and relaunch the app.",
+                )
+            else:
+                assert app.web_view.url == app.bootstrap_url(app.server_ready.result())
+
+            if outcome == "shutdown":
+                assert app.cleanup()
+                await asyncio.sleep(0)
+            elif outcome != "before_ready":
+                finish.set()
+                await asyncio.wait_for(dialog_shown.wait(), timeout=2)
+                assert app.cleanup()
+
+            assert app._instance_lock is None
+            (server,) = servers
+            assert server.close_count == 1
+            with socket.socket() as listener:
+                listener.bind(server.address)
+            if outcome == "shutdown":
+                app.main_window.dialog.assert_not_awaited()
+                app.exit.assert_not_called()
+            else:
+                if outcome != "before_ready":
+                    app_module.toga.ErrorDialog.assert_called_once_with(
+                        "Local service stopped",
+                        "The local service stopped. Quit and relaunch the app.",
+                    )
+                app.exit.assert_called_once()
+        finally:
+            finish.set()
+            await asyncio.to_thread(app.server_thread.join, 2)
+            if app._instance_lock is not None:
+                app_module.release_instance_lock(app._instance_lock)
+
+    asyncio.run(exercise())
