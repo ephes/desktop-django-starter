@@ -928,6 +928,7 @@ const quitGuard = createQuitGuard({
       : await dialog.showMessageBox(options);
     return response === 0;
   },
+  onConfirmationError: (error) => console.warn("Quit confirmation failed:", error),
   // Quit without asking before the app is up, for update installs, and in
   // the smoke test.
   skip: () => (

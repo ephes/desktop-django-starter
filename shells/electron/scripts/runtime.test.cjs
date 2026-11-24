@@ -28,11 +28,13 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), c
     } : name === "./scripts/orphan-processes.cjs" && cleanup ? {
       ...actualRequire(name), stopOrphanedBackendProcesses: cleanup
     } : name === "electron-updater" ? { autoUpdater: {} } : overrides[name] ?? actualRequire(name),
-    __dirname: path.dirname(filename), process, console, setTimeout, clearTimeout, URL, AbortController
+    __dirname: path.dirname(filename), process, console: overrides.console ?? console,
+    setTimeout, clearTimeout, URL, AbortController
   };
   vm.runInNewContext(fs.readFileSync(filename, "utf8") + `
     globalThis.control = {
       bootstrap, prepareForUpdateInstall,
+      activity: fetch => { getActivity = fetch; },
       children: (worker, django) => { taskWorkerProcess = worker; djangoProcess = django; },
       session: value => { shellSession = value; shellRecoveryConfirmed = true; },
       recover: error => recoverFailedUpdateInstall(error),
@@ -61,6 +63,49 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), c
 }
 
 module.exports = { runtime };
+
+function requestBeforeQuit(app) {
+  let deferred = false;
+  app.emit("before-quit", { preventDefault: () => { deferred = true; } });
+  return deferred;
+}
+
+test("a rejected native quit dialog is logged once and the next app quit can succeed", async () => {
+  const warnings = [];
+  const dialogError = new Error("native dialog unavailable");
+  let prompts = 0;
+  const { app, control } = runtime(os.tmpdir(), undefined, {
+    console: { warn: (...args) => warnings.push(args) },
+    electron: {
+      dialog: {
+        showMessageBox: async () => {
+          if (++prompts === 1) throw dialogError;
+          return { response: 0 };
+        }
+      }
+    }
+  });
+  control.visible(null);
+  control.activity(async () => ({ running_tasks: 1 }));
+  let quits = 0;
+  app.quit = () => {
+    quits++;
+    assert.equal(requestBeforeQuit(app), false);
+  };
+
+  assert.equal(requestBeforeQuit(app), true);
+  await new Promise(setImmediate);
+  assert.equal(quits, 0);
+  assert.equal(control.state().quitting, false);
+  assert.deepEqual(warnings, [["Quit confirmation failed:", dialogError]]);
+
+  assert.equal(requestBeforeQuit(app), true);
+  await new Promise(setImmediate);
+  assert.equal(prompts, 2);
+  assert.equal(quits, 1);
+  assert.equal(control.state().quitting, true);
+  assert.equal(warnings.length, 1);
+});
 
 test("Django exit cancels a pending startup probe before the worker or window starts", async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-backend-exit-"));
