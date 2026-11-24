@@ -188,19 +188,23 @@ class DesktopDjangoStarterPositron(toga.App):
         django.setup(set_prefix=False)
 
     def prepare_runtime(self) -> None:
-        # Packaged settings put the database in this version's state directory
-        # (<app-data>/state/<version>/app.sqlite3); ask Django rather than
-        # rebuilding the path. Seeding is idempotent, so seeding a database an
-        # upgrade copied forward is harmless.
+        # Claim first-run seeding before migrate can create the database.
+        # An existing database without a claim is already admitted, including
+        # legacy profiles and databases copied forward from an older version.
         database_path = Path(settings.DATABASES["default"]["NAME"])
-        should_seed_demo_content = (
-            positron_runtime_mode() == "packaged" and not database_path.exists()
-        )
+        pending_seed = database_path.with_suffix(".demo-seed-pending")
+        should_seed_demo_content = False
+        if positron_runtime_mode() == "packaged":
+            if not pending_seed.exists() and not database_path.exists():
+                pending_seed.touch(mode=0o600, exist_ok=False)
+            should_seed_demo_content = pending_seed.exists()
+
         django_manage.call_command("collectstatic", interactive=False, verbosity=0, clear=False)
         django_manage.call_command("migrate", interactive=False, verbosity=0)
         django_manage.call_command("recover_stale_routines", verbosity=0)
         if should_seed_demo_content:
             django_manage.call_command("seed_demo_content", verbosity=0)
+            pending_seed.unlink()
 
     def web_server(self) -> None:
         try:

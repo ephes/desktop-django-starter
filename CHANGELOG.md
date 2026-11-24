@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Retry interrupted first-run demo seeding on the next Positron launch.
+  Existing profiles without a pending seed retain their data, including
+  empty stables.
+
 - Verify Node.js 22.12 or newer in `dds doctor` and `dds wrap` preflight
   before launching a wrapping harness. Report a warning in print-only mode.
   Never run a `node` resolved from the current directory or a relative PATH

@@ -427,3 +427,80 @@ def test_positron_quit_owns_activity_probe_and_dialog(
                     await first
 
     asyncio.run(exercise_exit())
+
+
+@pytest.mark.parametrize("interruption", ["migrate", "seed_demo_content", "legacy"])
+def test_positron_packaged_seed_survives_interrupted_first_launch(tmp_path, interruption) -> None:
+    script = """
+import sys
+from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
+
+sys.modules["toga"] = SimpleNamespace(App=object)
+from desktop_django_starter_positron import app
+
+data, cache, action = sys.argv[1:]
+shell = app.DesktopDjangoStarterPositron()
+shell.paths = SimpleNamespace(data=Path(data), cache=Path(cache))
+shell.auth_token = "synthetic-test-token"
+shell.version = "1.0.0"
+shell.configure_django()
+
+from example_app.models import Item
+
+call_command = app.django_manage.call_command
+
+class Interrupted(Exception):
+    pass
+
+def interrupted_command(name, **kwargs):
+    if name == action == "seed_demo_content":
+        raise Interrupted
+    result = call_command(name, **kwargs)
+    if name == action == "migrate":
+        raise Interrupted
+    return result
+
+if action == "legacy":
+    call_command("migrate", interactive=False, verbosity=0)
+elif action in {"migrate", "seed_demo_content"}:
+    with patch.object(app.django_manage, "call_command", interrupted_command):
+        try:
+            shell.prepare_runtime()
+        except Interrupted:
+            pass
+        else:
+            raise AssertionError("the first launch did not reach the interruption")
+    assert Item.objects.count() == 0
+else:
+    shell.prepare_runtime()
+    if action == "edit":
+        assert Item.objects.count() == 3
+        Item.objects.filter(title="Skylark Comet").update(title="Edited pony")
+    elif action == "check":
+        assert set(Item.objects.values_list("title", flat=True)) == {
+            "Edited pony", "Marigold Drift", "Northwind Glimmer",
+        }
+        Item.objects.all().delete()
+    else:
+        assert Item.objects.count() == 0
+"""
+    env = {
+        **os.environ,
+        "PYTHONPATH": os.pathsep.join((str(POSITRON_SRC), str(ROOT / "src"))),
+    }
+    actions = (
+        (interruption, "empty")
+        if interruption == "legacy"
+        else (interruption, "edit", "check", "empty")
+    )
+    for action in actions:
+        result = subprocess.run(
+            [sys.executable, "-c", script, str(tmp_path / "data"), str(tmp_path / "cache"), action],
+            env=env,
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        assert result.returncode == 0, f"{action}: {result.stdout}\n{result.stderr}"

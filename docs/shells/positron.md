@@ -17,7 +17,7 @@ Current responsibilities:
 - enforce a single running instance per app-data directory with a lock file before the in-process server starts
 - run the optional `tasks_demo` worker in-process on a background thread
 - always boot Django with `desktop_django_starter.settings.packaged` so local Positron runs validate the packaged-style app-data and staticfiles contract
-- pass `DESKTOP_DJANGO_APP_VERSION` (Toga's `App.version`, falling back to the installed `desktop-django-starter-positron` distribution's version, because Toga derives its metadata lookup from the app ID and usually finds none) so packaged settings keep the database, media and cache in `<app-data>/state/<version>/`; demo content is seeded when the database path Django reports does not exist yet
+- pass `DESKTOP_DJANGO_APP_VERSION` (Toga's `App.version`, falling back to the installed `desktop-django-starter-positron` distribution's version, because Toga derives its metadata lookup from the app ID and usually finds none) so packaged settings keep the database, media and cache in `<app-data>/state/<version>/`
 - ask before quitting while background tasks are running or queued: the async `on_exit` handler reads `background_task_counts()` in a worker thread and, if tasks are active, shows a Toga `QuestionDialog`; answering No returns `False`, which cancels the exit. Idle, a failed count, or smoke mode exit normally, and further quit requests are ignored from the start of the activity check through confirmation and cleanup
 - refresh collected static files on startup without clearing the cache-backed staticfiles tree on every launch
 - reuse the shared brand source under `assets/brand/` and generate shell-local icon outputs into `shells/positron/resources/`
@@ -30,6 +30,14 @@ metadata, Django uses `<app-data>/state/unversioned/`. Omitted values are
 removed from both the constructed environment and the process environment
 before Django starts. Other inherited settings such as the smoke-test flag
 remain available.
+
+Before creating a new packaged database, Positron records a pending demo seed
+beside that version's database. If migration or seeding is interrupted, the
+same version retries on the next launch. Successful seeding clears the pending
+file. Django records the seed decision with the pony rows in one transaction,
+so a retry preserves edits and does not recreate deleted ponies. Positron
+admits existing databases without a pending file as initialized, including
+legacy profiles and databases copied from an older version.
 
 Lock acquisition and PID initialization failures close the opened handle and
 release any acquired lock. Shutdown also closes the handle when explicit unlock
