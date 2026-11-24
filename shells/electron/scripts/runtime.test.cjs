@@ -28,11 +28,13 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), c
     } : name === "./scripts/orphan-processes.cjs" && cleanup ? {
       ...actualRequire(name), stopOrphanedBackendProcesses: cleanup
     } : name === "electron-updater" ? { autoUpdater: {} } : overrides[name] ?? actualRequire(name),
-    __dirname: path.dirname(filename), process, console, setTimeout, clearTimeout, URL, AbortController
+    __dirname: path.dirname(filename), process, console: overrides.console ?? console,
+    setTimeout, clearTimeout, URL, AbortController
   };
   vm.runInNewContext(fs.readFileSync(filename, "utf8") + `
     globalThis.control = {
-      bootstrap, prepareForUpdateInstall,
+      bootstrap, createWindow, prepareForUpdateInstall,
+      activity: fetch => { getActivity = fetch; },
       children: (worker, django) => { taskWorkerProcess = worker; djangoProcess = django; },
       session: value => { shellSession = value; shellRecoveryConfirmed = true; },
       recover: error => recoverFailedUpdateInstall(error),
@@ -61,6 +63,118 @@ function runtime(dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-runtime-")), c
 }
 
 module.exports = { runtime };
+
+function requestQuit(emitter, eventName) {
+  let deferred = false;
+  emitter.emit(eventName, { preventDefault: () => { deferred = true; } });
+  return deferred;
+}
+
+test("a rejected native quit dialog is logged once and the next app quit can succeed", async () => {
+  const warnings = [];
+  const dialogError = new Error("native dialog unavailable");
+  let prompts = 0;
+  const { app, control } = runtime(os.tmpdir(), undefined, {
+    console: { warn: (...args) => warnings.push(args) },
+    electron: {
+      dialog: {
+        showMessageBox: async () => {
+          if (++prompts === 1) throw dialogError;
+          return { response: 0 };
+        }
+      }
+    }
+  });
+  control.visible(null);
+  control.activity(async () => ({ running_tasks: 1 }));
+  let quits = 0;
+  let resumedQuitDeferred;
+  app.quit = () => {
+    quits++;
+    resumedQuitDeferred = requestQuit(app, "before-quit");
+  };
+
+  assert.equal(requestQuit(app, "before-quit"), true);
+  await new Promise(setImmediate);
+  assert.equal(quits, 0);
+  assert.equal(control.state().quitting, false);
+  assert.deepEqual(warnings, [["Quit confirmation failed:", dialogError]]);
+
+  assert.equal(requestQuit(app, "before-quit"), true);
+  await new Promise(setImmediate);
+  assert.equal(prompts, 2);
+  assert.equal(quits, 1);
+  assert.equal(resumedQuitDeferred, false);
+  assert.equal(control.state().quitting, true);
+  assert.equal(warnings.length, 1);
+});
+
+class QuitTestWindow extends EventEmitter {
+  webContents = Object.assign(new EventEmitter(), {
+    session: {
+      setPermissionRequestHandler() {},
+      setPermissionCheckHandler() {},
+      webRequest: { onBeforeSendHeaders() {} }
+    },
+    setWindowOpenHandler() {}
+  });
+  isDestroyed() { return false; }
+  loadURL() {}
+}
+
+async function verifyQuitContinuation(appQuitPending) {
+  const url = "http://127.0.0.1:1";
+  const win = new QuitTestWindow();
+  const prompts = [];
+  const { app, control } = runtime(os.tmpdir(), undefined, {
+    electron: {
+      BrowserWindow: function () { return win; },
+      dialog: {
+        showMessageBox: () => new Promise(resolve => prompts.push(resolve))
+      }
+    }
+  });
+  control.createWindow(url);
+  control.activity(async () => ({ running_tasks: 1 }));
+  const closes = [];
+  const quits = [];
+  win.close = () => { closes.push(requestQuit(win, "close")); };
+  app.quit = () => { quits.push(requestQuit(app, "before-quit")); };
+
+  assert.equal(requestQuit(win, "close"), true);
+  await new Promise(setImmediate);
+  assert.equal(prompts.length, 1);
+  assert.equal(requestQuit(win, "close"), true);
+  assert.equal(requestQuit(app, "before-quit"), true);
+  prompts[0]({ response: 1 });
+  await new Promise(setImmediate);
+  assert.deepEqual(closes, []);
+  assert.deepEqual(quits, []);
+
+  // After Cancel, a new window request must own the next attempt.
+  assert.equal(requestQuit(win, "close"), true);
+  await new Promise(setImmediate);
+  assert.equal(prompts.length, 2);
+  assert.equal(requestQuit(win, "close"), true);
+  if (appQuitPending) {
+    assert.equal(requestQuit(app, "before-quit"), true);
+    assert.equal(requestQuit(win, "close"), true);
+    assert.equal(requestQuit(app, "before-quit"), true);
+  }
+  prompts[1]({ response: 0 });
+  await new Promise(setImmediate);
+  assert.deepEqual(quits, appQuitPending ? [false] : []);
+  assert.deepEqual(closes, appQuitPending ? [] : [false]);
+  assert.equal(prompts.length, 2);
+}
+
+test("repeated window closes resume once after a cancelled quit", async () => {
+  await verifyQuitContinuation(false);
+});
+
+test("overlapping quit events resume once and app quit takes priority", async () => {
+  await verifyQuitContinuation(true);
+});
 
 test("Django exit cancels a pending startup probe before the worker or window starts", async t => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-backend-exit-"));

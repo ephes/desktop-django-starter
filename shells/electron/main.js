@@ -755,13 +755,8 @@ function createWindow(url, authToken) {
   currentAuthToken = authToken;
 
   win.on("close", (event) => {
-    if (!quitGuard.needsCheck()) {
-      return;
-    }
-
-    event.preventDefault();
-    quitGuard.shouldProceed().then((proceed) => {
-      if (proceed && !win.isDestroyed()) {
+    quitGuard.defer(event, "window", () => {
+      if (!win.isDestroyed()) {
         win.close();
       }
     });
@@ -928,6 +923,7 @@ const quitGuard = createQuitGuard({
       : await dialog.showMessageBox(options);
     return response === 0;
   },
+  onConfirmationError: (error) => console.warn("Quit confirmation failed:", error),
   // Quit without asking before the app is up, for update installs, and in
   // the smoke test.
   skip: () => (
@@ -942,17 +938,9 @@ app.on("second-instance", () => {
 });
 
 app.on("before-quit", (event) => {
-  if (quitGuard.needsCheck()) {
-    event.preventDefault();
-    quitGuard.shouldProceed().then((proceed) => {
-      if (proceed) {
-        app.quit();
-      }
-    });
-    return;
+  if (!quitGuard.defer(event, "app", () => app.quit())) {
+    quitting = true;
   }
-
-  quitting = true;
 });
 
 app.on("window-all-closed", () => {

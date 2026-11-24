@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Resume a confirmed Electron quit only once. An app quit takes priority
+  when a window close is also pending.
+
+- Keep Electron open when the native quit confirmation fails. Log the error
+  and let the user retry.
+
 - Count only work on queues served by the shell worker when deciding whether
   to confirm a quit. Apply the new activity index with `just migrate` in
   development. Packaged shells migrate automatically.

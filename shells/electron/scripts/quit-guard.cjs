@@ -1,11 +1,8 @@
 // Asks before quitting while background tasks are still running.
 //
-// main.js calls `shouldProceed()` from the window `close` and app
-// `before-quit` handlers. The first call checks Django's /desktop/activity/
-// endpoint; if tasks are running or queued, the user is asked. Once the user
-// agreed (or nothing was running), later calls during the same quit return
-// true immediately, so the user is asked at most once. A failed check never
-// keeps the user from quitting.
+// The window `close` and app `before-quit` handlers share one activity check,
+// one confirmation and one continuation. A failed activity check allows
+// quitting. A failed confirmation dialog cancels the attempt so the user can retry.
 
 // Running tasks are interrupted by quitting; queued tasks stay in the
 // database and start when the app runs again.
@@ -21,16 +18,11 @@ function describeActivity({ running_tasks: running = 0, queued_tasks: queued = 0
   return parts.join(" ");
 }
 
-function createQuitGuard({ fetchActivity, confirmQuit, skip = () => false }) {
+function createQuitGuard({ fetchActivity, confirmQuit, onConfirmationError, skip = () => false }) {
   let confirmed = false;
   let pending = null;
 
   async function decide() {
-    if (confirmed || skip()) {
-      confirmed = true;
-      return true;
-    }
-
     let activity;
     try {
       activity = await fetchActivity();
@@ -40,32 +32,72 @@ function createQuitGuard({ fetchActivity, confirmQuit, skip = () => false }) {
 
     const busy = activity
       && ((activity.running_tasks || 0) > 0 || (activity.queued_tasks || 0) > 0);
-    if (busy && !(await confirmQuit(describeActivity(activity)))) {
-      return false;
+    if (busy) {
+      try {
+        if (!(await confirmQuit(describeActivity(activity)))) {
+          return false;
+        }
+      } catch (error) {
+        onConfirmationError?.(error);
+        return false;
+      }
     }
 
-    confirmed = true;
     return true;
   }
 
+  async function finishAttempt(attempt) {
+    try {
+      const proceed = await decide();
+      pending = null;
+      if (proceed) {
+        confirmed = true;
+        if (!skip()) attempt.resume?.();
+      }
+      return proceed;
+    } catch (error) {
+      if (pending === attempt) pending = null;
+      console.warn("Quit attempt failed:", error);
+      return false;
+    }
+  }
+
+  function pendingAttempt() {
+    if (!pending) {
+      const attempt = { resume: null, decision: null };
+      pending = attempt;
+      attempt.decision = finishAttempt(attempt);
+    }
+    return pending;
+  }
+
   return {
-    // True when a quit must wait for `shouldProceed()`; false when it can
-    // continue right away (already confirmed, or checks are skipped).
+    // Returns true if the native event was deferred. The app quit replaces a
+    // pending window close because quitting the app will close its windows.
+    defer(event, action, resume) {
+      if (skip()) {
+        if (pending) pending.resume = null;
+        return false;
+      }
+      if (confirmed) {
+        return false;
+      }
+      event.preventDefault();
+      const attempt = pendingAttempt();
+      if (attempt.resume === null || action === "app") {
+        attempt.resume = resume;
+      }
+      return true;
+    },
     needsCheck() {
       return !confirmed && !skip();
     },
-    // Resolves true when quitting may continue.
     shouldProceed() {
       if (confirmed || skip()) {
         confirmed = true;
         return Promise.resolve(true);
       }
-      if (!pending) {
-        pending = decide().finally(() => {
-          pending = null;
-        });
-      }
-      return pending;
+      return pendingAttempt().decision;
     },
     isConfirmed() {
       return confirmed;
