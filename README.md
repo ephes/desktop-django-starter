@@ -125,10 +125,20 @@ references. To replace an older saved model, run `dds init` or pass
 `--model gpt-6.2-sol` for Codex or `--model openai-codex/gpt-6.2-sol` for Pi.
 Other provider references and the native Codex default follow the harness's
 own model configuration.
+`dds doctor` flags any saved model that fails this check and shows how to
+replace it. This is setup advice when core checks pass.
 `dds init` applies the same check. It re-prompts for an unapproved OpenAI
 model and does not keep an unapproved saved model when you press Enter.
 The source-checkout `scripts/wrap --run --agent pi` also launches
 `openai-codex/gpt-6.2-sol`.
+
+`dds doctor` and `dds wrap` run a timed `node --version` check on the
+executable found in an absolute PATH directory. A `node` resolved from the
+current directory or a relative PATH entry is reported and never run.
+Node.js 22.12 or newer is required; pre-release suffixes such as `-rc.1` are
+accepted. A missing or unusable runtime fails Doctor's core checks and blocks `dds wrap --run`
+before harness launch. Plain `dds wrap` warns and prints the manual commands
+when its other checks pass.
 
 `dds wrap --emit-prompt` works offline without setup and substitutes only full
 starter-path prefixes, preserving literal relocated paths and similar text.

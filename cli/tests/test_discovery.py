@@ -36,6 +36,7 @@ def preflight(tmp_path, monkeypatch):
     prompt.write_text("synthetic prompt", encoding="utf-8")
     monkeypatch.setattr(wrap, "SKILL_PATH", skill)
     monkeypatch.setattr(wrap, "PROMPT_TEMPLATE", prompt)
+    monkeypatch.setattr(wrap, "probe_node_version", lambda path: "v22.12.0")
     monkeypatch.setattr(wrap.shutil, "which", lambda name: f"/fake/{name}")
     git_calls = []
     launches = []

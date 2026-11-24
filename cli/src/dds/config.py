@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import sys
 import tempfile
@@ -22,6 +23,10 @@ else:
 SUPPORTED_HARNESSES = ("claude", "pi", "codex")
 OPENAI_MODEL_EXAMPLE = "gpt-6.2-sol"
 DEFAULT_PI_MODEL = f"openai-codex/{OPENAI_MODEL_EXAMPLE}"
+_OPENAI_PROVIDERS = frozenset({"openai", "openai-codex"})
+_APPROVED_OPENAI_MODELS = frozenset({OPENAI_MODEL_EXAMPLE, "gpt-6.2-astra"})
+_BARE_OPENAI_MODEL = re.compile(r"^(?:gpt-(?!oss(?:-|$))|chatgpt-|codex-|o[1-9](?:-|$))")
+_PI_THINKING_LEVELS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh", "max"})
 _WRAP_SECTION = "wrap"
 # Windows refuses to replace a file while another process or thread is replacing
 # or reading it, and refuses to open one that is being replaced, so a concurrent
@@ -40,6 +45,35 @@ class WrapperConfig:
 
     harness: str
     model: str | None = None
+
+
+def is_unapproved_openai_model(harness: str, model: str | None) -> bool:
+    """Return whether DDS refuses the model before launching the harness."""
+    if not model or harness not in ("codex", "pi"):
+        return False
+
+    reference = model.strip()
+    if harness == "pi":
+        base, _, suffix = reference.rpartition(":")
+        if suffix in _PI_THINKING_LEVELS:
+            reference = base
+
+    provider, separator, model_id = reference.lower().partition("/")
+    if separator:
+        if provider.strip() not in _OPENAI_PROVIDERS:
+            return False
+        model_id = model_id.strip()
+    else:
+        model_id = provider
+        if not _BARE_OPENAI_MODEL.match(model_id):
+            return False
+
+    return model_id not in _APPROVED_OPENAI_MODELS
+
+
+def approved_model_replacement(harness: str) -> str:
+    """Return an approved model reference for the selected harness."""
+    return DEFAULT_PI_MODEL if harness == "pi" else OPENAI_MODEL_EXAMPLE
 
 
 def default_config_path() -> Path:

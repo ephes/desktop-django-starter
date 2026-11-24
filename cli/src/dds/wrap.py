@@ -23,11 +23,14 @@ from dds.config import (
     SUPPORTED_HARNESSES,
     ConfigError,
     WrapperConfig,
+    approved_model_replacement,
     default_config_path,
     detect_installed_harnesses,
+    is_unapproved_openai_model,
     load_wrapper_config,
     save_wrapper_config,
 )
+from dds.prerequisites import NodeVersionError, probe_node_version
 
 ASSETS_PATH = Path(str(files("dds") / "_assets"))
 PROMPT_TEMPLATE = ASSETS_PATH / "skills" / "wrap-existing-django-in-electron" / "prompt.md"
@@ -39,10 +42,6 @@ _STARTER_TOKEN = "../desktop-django-starter/"
 _CLAUDE_TERMINATION_GRACE = 5.0
 _CLAUDE_MAX_EVENT_BYTES = 1024 * 1024
 _CLAUDE_DISPLAY_BYTES = 4096
-_OPENAI_PROVIDERS = frozenset({"openai", "openai-codex"})
-_APPROVED_OPENAI_MODELS = frozenset({OPENAI_MODEL_EXAMPLE, "gpt-6.2-astra"})
-_BARE_OPENAI_MODEL = re.compile(r"^(?:gpt-(?!oss(?:-|$))|chatgpt-|codex-|o[1-9](?:-|$))")
-_PI_THINKING_LEVELS = frozenset({"off", "minimal", "low", "medium", "high", "xhigh", "max"})
 
 
 def _summarize_claude_tool_use(content: dict[str, object]) -> str | None:
@@ -395,11 +394,11 @@ def _prompt_for_harness(options: list[str], default: str) -> str:
 def _prompt_for_model(current_model: str | None, harness: str) -> str | None:
     current = current_model or ""
     while True:
-        if current and _is_unapproved_openai_model(harness, current):
+        if current and is_unapproved_openai_model(harness, current):
             print(
                 f"The saved model {_bounded_text(repr(current), 200)} is outside the approved "
                 f"GPT-6.2 model list. Enter an approved model such as "
-                f"{_approved_model_replacement(harness)}, or press Enter to use the harness "
+                f"{approved_model_replacement(harness)}, or press Enter to use the harness "
                 "default."
             )
             current = ""
@@ -419,11 +418,11 @@ def _prompt_for_model(current_model: str | None, harness: str) -> str | None:
             return current or None
         if answer == "-":
             return None
-        if not _is_unapproved_openai_model(harness, answer):
+        if not is_unapproved_openai_model(harness, answer):
             return answer
         print(
             f"{_bounded_text(repr(answer), 200)} is outside the approved GPT-6.2 model list. "
-            f"Enter an approved model such as {_approved_model_replacement(harness)}."
+            f"Enter an approved model such as {approved_model_replacement(harness)}."
         )
 
 
@@ -493,38 +492,11 @@ def _describe_model_source(resolved: _ResolvedRunConfig) -> str:
     return resolved.model_source
 
 
-def _is_unapproved_openai_model(harness: str, model: str | None) -> bool:
-    if not model or harness not in ("codex", "pi"):
-        return False
-
-    reference = model.strip()
-    if harness == "pi":
-        base, _, suffix = reference.rpartition(":")
-        if suffix in _PI_THINKING_LEVELS:
-            reference = base
-
-    provider, separator, model_id = reference.lower().partition("/")
-    if separator:
-        if provider.strip() not in _OPENAI_PROVIDERS:
-            return False
-        model_id = model_id.strip()
-    else:
-        model_id = provider
-        if not _BARE_OPENAI_MODEL.match(model_id):
-            return False
-
-    return model_id not in _APPROVED_OPENAI_MODELS
-
-
-def _approved_model_replacement(harness: str) -> str:
-    return DEFAULT_PI_MODEL if harness == "pi" else OPENAI_MODEL_EXAMPLE
-
-
 def _validate_openai_model(resolved: _ResolvedRunConfig) -> None:
-    if not _is_unapproved_openai_model(resolved.harness, resolved.model):
+    if not is_unapproved_openai_model(resolved.harness, resolved.model):
         return
 
-    replacement = _approved_model_replacement(resolved.harness)
+    replacement = approved_model_replacement(resolved.harness)
     instruction = f"Pass `--model {replacement}`"
     if resolved.model_source == "config":
         instruction += " or update the saved model with `dds init`"
@@ -722,8 +694,18 @@ def run_wrap(
 
     # 6. Required CLIs: warning in print mode, hard error with --run
     for cmd in ("node", "npm", "just"):
-        if shutil.which(cmd):
-            pf.ok(f"{cmd} found")
+        found = shutil.which(cmd)
+        if found:
+            if cmd == "node":
+                try:
+                    version = probe_node_version(found)
+                except NodeVersionError as exc:
+                    report_issue = pf.error if run_agent else pf.warn
+                    report_issue(f"{exc} ({found})")
+                    continue
+                pf.ok(f"node: {found} ({version})")
+            else:
+                pf.ok(f"{cmd} found")
         elif run_agent:
             pf.error(f"{cmd} not found (required for wrapping and verification)")
         else:

@@ -10,10 +10,13 @@ from dds import __version__
 from dds.config import (
     SUPPORTED_HARNESSES,
     ConfigError,
+    approved_model_replacement,
     default_config_path,
     detect_installed_harnesses,
+    is_unapproved_openai_model,
     load_wrapper_config,
 )
+from dds.prerequisites import NodeVersionError, probe_node_version
 
 # Tools that must be present for wrapping to succeed.
 REQUIRED_TOOLS = {
@@ -67,6 +70,14 @@ def run_doctor() -> None:
     for tool, description in REQUIRED_TOOLS.items():
         found = shutil.which(tool)
         if found:
+            if tool == "node":
+                try:
+                    version = probe_node_version(found)
+                except NodeVersionError as exc:
+                    print(f"  x  {exc} ({found})", file=sys.stderr)
+                    errors += 1
+                    continue
+                found = f"{found} ({version})"
             print(f"  ok {tool}: {found}")
         else:
             print(f"  x  {tool}: not found ({description})", file=sys.stderr)
@@ -102,6 +113,7 @@ def _print_wrapper_setup_summary() -> bool:
         config = None
         config_error = exc
 
+    refused_model = config is not None and is_unapproved_openai_model(config.harness, config.model)
     installed = detect_installed_harnesses()
     print("Wrapper setup")
     if config_error is not None:
@@ -112,7 +124,13 @@ def _print_wrapper_setup_summary() -> bool:
     else:
         print(f"  ok config: {config_path}")
         print(f"  ok default harness: {config.harness}")
-        if config.model:
+        if refused_model:
+            replacement = approved_model_replacement(config.harness)
+            print(
+                f"  ! default model: {config.model!r} is outside the approved GPT-6.2 model list. "
+                f"Run `dds init` to update the saved model or pass `--model {replacement}`."
+            )
+        elif config.model:
             print(f"  ok default model: {config.model}")
         else:
             print("  -  default model: harness default")
@@ -132,6 +150,9 @@ def _print_wrapper_setup_summary() -> bool:
 
     if config is not None:
         if config.harness in installed:
+            if refused_model:
+                print("  ! `dds wrap --run` will refuse the saved default model.")
+                return True
             print(
                 f"  ok `dds wrap --run` will use saved default harness `{config.harness}` "
                 "unless you pass `--harness` or `--agent`."
