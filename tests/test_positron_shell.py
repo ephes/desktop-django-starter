@@ -511,7 +511,9 @@ else:
 def running_positron_shell(positron_app_module, monkeypatch, tmp_path):
     app_module = positron_app_module
     monkeypatch.setattr(app_module.toga, "WebView", Mock(), raising=False)
-    monkeypatch.setattr(app_module.toga, "MainWindow", Mock(), raising=False)
+    window = Mock(dialog=AsyncMock())
+    monkeypatch.setattr(app_module.toga, "MainWindow", Mock(return_value=window), raising=False)
+    monkeypatch.setattr(app_module.toga, "ErrorDialog", Mock(), raising=False)
     app = app_module.DesktopDjangoStarterPositron()
     app.paths = SimpleNamespace(data=tmp_path)
     app.formal_name = "Synthetic Positron"
@@ -563,5 +565,48 @@ def test_positron_closes_listener_when_handler_setup_fails(
                     server.server_close()
             if app._instance_lock is not None:
                 app_module.release_instance_lock(app._instance_lock)
+
+    asyncio.run(exercise())
+
+
+def test_positron_worker_start_failure_keeps_cleanup_available(
+    monkeypatch, positron_app_module, running_positron_shell
+) -> None:
+    from django_tasks_db.management.commands import db_worker
+
+    app_module = positron_app_module
+    app = running_positron_shell
+    app.exit = Mock()
+    monkeypatch.setattr(app_module, "WSGIHandler", Mock())
+    worker = Mock()
+    monkeypatch.setattr(db_worker, "Worker", Mock(return_value=worker))
+    worker_thread = Mock()
+    worker_thread.start.side_effect = RuntimeError("synthetic worker start failure")
+    worker_thread.join.side_effect = RuntimeError("cannot join an unstarted thread")
+
+    async def exercise():
+        app.loop = asyncio.get_running_loop()
+        app.startup()
+        try:
+            port = await asyncio.wait_for(app.server_ready, timeout=2)
+            monkeypatch.setattr(app_module, "Thread", Mock(return_value=worker_thread))
+            try:
+                await asyncio.wait_for(app.on_running(), timeout=2)
+            except RuntimeError:
+                app.cleanup()
+                raise
+            worker_thread.start.assert_called_once()
+            worker_thread.join.assert_not_called()
+            assert app._instance_lock is None
+            assert not app.server_thread.is_alive()
+            with socket.socket() as listener:
+                listener.bind((app_module.HOST, port))
+            app.main_window.dialog.assert_awaited_once()
+            app.exit.assert_called_once()
+        finally:
+            # The real listener must also stop if a regression restores the
+            # broken worker ownership and the test fails above.
+            app._task_worker_thread = None
+            app.cleanup()
 
     asyncio.run(exercise())

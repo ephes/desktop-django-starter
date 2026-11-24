@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Clean up the Positron listener and profile lock if the task worker cannot
+  start its thread, and show a startup error.
+
 - Release the Positron listener if WSGI setup fails after binding so teardown
   can finish and release the profile lock.
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import secrets
 import socketserver
@@ -32,6 +33,7 @@ from .runtime import (
 
 SMOKE_EXIT_DELAY_SECONDS = 0.75
 AUTH_BOOTSTRAP_PATH = "/desktop-auth/bootstrap/"
+logger = logging.getLogger(__name__)
 
 
 class ThreadedWSGIServer(socketserver.ThreadingMixIn, WSGIServer):
@@ -77,10 +79,24 @@ class DesktopDjangoStarterPositron(toga.App):
             )
             return
 
-        port = await self.server_ready
-        self.start_task_worker()
+        try:
+            port = await self.server_ready
+            self.start_task_worker()
+        except Exception:
+            logger.exception("Positron startup failed")
+            await self.show_terminal_error(
+                "Startup failed", "The local service could not start. Quit and relaunch the app."
+            )
+            return
+
         self.web_view.url = self.bootstrap_url(port)
         self.main_window.show()
+
+    async def show_terminal_error(self, title: str, message: str) -> None:
+        self.cleanup()
+        self.main_window.show()
+        await self.main_window.dialog(toga.ErrorDialog(title, message))
+        self.exit()
 
     def bootstrap_url(self, port: int) -> str:
         query = urlencode({"token": self.auth_token, "next": "/"})
@@ -245,7 +261,7 @@ class DesktopDjangoStarterPositron(toga.App):
         from django.tasks import DEFAULT_TASK_BACKEND_ALIAS
         from django_tasks_db.management.commands.db_worker import Worker
 
-        self._task_worker = Worker(
+        worker = Worker(
             queue_names=settings.DESKTOP_DJANGO_WORKER_QUEUES.split(","),
             interval=1.0,
             batch=False,
@@ -255,8 +271,10 @@ class DesktopDjangoStarterPositron(toga.App):
             worker_id=WORKER_ID,
             excluded_queue_names=[],
         )
-        self._task_worker_thread = Thread(target=self._task_worker.run, daemon=True)
-        self._task_worker_thread.start()
+        thread = Thread(target=worker.run, daemon=True)
+        thread.start()
+        self._task_worker = worker
+        self._task_worker_thread = thread
 
     def stop_task_worker(self) -> None:
         if self._task_worker is None:

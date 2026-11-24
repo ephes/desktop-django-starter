@@ -41,7 +41,9 @@ legacy profiles and databases copied from an older version.
 
 The server thread owns the listener. If WSGI setup fails after binding, it
 closes the listener directly. Exit requests during startup prevent serving
-and keep the profile locked until startup stops.
+and keep the profile locked until startup stops. If Django or the task
+worker fails to start, Positron cleans up the startup resources and shows a
+restart message.
 
 Lock acquisition and PID initialization failures close the opened handle and
 release any acquired lock. Shutdown also closes the handle when explicit unlock
