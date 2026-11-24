@@ -610,3 +610,105 @@ def test_positron_worker_start_failure_keeps_cleanup_available(
             app.cleanup()
 
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize("outcome", ["raises", "returns", "before_ready", "shutdown"])
+def test_positron_reports_unexpected_server_exit_on_ui_thread(
+    monkeypatch, positron_app_module, running_positron_shell, outcome
+) -> None:
+    from threading import Event, get_ident
+
+    app_module = positron_app_module
+    app = running_positron_shell
+    app.start_task_worker = Mock()
+    app.exit = Mock()
+    monkeypatch.setattr(app_module, "WSGIHandler", Mock())
+    finish = Event()
+    servers = []
+
+    class RunningServer(app_module.ThreadedWSGIServer):
+        def __init__(self, *args):
+            super().__init__(*args)
+            self.address = self.socket.getsockname()
+            self.close_count = 0
+            servers.append(self)
+
+        def serve_forever(self):
+            if outcome == "shutdown":
+                super().serve_forever(poll_interval=0.01)
+                return
+            if outcome == "before_ready":
+                return
+            if not finish.wait(timeout=5):
+                raise AssertionError("test did not trigger the serve loop exit")
+            if outcome == "raises":
+                raise RuntimeError("synthetic serve loop failure")
+
+        def shutdown(self):
+            assert outcome == "shutdown", "cleanup tried to shut down a finished serve loop"
+            super().shutdown()
+
+        def server_close(self):
+            self.close_count += 1
+            super().server_close()
+
+    monkeypatch.setattr(app_module, "ThreadedWSGIServer", RunningServer)
+
+    async def exercise():
+        ui_thread = get_ident()
+        app.loop = asyncio.get_running_loop()
+        app.startup()
+        dialog_shown = asyncio.Event()
+
+        async def show_dialog(dialog):
+            assert get_ident() == ui_thread
+            assert dialog is app_module.toga.ErrorDialog.return_value
+            dialog_shown.set()
+
+        app.main_window.dialog.side_effect = show_dialog
+
+        try:
+            if outcome == "before_ready":
+                # Let the server close before the UI can process its queued callback.
+                app.server_thread.join(timeout=2)
+                assert not app.server_thread.is_alive()
+            await asyncio.wait_for(app.on_running(), timeout=2)
+            if outcome == "before_ready":
+                app.start_task_worker.assert_not_called()
+                app_module.toga.ErrorDialog.assert_called_once_with(
+                    "Startup failed",
+                    "The local service could not start. Quit and relaunch the app.",
+                )
+            else:
+                assert app.web_view.url == app.bootstrap_url(app.server_ready.result())
+
+            if outcome == "shutdown":
+                assert app.cleanup()
+                await asyncio.sleep(0)
+            elif outcome != "before_ready":
+                finish.set()
+                await asyncio.wait_for(dialog_shown.wait(), timeout=2)
+                assert app.cleanup()
+
+            assert app._instance_lock is None
+            (server,) = servers
+            assert server.close_count == 1
+            with socket.socket() as listener:
+                listener.bind(server.address)
+            if outcome == "shutdown":
+                app.main_window.dialog.assert_not_awaited()
+                app.exit.assert_not_called()
+            else:
+                if outcome != "before_ready":
+                    app_module.toga.ErrorDialog.assert_called_once_with(
+                        "Local service stopped",
+                        "The local service stopped. Quit and relaunch the app.",
+                    )
+                app.exit.assert_called_once()
+        finally:
+            finish.set()
+            await asyncio.to_thread(app.server_thread.join, 2)
+            if app._instance_lock is not None:
+                app_module.release_instance_lock(app._instance_lock)
+
+    asyncio.run(exercise())

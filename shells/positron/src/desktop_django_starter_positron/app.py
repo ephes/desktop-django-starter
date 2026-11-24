@@ -81,6 +81,8 @@ class DesktopDjangoStarterPositron(toga.App):
 
         try:
             port = await self.server_ready
+            if self._server_stopping:
+                return
             self.start_task_worker()
         except Exception:
             logger.exception("Positron startup failed")
@@ -93,6 +95,8 @@ class DesktopDjangoStarterPositron(toga.App):
         self.main_window.show()
 
     async def show_terminal_error(self, title: str, message: str) -> None:
+        if self._server_stopping:
+            return
         self.cleanup()
         self.main_window.show()
         await self.main_window.dialog(toga.ErrorDialog(title, message))
@@ -147,7 +151,8 @@ class DesktopDjangoStarterPositron(toga.App):
 
     def _django_ready(self) -> bool:
         return (
-            self.server_ready.done()
+            self._httpd is not None
+            and self.server_ready.done()
             and not self.server_ready.cancelled()
             and self.server_ready.exception() is None
         )
@@ -164,10 +169,12 @@ class DesktopDjangoStarterPositron(toga.App):
             connections.close_all()
 
     def cleanup(self, *_args, **_kwargs) -> bool:
+        with self._server_lock:
+            self._server_stopping = True
+
         self.stop_task_worker()
 
         with self._server_lock:
-            self._server_stopping = True
             httpd = self._httpd
         if httpd is not None:
             httpd.shutdown()
@@ -242,7 +249,7 @@ class DesktopDjangoStarterPositron(toga.App):
                 with self._server_lock:
                     if self._server_stopping:
                         return
-                    self.loop.call_soon_threadsafe(self.server_ready.set_result, port)
+                    self.loop.call_soon_threadsafe(self.server_became_ready, port)
                     self._httpd = httpd
 
                 try:
@@ -250,9 +257,37 @@ class DesktopDjangoStarterPositron(toga.App):
                 finally:
                     with self._server_lock:
                         self._httpd = None
-        except Exception as error:  # pragma: no cover - surfaced during manual shell startup
-            if not self.server_ready.done():
-                self.loop.call_soon_threadsafe(self.server_ready.set_exception, error)
+        except Exception as error:
+            failure = error
+        else:
+            failure = RuntimeError("Positron WSGI serve loop returned")
+
+        with self._server_lock:
+            if not self._server_stopping:
+                self.loop.call_soon_threadsafe(self.server_finished, failure)
+
+    def server_became_ready(self, port: int) -> None:
+        with self._server_lock:
+            if (
+                not self._server_stopping
+                and self._httpd is not None
+                and not self.server_ready.done()
+            ):
+                self.server_ready.set_result(port)
+
+    def server_finished(self, error: Exception) -> None:
+        if self._server_stopping or self.server_ready.cancelled():
+            return
+        if not self.server_ready.done():
+            self.server_ready.set_exception(error)
+            return
+
+        logger.error("Positron local service stopped", exc_info=error)
+        self.loop.create_task(
+            self.show_terminal_error(
+                "Local service stopped", "The local service stopped. Quit and relaunch the app."
+            )
+        )
 
     def start_task_worker(self) -> None:
         if self._task_worker_thread is not None and self._task_worker_thread.is_alive():

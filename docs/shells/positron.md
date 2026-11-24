@@ -43,7 +43,9 @@ The server thread owns the listener. If WSGI setup fails after binding, it
 closes the listener directly. Exit requests during startup prevent serving
 and keep the profile locked until startup stops. If Django or the task
 worker fails to start, Positron cleans up the startup resources and shows a
-restart message.
+restart message. If the WSGI server stops after readiness, the server thread
+closes its listener and the UI shows a terminal error. Dismissing the dialog
+exits the app so it can be relaunched. A normal quit shows no service error.
 
 Lock acquisition and PID initialization failures close the opened handle and
 release any acquired lock. Shutdown also closes the handle when explicit unlock

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Show a restart dialog and exit when Positron loses its running local server.
+  An intentional shutdown closes the listener quietly.
+
 - Clean up the Positron listener and profile lock if the task worker cannot
   start its thread, and show a startup error.
 
