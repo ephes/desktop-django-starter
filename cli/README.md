@@ -64,6 +64,11 @@ model and does not keep an unapproved saved model when you press Enter.
 The source-checkout `scripts/wrap --run --agent pi` also launches
 `openai-codex/gpt-6.2-sol`.
 
+`dds wrap` and `dds doctor` run a timed `node --version` check on the
+executable found on PATH. Node.js 22.12 or newer is required. Missing Node,
+older versions and probe failures block `dds wrap --run` before agent launch.
+Plain `dds wrap` reports these as warnings.
+
 Preflight requires a successful `git status`. A failed inspection blocks wrapping
 even with `--force`; that flag permits known uncommitted changes and an existing
 `electron/` directory. Command failure diagnostics are truncated to 800 UTF-8 bytes.
@@ -104,10 +109,10 @@ harnesses are sufficient for `wrap --run`. Doctor checks every file listed in
 the installed asset manifest. An incomplete bundle reports up to eight missing
 paths and the total count, with instructions to reinstall.
 Doctor is read-only: it never invokes a harness, saves preferences or stages assets.
-Missing required assets or tools exit with status 1; missing optional `uv`,
-invalid wrapper config, refused saved models and harness setup advice remain
-advisory (status 0 when core checks pass). Doctor shows the refused model and
-how to replace it with an approved selection.
+Missing required assets or tools and failed Node version checks exit with
+status 1. Missing optional `uv`, invalid wrapper config, refused saved models
+and harness setup advice remain advisory (status 0 when core checks pass).
+Doctor shows the refused model and how to replace it with an approved selection.
 
 ## What happens after wrapping
 

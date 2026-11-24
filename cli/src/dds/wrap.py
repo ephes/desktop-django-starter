@@ -30,6 +30,7 @@ from dds.config import (
     load_wrapper_config,
     save_wrapper_config,
 )
+from dds.prerequisites import NodeVersionError, probe_node_version
 
 ASSETS_PATH = Path(str(files("dds") / "_assets"))
 PROMPT_TEMPLATE = ASSETS_PATH / "skills" / "wrap-existing-django-in-electron" / "prompt.md"
@@ -693,8 +694,18 @@ def run_wrap(
 
     # 6. Required CLIs: warning in print mode, hard error with --run
     for cmd in ("node", "npm", "just"):
-        if shutil.which(cmd):
-            pf.ok(f"{cmd} found")
+        found = shutil.which(cmd)
+        if found:
+            if cmd == "node":
+                try:
+                    version = probe_node_version(found)
+                except NodeVersionError as exc:
+                    report_issue = pf.error if run_agent else pf.warn
+                    report_issue(f"{exc} ({found})")
+                    continue
+                pf.ok(f"node: {found} ({version})")
+            else:
+                pf.ok(f"{cmd} found")
         elif run_agent:
             pf.error(f"{cmd} not found (required for wrapping and verification)")
         else:

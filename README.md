@@ -132,6 +132,12 @@ model and does not keep an unapproved saved model when you press Enter.
 The source-checkout `scripts/wrap --run --agent pi` also launches
 `openai-codex/gpt-6.2-sol`.
 
+`dds doctor` and `dds wrap` run a timed `node --version` check on the
+executable found on PATH. Node.js 22.12 or newer is required. A missing or
+unusable runtime fails Doctor's core checks and blocks `dds wrap --run`
+before harness launch. Plain `dds wrap` warns and prints the manual commands
+when its other checks pass.
+
 `dds wrap --emit-prompt` works offline without setup and substitutes only full
 starter-path prefixes, preserving literal relocated paths and similar text.
 Unreadable UTF-8 templates fail with a CLI diagnostic. Project discovery lists

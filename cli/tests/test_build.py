@@ -279,13 +279,17 @@ def test_wheel_installs_and_runs_after_relocation(project, tmp_path, monkeypatch
         path = tools / (name + ".EXE" if os.name == "nt" else name)
         path.write_bytes(b"never execute")
         path.chmod(0o755)
-    # The installed entry point must not start any subprocess, exec a harness,
-    # prompt for preferences or use the network. sitecustomize guards children.
+    # Only doctor may probe Node. Reject other child processes and network access.
     (relocated / "sitecustomize.py").write_text(
-        "import os, socket, subprocess\n"
+        "import os, socket, subprocess, sys\n"
         "def forbidden(*args, **kwargs):\n"
         "    raise AssertionError('installed probe must be read-only and offline')\n"
-        "subprocess.Popen = forbidden\nos.execvp = forbidden\n"
+        "def run(args, **kwargs):\n"
+        "    node = os.path.join(os.environ['PATH'], 'node.EXE' if os.name == 'nt' else 'node')\n"
+        "    if sys.argv[1:] != ['doctor'] or args != [node, '--version']:\n"
+        "        forbidden()\n"
+        "    return subprocess.CompletedProcess(args, 0, b'v22.12.0', b'')\n"
+        "subprocess.run = run\nsubprocess.Popen = forbidden\nos.execvp = forbidden\n"
         "socket.socket = forbidden\n",
         encoding="utf-8",
     )
@@ -329,5 +333,6 @@ def test_wheel_installs_and_runs_after_relocation(project, tmp_path, monkeypatch
                 assert (installed_assets / rel).is_file()
         else:
             assert "Core checks passed" in result.stdout
+            assert "v22.12.0" in result.stdout
             assert str(relocated / "dds" / "_assets") in result.stdout
     assert {str(p): tree(p) for p in (home, cwd, relocated, tools)} == before

@@ -63,6 +63,10 @@ Important constraints:
   outputs before publication. See `docs/shells/positron.md` for rollback recovery
   and the serial-publication requirement.
 
+- `dds doctor` and `dds wrap` check for Node.js 22.12 or newer with a timed
+  version probe. A failed probe is a core error in Doctor, blocks harness
+  launch in `dds wrap --run`, and warns in preflight-only mode.
+
 - `dds wrap --emit-prompt` bypasses setup/preflight and reads UTF-8 templates
   without side effects. Only full starter-path prefixes are substituted.
   Discovery excludes hidden/environment/dependency directories and directory

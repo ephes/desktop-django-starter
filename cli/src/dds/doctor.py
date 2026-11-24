@@ -16,6 +16,7 @@ from dds.config import (
     is_unapproved_openai_model,
     load_wrapper_config,
 )
+from dds.prerequisites import NodeVersionError, probe_node_version
 
 # Tools that must be present for wrapping to succeed.
 REQUIRED_TOOLS = {
@@ -69,6 +70,14 @@ def run_doctor() -> None:
     for tool, description in REQUIRED_TOOLS.items():
         found = shutil.which(tool)
         if found:
+            if tool == "node":
+                try:
+                    version = probe_node_version(found)
+                except NodeVersionError as exc:
+                    print(f"  x  {exc} ({found})", file=sys.stderr)
+                    errors += 1
+                    continue
+                found = f"{found} ({version})"
             print(f"  ok {tool}: {found}")
         else:
             print(f"  x  {tool}: not found ({description})", file=sys.stderr)

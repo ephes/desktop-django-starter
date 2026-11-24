@@ -107,6 +107,12 @@ model and does not keep an unapproved saved model when you press Enter.
 The source-checkout `scripts/wrap --run --agent pi` also launches
 `openai-codex/gpt-6.2-sol`.
 
+`dds doctor` and `dds wrap` check the Node.js version on PATH with a short
+`node --version` timeout. Both report Node.js versions below 22.12 or probe
+failures. Doctor exits 1 and `dds wrap --run` stops before agent launch.
+Preflight-only `dds wrap` warns and prints instructions if the project
+passes its other checks.
+
 `dds wrap --emit-prompt` is an offline, read-only path that bypasses setup,
 saved config, discovery and tool checks, including when combined with `--run`.
 Only `../desktop-django-starter/` path prefixes are replaced; similar text is

@@ -26,7 +26,7 @@ def snapshot(root: Path) -> dict[str, bytes | None]:
 
 
 @pytest.fixture
-def installation(tmp_path, monkeypatch, isolated_user_dirs):
+def tool_installation(tmp_path, monkeypatch, isolated_user_dirs):
     package = tmp_path / "relocated package with spaces"
     for rel in CANONICAL_ASSETS:
         path = package / "_assets" / rel
@@ -47,16 +47,28 @@ def installation(tmp_path, monkeypatch, isolated_user_dirs):
         doctor, "files", lambda name: package if name == "dds" else pytest.fail(name)
     )
 
+    return package, tools, isolated_user_dirs
+
+
+@pytest.fixture
+def installation(tool_installation, monkeypatch):
     def forbidden(*args, **kwargs):
         pytest.fail("doctor must not launch, prompt, save config or stage assets")
 
-    monkeypatch.setattr(subprocess, "run", forbidden)
+    node = tool_installation[1]["node"]
+
+    def probe(args, **kwargs):
+        if args != [str(node), "--version"]:
+            forbidden()
+        return subprocess.CompletedProcess(args, 0, b"v22.12.0\n", b"")
+
+    monkeypatch.setattr(subprocess, "run", probe)
     monkeypatch.setattr(subprocess, "Popen", forbidden)
     monkeypatch.setattr(os, "execvp", forbidden)
     monkeypatch.setattr(config, "save_wrapper_config", forbidden)
     monkeypatch.setattr(wrap, "run_init", forbidden)
     monkeypatch.setattr("builtins.input", forbidden)
-    return package, tools, isolated_user_dirs
+    return tool_installation
 
 
 def invoke_readonly(installation, capsys):
@@ -243,9 +255,14 @@ def test_saved_model_matches_wrap_preflight(
     (package / "manage.py").touch()
     monkeypatch.setattr(wrap, "SKILL_PATH", package / "_assets" / ASSETS[0])
     monkeypatch.setattr(wrap, "PROMPT_TEMPLATE", package / "_assets" / ASSETS[1])
-    monkeypatch.setattr(
-        subprocess, "run", lambda args, **kwargs: subprocess.CompletedProcess(args, 0, "", "")
-    )
+    probe = subprocess.run
+
+    def preflight(args, **kwargs):
+        if args in (["git", "rev-parse", "--git-dir"], ["git", "status", "--porcelain"]):
+            return subprocess.CompletedProcess(args, 0, "", "")
+        return probe(args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", preflight)
     launches = []
     monkeypatch.setattr(os, "execvp", lambda name, argv: launches.append((name, argv)))
 
@@ -254,3 +271,69 @@ def test_saved_model_matches_wrap_preflight(
     [(name, argv)] = launches
     assert name == harness
     assert argv[argv.index("--model") + 1] == model
+
+
+@pytest.mark.skipif(os.name == "nt", reason="synthetic Node executable uses a POSIX shell")
+@pytest.mark.parametrize("mode", ["doctor", "print", "run"])
+@pytest.mark.parametrize(
+    ("script", "diagnostic", "supported"),
+    [
+        ("printf 'v22.12.0\\n'", "v22.12.0", True),
+        ("printf 'v23.0.0\\n'", "v23.0.0", True),
+        ("printf 'v22.11.99\\n'", "v22.11.99", False),
+        ("printf 'unknown version\\n'", "unrecognized version", False),
+        ("printf 'v23.0.0\\n'; exit 7", "exit 7", False),
+        ("exec /bin/sleep 30", "timed out", False),
+    ],
+)
+def test_node_version_prerequisite(
+    tool_installation, monkeypatch, capsys, mode, script, diagnostic, supported
+):
+    package, tools, _ = tool_installation
+    node = tools["node"]
+    node.write_text(f"#!/bin/sh\n{script}\n", encoding="utf-8")
+    codex = node.with_name("codex")
+    codex.touch()
+    codex.chmod(0o755)
+    monkeypatch.chdir(package)
+    (package / "manage.py").touch()
+    monkeypatch.setattr(wrap, "SKILL_PATH", package / "_assets" / ASSETS[0])
+    monkeypatch.setattr(wrap, "PROMPT_TEMPLATE", package / "_assets" / ASSETS[1])
+    real_run = subprocess.run
+
+    def run_local_check(args, **kwargs):
+        if args == [str(node), "--version"]:
+            assert 0 < kwargs["timeout"] <= 5
+            return real_run(args, **kwargs)
+        assert mode != "doctor"
+        assert args in (["git", "rev-parse", "--git-dir"], ["git", "status", "--porcelain"])
+        return subprocess.CompletedProcess(args, 0, "", "")
+
+    monkeypatch.setattr(subprocess, "run", run_local_check)
+    launches = []
+    monkeypatch.setattr(os, "execvp", lambda name, argv: launches.append(name))
+
+    if mode == "doctor":
+        code, out, err = invoke_readonly(tool_installation, capsys)
+        assert code == int(not supported)
+    else:
+        args = ["wrap", "--force"] + (["--run", "--harness", "codex"] if mode == "run" else [])
+        if mode == "run" and not supported:
+            with pytest.raises(SystemExit) as exit_info:
+                main(args)
+            assert exit_info.value.code == 1
+        else:
+            main(args)
+        out, err = capsys.readouterr()
+        assert ("Preflight passed." in out) is (supported or mode == "print")
+        if mode == "print":
+            assert "To wrap this project:" in out
+
+    if supported:
+        assert diagnostic in out
+        assert not err
+    else:
+        message = out if mode == "print" else err
+        assert diagnostic in message
+        assert "Node.js 22.12 or newer" in message
+    assert launches == (["codex"] if supported and mode == "run" else [])

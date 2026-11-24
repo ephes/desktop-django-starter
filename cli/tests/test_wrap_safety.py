@@ -28,6 +28,7 @@ def test_failed_status_never_launches(monkeypatch, tmp_path, capsys, run_agent, 
 
     monkeypatch.setattr(wrap.subprocess, "run", git)
     monkeypatch.setattr(wrap.shutil, "which", lambda name: name)
+    monkeypatch.setattr(wrap, "probe_node_version", lambda path: "v22.12.0")
     monkeypatch.setattr(wrap, "SKILL_PATH", tmp_path / "manage.py")
     monkeypatch.setattr(wrap, "_run_claude", lambda *args: pytest.fail("agent launched"))
     monkeypatch.setattr(wrap.os, "execvp", lambda *args: pytest.fail("agent launched"))
@@ -52,6 +53,7 @@ def test_successful_status_retains_dirty_policy(monkeypatch, tmp_path, dirty, fo
     (tmp_path / "manage.py").touch()
     monkeypatch.setattr(wrap, "SKILL_PATH", tmp_path / "manage.py")
     monkeypatch.setattr(wrap.shutil, "which", lambda name: name)
+    monkeypatch.setattr(wrap, "probe_node_version", lambda path: "v22.12.0")
     monkeypatch.setattr(
         wrap.subprocess,
         "run",
