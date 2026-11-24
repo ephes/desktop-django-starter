@@ -12,8 +12,9 @@
   can finish and release the profile lock.
 
 - Retry interrupted first-run demo seeding on the next Positron launch.
-  Existing profiles without a pending seed retain their data, including
-  empty stables.
+  The pending-seed marker is flushed to disk before migration creates the
+  database. Existing profiles without a pending seed retain their data,
+  including empty stables.
 
 - Verify Node.js 22.12 or newer in `dds doctor` and `dds wrap` preflight
   before launching a wrapping harness. Report a warning in print-only mode.

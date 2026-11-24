@@ -5,6 +5,7 @@ import logging
 import os
 import secrets
 import socketserver
+import stat
 from pathlib import Path
 from threading import Lock, Thread
 from typing import BinaryIO
@@ -34,6 +35,43 @@ from .runtime import (
 SMOKE_EXIT_DELAY_SECONDS = 0.75
 AUTH_BOOTSTRAP_PATH = "/desktop-auth/bootstrap/"
 logger = logging.getLogger(__name__)
+
+
+def _sync_directory(directory: Path) -> None:
+    # Windows has no directory flush through os.fsync.
+    if os.name == "nt":
+        return
+    fd = os.open(directory, os.O_RDONLY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def claim_pending_demo_seed(database_path: Path) -> Path | None:
+    """Durably record a pending first-run seed before migrate creates the database.
+
+    Returns the marker path when seeding is pending, or None when an existing
+    database without a marker is already admitted as initialized.
+    """
+    marker = database_path.with_suffix(".demo-seed-pending")
+    try:
+        pending = marker.lstat()
+    except FileNotFoundError:
+        pending = None
+    if pending is None and os.path.lexists(database_path):
+        return None
+    if pending is not None and (not stat.S_ISREG(pending.st_mode) or pending.st_size != 0):
+        raise RuntimeError("Invalid pending demo seed marker.")
+
+    flags = os.O_RDWR if pending is not None else os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    fd = os.open(marker, flags | getattr(os, "O_NOFOLLOW", 0), 0o600)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+    _sync_directory(marker.parent)
+    return marker
 
 
 class ThreadedWSGIServer(socketserver.ThreadingMixIn, WSGIServer):
@@ -222,17 +260,14 @@ class DesktopDjangoStarterPositron(toga.App):
         # An existing database without a claim is already admitted, including
         # legacy profiles and databases copied forward from an older version.
         database_path = Path(settings.DATABASES["default"]["NAME"])
-        pending_seed = database_path.with_suffix(".demo-seed-pending")
-        should_seed_demo_content = False
+        pending_seed = None
         if positron_runtime_mode() == "packaged":
-            if not pending_seed.exists() and not database_path.exists():
-                pending_seed.touch(mode=0o600, exist_ok=False)
-            should_seed_demo_content = pending_seed.exists()
+            pending_seed = claim_pending_demo_seed(database_path)
 
         django_manage.call_command("collectstatic", interactive=False, verbosity=0, clear=False)
         django_manage.call_command("migrate", interactive=False, verbosity=0)
         django_manage.call_command("recover_stale_routines", verbosity=0)
-        if should_seed_demo_content:
+        if pending_seed is not None:
             django_manage.call_command("seed_demo_content", verbosity=0)
             pending_seed.unlink()
 

@@ -32,7 +32,10 @@ before Django starts. Other inherited settings such as the smoke-test flag
 remain available.
 
 Before creating a new packaged database, Positron records a pending demo seed
-beside that version's database. If migration or seeding is interrupted, the
+beside that version's database and flushes the empty marker file and its
+directory to disk, so a crash or power loss cannot keep the new database while
+losing the claim. A marker that is not an empty regular file stops startup.
+If migration or seeding is interrupted, the
 same version retries on the next launch. Successful seeding clears the pending
 file. Django records the seed decision with the pony rows in one transaction,
 so a retry preserves edits and does not recreate deleted ponies. Positron

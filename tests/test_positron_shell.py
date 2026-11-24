@@ -2,6 +2,7 @@ import asyncio
 import importlib.util
 import os
 import socket
+import stat
 import subprocess
 import sys
 from pathlib import Path
@@ -505,6 +506,54 @@ else:
             timeout=20,
         )
         assert result.returncode == 0, f"{action}: {result.stdout}\n{result.stderr}"
+
+
+def test_positron_seed_claim_is_durable_before_migrate(
+    positron_app_module, monkeypatch, tmp_path
+) -> None:
+    app_module = positron_app_module
+    database_path = tmp_path / "app.sqlite3"
+    marker = tmp_path / "app.demo-seed-pending"
+    synced: list[str] = []
+    real_fsync = os.fsync
+
+    def recording_fsync(fd: int) -> None:
+        synced.append("dir" if stat.S_ISDIR(os.fstat(fd).st_mode) else "file")
+        real_fsync(fd)
+
+    monkeypatch.setattr(app_module.os, "fsync", recording_fsync)
+
+    assert app_module.claim_pending_demo_seed(database_path) == marker
+    assert marker.is_file() and marker.stat().st_size == 0
+    assert synced[0] == "file"
+    if os.name != "nt":
+        assert synced[1:] == ["dir"]
+
+    # A retry reuses the durable claim even though migrate created the database.
+    database_path.touch()
+    assert app_module.claim_pending_demo_seed(database_path) == marker
+
+    # Without a claim, an existing database is already admitted.
+    marker.unlink()
+    assert app_module.claim_pending_demo_seed(database_path) is None
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize("kind", ["nonempty", "directory", "symlink"])
+def test_positron_seed_claim_rejects_invalid_marker(positron_app_module, tmp_path, kind) -> None:
+    database_path = tmp_path / "app.sqlite3"
+    marker = tmp_path / "app.demo-seed-pending"
+    if kind == "nonempty":
+        marker.write_text("x")
+    elif kind == "directory":
+        marker.mkdir()
+    else:
+        target = tmp_path / "target"
+        target.touch()
+        marker.symlink_to(target)
+
+    with pytest.raises(RuntimeError, match="Invalid pending demo seed marker"):
+        positron_app_module.claim_pending_demo_seed(database_path)
 
 
 @pytest.fixture
