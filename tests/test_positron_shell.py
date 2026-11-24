@@ -1,6 +1,7 @@
 import asyncio
 import importlib.util
 import os
+import socket
 import subprocess
 import sys
 from pathlib import Path
@@ -504,3 +505,63 @@ else:
             timeout=20,
         )
         assert result.returncode == 0, f"{action}: {result.stdout}\n{result.stderr}"
+
+
+@pytest.fixture
+def running_positron_shell(positron_app_module, monkeypatch, tmp_path):
+    app_module = positron_app_module
+    monkeypatch.setattr(app_module.toga, "WebView", Mock(), raising=False)
+    monkeypatch.setattr(app_module.toga, "MainWindow", Mock(), raising=False)
+    app = app_module.DesktopDjangoStarterPositron()
+    app.paths = SimpleNamespace(data=tmp_path)
+    app.formal_name = "Synthetic Positron"
+    app.configure_django = Mock()
+    app.prepare_runtime = Mock()
+    return app
+
+
+def test_positron_closes_listener_when_handler_setup_fails(
+    monkeypatch, positron_app_module, running_positron_shell
+) -> None:
+    app_module = positron_app_module
+    app = running_positron_shell
+    servers = []
+
+    class BoundServer(app_module.ThreadedWSGIServer):
+        def __init__(self, *args):
+            super().__init__(*args)
+            self.address = self.socket.getsockname()
+            self.close_count = 0
+            servers.append(self)
+
+        def shutdown(self):
+            pytest.fail("cleanup called shutdown before the serve loop started")
+
+        def server_close(self):
+            self.close_count += 1
+            super().server_close()
+
+    error = RuntimeError("synthetic handler setup failure")
+    monkeypatch.setattr(app_module, "ThreadedWSGIServer", BoundServer)
+    monkeypatch.setattr(app_module, "WSGIHandler", Mock(side_effect=error))
+
+    async def exercise():
+        app.loop = asyncio.get_running_loop()
+        app.startup()
+        try:
+            with pytest.raises(RuntimeError, match="synthetic handler setup failure"):
+                await asyncio.wait_for(app.server_ready, timeout=2)
+            assert await asyncio.wait_for(asyncio.to_thread(app.cleanup), timeout=2)
+            assert app._instance_lock is None
+            (server,) = servers
+            assert server.close_count == 1
+            with socket.socket() as listener:
+                listener.bind(server.address)
+        finally:
+            for server in servers:
+                if server.socket.fileno() >= 0:
+                    server.server_close()
+            if app._instance_lock is not None:
+                app_module.release_instance_lock(app._instance_lock)
+
+    asyncio.run(exercise())

@@ -39,6 +39,10 @@ so a retry preserves edits and does not recreate deleted ponies. Positron
 admits existing databases without a pending file as initialized, including
 legacy profiles and databases copied from an older version.
 
+The server thread owns the listener. If WSGI setup fails after binding, it
+closes the listener directly. Exit requests during startup prevent serving
+and keep the profile locked until startup stops.
+
 Lock acquisition and PID initialization failures close the opened handle and
 release any acquired lock. Shutdown also closes the handle when explicit unlock
 fails. Cleanup preserves the original failure, so a retained traceback does not

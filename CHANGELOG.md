@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Release the Positron listener if WSGI setup fails after binding so teardown
+  can finish and release the profile lock.
+
 - Retry interrupted first-run demo seeding on the next Positron launch.
   Existing profiles without a pending seed retain their data, including
   empty stables.

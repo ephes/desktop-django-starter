@@ -5,7 +5,7 @@ import os
 import secrets
 import socketserver
 from pathlib import Path
-from threading import Thread
+from threading import Lock, Thread
 from typing import BinaryIO
 from urllib.parse import urlencode
 from wsgiref.simple_server import WSGIServer
@@ -41,6 +41,8 @@ class ThreadedWSGIServer(socketserver.ThreadingMixIn, WSGIServer):
 class DesktopDjangoStarterPositron(toga.App):
     def startup(self) -> None:
         self._httpd: ThreadedWSGIServer | None = None
+        self._server_lock = Lock()
+        self._server_stopping = False
         self._instance_lock: BinaryIO | None = None
         self._task_worker = None
         self._task_worker_thread: Thread | None = None
@@ -148,16 +150,21 @@ class DesktopDjangoStarterPositron(toga.App):
     def cleanup(self, *_args, **_kwargs) -> bool:
         self.stop_task_worker()
 
-        if self._httpd is not None:
-            self._httpd.shutdown()
-            self._httpd.server_close()
+        with self._server_lock:
+            self._server_stopping = True
+            httpd = self._httpd
+        if httpd is not None:
+            httpd.shutdown()
 
-        if hasattr(self, "server_thread") and self.server_thread.is_alive():
-            self.server_thread.join(timeout=5)
+        server_thread = getattr(self, "server_thread", None)
+        if server_thread is not None and server_thread.is_alive():
+            server_thread.join(timeout=5)
 
-        # If the worker is still finishing a routine, hold the profile lock
-        # until process exit releases it along with the daemon worker.
-        if self._task_worker_thread is None or not self._task_worker_thread.is_alive():
+        # Keep the profile lock while startup or a routine can still use it.
+        if not (
+            (server_thread is not None and server_thread.is_alive())
+            or (self._task_worker_thread is not None and self._task_worker_thread.is_alive())
+        ):
             release_instance_lock(self._instance_lock)
             self._instance_lock = None
 
@@ -211,13 +218,22 @@ class DesktopDjangoStarterPositron(toga.App):
             self.configure_django()
             self.prepare_runtime()
 
-            self._httpd = ThreadedWSGIServer((HOST, 0), WSGIRequestHandler)
-            self._httpd.daemon_threads = True
-            self._httpd.set_app(WSGIHandler())
+            with ThreadedWSGIServer((HOST, 0), WSGIRequestHandler) as httpd:
+                httpd.daemon_threads = True
+                httpd.set_app(WSGIHandler())
+                _host, port = httpd.socket.getsockname()
 
-            _host, port = self._httpd.socket.getsockname()
-            self.loop.call_soon_threadsafe(self.server_ready.set_result, port)
-            self._httpd.serve_forever()
+                with self._server_lock:
+                    if self._server_stopping:
+                        return
+                    self.loop.call_soon_threadsafe(self.server_ready.set_result, port)
+                    self._httpd = httpd
+
+                try:
+                    httpd.serve_forever()
+                finally:
+                    with self._server_lock:
+                        self._httpd = None
         except Exception as error:  # pragma: no cover - surfaced during manual shell startup
             if not self.server_ready.done():
                 self.loop.call_soon_threadsafe(self.server_ready.set_exception, error)
