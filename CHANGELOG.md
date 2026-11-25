@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Stop desktop startup with a clear recovery error when the routine database
+  cannot be updated.
+
+- Sync the packaged secret key's directory entry before use on macOS and Linux
+  and keep the published key for retry if the directory sync fails.
+
 - Prune nested tool caches and environments in the Python fallback for `just loc`.
 
 - Include Rust sources in the Python fallback for `just loc`.

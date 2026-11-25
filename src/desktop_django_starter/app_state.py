@@ -44,6 +44,7 @@ from .state_files import (
     optional_file,
     regular_reader,
     state_error,
+    sync_directory,
 )
 from .state_markers import read_state_marker
 from .state_staging import (
@@ -51,7 +52,6 @@ from .state_staging import (
     STAGE_PREFIX,
     initialization_lock,
     recover_stages,
-    sync_directory,
     sync_file,
     sync_tree,
 )

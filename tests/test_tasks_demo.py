@@ -11,7 +11,7 @@ from unittest import mock
 from uuid import UUID
 
 import pytest
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.db import OperationalError, ProgrammingError, close_old_connections, transaction
 from django.db.models import QuerySet
 from django.tasks import TaskResultStatus
@@ -762,8 +762,8 @@ def test_only_owned_restart_reconciles_active_routines(tmp_path):
         "DESKTOP_DJANGO_APP_VERSION": "1.0.0",
     }
 
-    def manage(*args):
-        result = subprocess.run(
+    def run_manage(*args):
+        return subprocess.run(
             [sys.executable, str(root / "manage.py"), *args],
             cwd=root,
             env=env,
@@ -771,6 +771,9 @@ def test_only_owned_restart_reconciles_active_routines(tmp_path):
             text=True,
             timeout=30,
         )
+
+    def manage(*args):
+        result = run_manage(*args)
         assert result.returncode == 0, result.stderr
 
     manage("migrate", "--noinput", "--verbosity", "0")
@@ -791,6 +794,20 @@ def test_only_owned_restart_reconciles_active_routines(tmp_path):
         query = "SELECT status, completed_at FROM tasks_demo_simulatedtask ORDER BY id"
         assert connection.execute(query).fetchall() == [("PENDING", None), ("RUNNING", None)]
 
+        connection.execute(
+            "ALTER TABLE tasks_demo_simulatedtask RENAME COLUMN result TO unavailable_result"
+        )
+        failure = run_manage("recover_stale_routines")
+        assert failure.returncode == 1
+        assert failure.stderr.strip() == (
+            "CommandError: Routine startup recovery failed: the routine database "
+            "could not be updated."
+        )
+        assert connection.execute(query).fetchall() == [("PENDING", None), ("RUNNING", None)]
+
+        connection.execute(
+            "ALTER TABLE tasks_demo_simulatedtask RENAME COLUMN unavailable_result TO result"
+        )
         manage("recover_stale_routines")
         rows = connection.execute(query).fetchall()
         assert len(rows) == 2
@@ -799,18 +816,25 @@ def test_only_owned_restart_reconciles_active_routines(tmp_path):
 
 class TestStartupReconciliation:
     @pytest.mark.parametrize("error_type", [OperationalError, ProgrammingError])
-    def test_database_failures_log_a_fixed_warning(self, caplog, error_type):
+    def test_database_failures_raise_a_fixed_command_error(self, error_type):
         with mock.patch.object(QuerySet, "update", side_effect=error_type("synthetic detail")):
+            with pytest.raises(CommandError) as exc:
+                call_command("recover_stale_routines")
+
+        assert str(exc.value) == (
+            "Routine startup recovery failed: the routine database could not be updated."
+        )
+        assert isinstance(exc.value.__cause__, error_type)
+
+    def test_no_demo_app_is_a_noop(self):
+        with (
+            mock.patch("django.apps.apps.is_installed", return_value=False) as is_installed,
+            mock.patch.object(QuerySet, "update") as update,
+        ):
             call_command("recover_stale_routines")
 
-        diagnostics = [
-            record.getMessage()
-            for record in caplog.records
-            if record.name.endswith(".recover_stale_routines")
-        ]
-        assert diagnostics == [
-            "Routine startup recovery failed. Abandoned routines may remain active."
-        ]
+        is_installed.assert_called_once_with("tasks_demo")
+        update.assert_not_called()
 
     def test_stale_pending_tasks_marked_failed(self):
         task = SimulatedTask.objects.create(

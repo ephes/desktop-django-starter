@@ -11,8 +11,6 @@ from typing import BinaryIO
 
 from django.core.exceptions import ImproperlyConfigured
 
-from .runtime_secret import _open_key_windows
-
 # Keep recursive copy, sync, and cleanup below the runtime stack limit.
 _MAX_MEDIA_DEPTH = 64
 
@@ -74,6 +72,47 @@ def directory_guard(path: Path, *, parent_fd: int | None = None) -> Iterator[int
     else:
         if descriptor is not None:
             os.close(descriptor)
+
+
+def sync_directory(path: Path) -> None:
+    # Python exposes no portable Windows directory FlushFileBuffers handle.
+    if os.name != "nt":
+        with directory_guard(path) as descriptor:
+            assert descriptor is not None
+            os.fsync(descriptor)
+
+
+def _open_key_windows(key_path: Path) -> int:
+    """Open the entry itself, including reparse points, using the Windows API."""
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
+    create_file = kernel32.CreateFileW
+    create_file.argtypes = [
+        wintypes.LPCWSTR,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.LPVOID,
+        wintypes.DWORD,
+        wintypes.DWORD,
+        wintypes.HANDLE,
+    ]
+    create_file.restype = wintypes.HANDLE
+    close_handle = kernel32.CloseHandle
+    close_handle.argtypes = [wintypes.HANDLE]
+    close_handle.restype = wintypes.BOOL
+    # GENERIC_READ, shared read/write/delete, OPEN_EXISTING,
+    # FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS.
+    handle = create_file(str(key_path), 0x80000000, 0x7, None, 3, 0x02200000, None)
+    if handle == ctypes.c_void_p(-1).value:
+        raise ctypes.WinError(ctypes.get_last_error())  # type: ignore[attr-defined]
+    try:
+        return msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)  # type: ignore[attr-defined]
+    except BaseException:
+        close_handle(handle)
+        raise
 
 
 @contextmanager

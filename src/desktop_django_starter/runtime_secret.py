@@ -17,6 +17,8 @@ from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 
+from .state_files import _open_key_windows, sync_directory
+
 logger = logging.getLogger(__name__)
 
 SECRET_KEY_FILENAME = "secret_key"
@@ -37,6 +39,8 @@ def load_or_create_secret_key(app_data_dir: Path) -> str:
     key_path = app_data_dir / SECRET_KEY_FILENAME
     existing_key = _read_secret_key(key_path)
     if existing_key is not None:
+        # The creator might still be syncing the link, or its sync might have failed.
+        sync_directory(app_data_dir)
         return existing_key
 
     app_data_dir.mkdir(parents=True, exist_ok=True)
@@ -53,6 +57,7 @@ def load_or_create_secret_key(app_data_dir: Path) -> str:
         except FileExistsError:
             # Another process created the key first; use theirs.
             pass
+        sync_directory(app_data_dir)
     except BaseException as publication_error:
         try:
             temp_path.unlink(missing_ok=True)
@@ -69,39 +74,6 @@ def load_or_create_secret_key(app_data_dir: Path) -> str:
     if created_key is None:
         raise ImproperlyConfigured(f"Could not create the packaged secret key at {key_path}.")
     return created_key
-
-
-def _open_key_windows(key_path: Path) -> int:
-    """Open the entry itself, including reparse points, using the Windows API."""
-    import ctypes
-    import msvcrt
-    from ctypes import wintypes
-
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)  # type: ignore[attr-defined]
-    create_file = kernel32.CreateFileW
-    create_file.argtypes = [
-        wintypes.LPCWSTR,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.LPVOID,
-        wintypes.DWORD,
-        wintypes.DWORD,
-        wintypes.HANDLE,
-    ]
-    create_file.restype = wintypes.HANDLE
-    close_handle = kernel32.CloseHandle
-    close_handle.argtypes = [wintypes.HANDLE]
-    close_handle.restype = wintypes.BOOL
-    # GENERIC_READ, shared read/write/delete, OPEN_EXISTING,
-    # FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS.
-    handle = create_file(str(key_path), 0x80000000, 0x7, None, 3, 0x02200000, None)
-    if handle == ctypes.c_void_p(-1).value:
-        raise ctypes.WinError(ctypes.get_last_error())  # type: ignore[attr-defined]
-    try:
-        return msvcrt.open_osfhandle(handle, os.O_RDONLY | os.O_BINARY)  # type: ignore[attr-defined]
-    except BaseException:
-        close_handle(handle)
-        raise
 
 
 def _read_secret_key(key_path: Path) -> str | None:

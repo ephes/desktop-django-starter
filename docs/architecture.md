@@ -380,9 +380,10 @@ Current launcher contract:
   worker may still finish. The shells run `recover_stale_routines` after
   migrations, with exclusive profile ownership and after the old worker has
   stopped. It marks pending and running demo rows failed and leaves terminal
-  rows and the backend queue intact. Without the optional demo app it does
-  nothing. Operational or programming errors log a fixed warning and startup
-  continues. Ordinary Django setup and standalone worker startup leave these
+  rows and the backend queue intact. Without the optional demo app recovery
+  succeeds immediately. A database error fails the command with a fixed
+  diagnostic. The shells report the startup failure before opening Django
+  or the worker. Ordinary Django setup and standalone worker startup leave these
   rows alone. When using the development database, stop any manually launched
   worker before starting a desktop shell against the same checkout.
 - task polling applies backend outcomes only while the current demo row is

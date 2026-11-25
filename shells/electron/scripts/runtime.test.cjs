@@ -197,7 +197,7 @@ test("Django exit cancels a pending startup probe before the worker or window st
           return django;
         }
         const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
-        queueMicrotask(() => child.emit("exit", 0));
+        queueMicrotask(() => child.emit("close", 0));
         return child;
       }
     },
@@ -228,6 +228,37 @@ test("Django exit cancels a pending startup probe before the worker or window st
   assert.deepEqual(commands, ["migrate", ...recoveryCommands, "runserver"]);
   assert.equal(windowOpened, false);
   assert.deepEqual(errors, []);
+});
+
+test("routine recovery reports late database stderr and blocks backend startup", {
+  skip: !inStarter && "Requires the starter recovery command"
+}, async t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "dds-routine-recovery-"));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  const commands = [];
+  const { control } = runtime(dir, undefined, {
+    "./scripts/managed-process.cjs": {
+      spawnManagedProcess: ({ args }) => {
+        const command = args[args.findIndex(arg => path.basename(arg) === "manage.py") + 1];
+        commands.push(command);
+        assert.ok(["migrate", "recover_stale_routines"].includes(command));
+        const child = Object.assign(new EventEmitter(), { stdout: new EventEmitter(), stderr: new EventEmitter() });
+        const code = command === "migrate" ? 0 : 1;
+        queueMicrotask(() => {
+          child.emit("exit", code);
+          if (code !== 0) {
+            child.stderr.emit("data", "CommandError: Routine startup recovery failed: the routine database could not be updated.");
+          }
+          child.emit("close", code);
+        });
+        return child;
+      }
+    }
+  });
+  control.stubWindows(() => assert.fail("Startup opened an app window"));
+
+  await assert.rejects(control.bootstrap(), /routine database could not be updated/);
+  assert.deepEqual(commands, ["migrate", "recover_stale_routines"]);
 });
 
 test("the renderer shows an app-data folder error only when the native open fails", {
