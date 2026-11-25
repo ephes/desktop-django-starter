@@ -7,7 +7,6 @@ from desktop_django_starter import devtools
 from desktop_django_starter.devtools import (
     _aggregate_cloc_csv,
     _is_excluded_dir,
-    _parse_cloc_summary_csv,
     bucket_for_path,
 )
 
@@ -26,6 +25,50 @@ def test_bucket_for_path_groups_repo_sections() -> None:
     assert bucket_for_path("shells/tauri/src-tauri/src/lib.rs") == "shells/tauri"
 
 
+def test_cloc_report_uses_one_scan(monkeypatch, capsys) -> None:
+    from unittest.mock import Mock
+
+    first_detail = (
+        'language,filename,blank,comment,code,"github.com/AlDanial/cloc v 2.12"\n'
+        'Python,"./src/app/models,old.py",1,2,10\n'
+        "Python,./tests/test_health.py,2,0,5\n"
+        "JavaScript,./shells/electron/main.js,0,1,20\n"
+        "SUM,,3,3,35\n"
+        "HTML,./bad.html,invalid,1,20\n"
+        "Python\n"
+    )
+    first_summary = "files,language,blank,comment,code\n3,SUM,3,3,35\n"
+    second_detail = first_detail.replace(",1,2,10", ",1,2,90")
+
+    def scan(command, **kwargs):
+        if run.call_count > 1:
+            output = second_detail
+        else:
+            output = first_detail if "--by-file" in command else first_summary
+        kwargs["stdout"].write(output)
+        return devtools.subprocess.CompletedProcess(command, 0)
+
+    run = Mock(side_effect=scan)
+    monkeypatch.setattr(devtools.subprocess, "run", run)
+    monkeypatch.setattr(devtools.shutil, "which", lambda _: "cloc")
+    monkeypatch.setattr(devtools, "Console", None)
+
+    assert devtools.count_lines_of_code() == 0
+    run.assert_called_once()
+    assert "--by-file" in run.call_args.args[0]
+    assert run.call_args.kwargs["timeout"] == 30
+    output = capsys.readouterr().out
+    assert "github.com/AlDanial/cloc v 2.12" in output
+    assert "Lines of code counted successfully with cloc!" in output
+    rows = [line.split() for line in output.splitlines() if line.startswith("|")]
+    assert "| JavaScript | 1 | 0 | 1 | 20 |".split() in rows
+    assert "| Python | 2 | 3 | 2 | 15 |".split() in rows
+    assert "| SUM | 3 | 3 | 3 | 35 |".split() in rows
+    assert "| src/app | 1 | 10 |".split() in rows
+    assert "| tests | 1 | 5 |".split() in rows
+    assert "| shells/electron | 1 | 20 |".split() in rows
+
+
 def test_aggregate_cloc_csv_sums_by_bucket() -> None:
     csv_output = """language,filename,blank,comment,code
 Python,./src/example_app/models.py,1,2,10
@@ -35,50 +78,12 @@ Python,./tests/test_health.py,1,2,5
 SUM,,4,8,65
 """
 
-    stats = _aggregate_cloc_csv(csv_output)
+    _, _, stats = _aggregate_cloc_csv(csv_output)
 
     assert stats == {
         "src/example_app": {"files": 2, "lines": 30},
         "shells/electron": {"files": 1, "lines": 30},
         "tests": {"files": 1, "lines": 5},
-    }
-
-
-def test_parse_cloc_summary_csv_keeps_metadata_and_sum_row() -> None:
-    csv_output = """files,language,blank,comment,code,"github.com/AlDanial/cloc v 2.08"
-11,JavaScript,214,14,1119
-26,Python,163,30,500
-53,SUM,495,52,2238
-bad,HTML,8,0,107
-"""
-
-    parsed = _parse_cloc_summary_csv(csv_output)
-
-    assert parsed == {
-        "metadata": "github.com/AlDanial/cloc v 2.08",
-        "rows": [
-            {
-                "language": "JavaScript",
-                "files": 11,
-                "blank": 214,
-                "comment": 14,
-                "code": 1119,
-            },
-            {
-                "language": "Python",
-                "files": 26,
-                "blank": 163,
-                "comment": 30,
-                "code": 500,
-            },
-            {
-                "language": "SUM",
-                "files": 53,
-                "blank": 495,
-                "comment": 52,
-                "code": 2238,
-            },
-        ],
     }
 
 
@@ -95,7 +100,13 @@ def test_excluded_dirs_cover_generated_shell_artifacts() -> None:
 
 
 def test_python_fallback_prunes_excluded_trees(monkeypatch, tmp_path, capsys) -> None:
-    excluded = {tmp_path / "node_modules", tmp_path / "shells/tauri/src-tauri/target"}
+    excluded = {
+        tmp_path / "node_modules",
+        tmp_path / "fixtures/project/.venv",
+        tmp_path / "fixtures/project/node_modules",
+        tmp_path / "src/app/__pycache__",
+        tmp_path / "shells/tauri/src-tauri/target",
+    }
     sources = {
         tmp_path / "src/app/models.py": "first\nsecond\n",
         tmp_path / "src/app/build/helper.py": "third\n",
@@ -123,6 +134,29 @@ def test_python_fallback_prunes_excluded_trees(monkeypatch, tmp_path, capsys) ->
     assert "| src/app   |     2 |     3 |" in output
     assert all(directory in scanned for directory in (tmp_path, tmp_path / "src/app/build"))
     assert not any(directory.is_relative_to(tree) for directory in scanned for tree in excluded)
+
+
+def test_python_fallback_counts_rust_sources_outside_tauri_target(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    tauri = tmp_path / "shells/tauri/src-tauri"
+    sources = {
+        tauri / "src/main.rs": "fn main() {}\n",
+        tauri / "target/debug/build/generated.rs": "fn generated() {}\n",
+    }
+    for path, content in sources.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    monkeypatch.setattr(devtools.shutil, "which", lambda _: None)
+    monkeypatch.setattr(devtools, "Console", None)
+    monkeypatch.chdir(tmp_path)
+
+    assert devtools.count_lines_of_code() == 0
+    output = capsys.readouterr().out
+    rows = [line.split() for line in output.splitlines() if line.startswith("|")]
+    assert "| Rust | 1 | 1 |".split() in rows
+    assert "| shells/tauri | 1 | 1 |".split() in rows
 
 
 @pytest.mark.parametrize("backend", ["cloc", "python"])
@@ -162,7 +196,6 @@ def test_plain_table_preserves_alignment(rows, expected_rows) -> None:
     assert len({len(line) for line in lines}) == 1
 
 
-@pytest.mark.parametrize("failed_invocation", [1, 2])
 @pytest.mark.parametrize(
     ("error", "message"),
     [
@@ -171,17 +204,11 @@ def test_plain_table_preserves_alignment(rows, expected_rows) -> None:
         (PermissionError("denied"), "Could not start cloc."),
     ],
 )
-def test_cloc_execution_failures_exit_without_summary(
-    failed_invocation, error, message, monkeypatch, capsys
-):
+def test_cloc_execution_failures_exit_without_summary(error, message, monkeypatch, capsys):
     from unittest.mock import Mock
 
     monkeypatch.setattr(devtools.shutil, "which", lambda _: "cloc")
-    run = Mock(
-        side_effect=[devtools.subprocess.CompletedProcess([], 0, stdout="")]
-        * (failed_invocation - 1)
-        + [error]
-    )
+    run = Mock(side_effect=error)
     monkeypatch.setattr(devtools.subprocess, "run", run)
     fallback = Mock()
     monkeypatch.setattr(devtools, "_count_with_python", fallback)
@@ -190,7 +217,7 @@ def test_cloc_execution_failures_exit_without_summary(
         devtools.count_lines_of_code()
 
     assert exc.value.code == 1
-    assert run.call_count == failed_invocation
+    run.assert_called_once()
     for call in run.call_args_list:
         assert call.kwargs == {
             "check": True,
@@ -205,35 +232,6 @@ def test_cloc_execution_failures_exit_without_summary(
     captured = capsys.readouterr()
     assert captured.err == message + "\n"
     assert captured.out == ""
-
-
-def test_cloc_success_runs_summary_and_detail_with_timeout(monkeypatch, capsys):
-    from unittest.mock import Mock
-
-    monkeypatch.setattr(devtools, "Console", None)
-    monkeypatch.setattr(devtools.shutil, "which", lambda _: "cloc")
-
-    def successful_run(command, **kwargs):
-        csv = (
-            "language,filename,blank,comment,code\nPython,src/app/a.py,0,0,5\n"
-            if "--by-file" in command
-            else "files,language,blank,comment,code\n1,Python,0,0,5\n"
-        )
-        kwargs["stdout"].write(csv)
-        return devtools.subprocess.CompletedProcess(command, 0)
-
-    run = Mock(side_effect=successful_run)
-    monkeypatch.setattr(devtools.subprocess, "run", run)
-
-    assert devtools.count_lines_of_code() == 0
-    assert run.call_count == 2
-    assert "--by-file" not in run.call_args_list[0].args[0]
-    assert "--by-file" in run.call_args_list[1].args[0]
-    assert all(call.kwargs["timeout"] == 30 for call in run.call_args_list)
-    output = capsys.readouterr().out
-    assert "Python" in output
-    assert "src/app" in output
-    assert "Lines of code counted successfully with cloc!" in output
 
 
 def test_cloc_real_child_is_killed_and_reaped_on_timeout(monkeypatch, capsys):

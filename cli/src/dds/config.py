@@ -130,7 +130,6 @@ def save_wrapper_config(config: WrapperConfig, path: Path | None = None) -> Path
         raise ConfigError(f"Unsupported harness {config.harness!r}. Expected one of: {supported}.")
 
     resolved_path = path or default_config_path()
-    resolved_path.parent.mkdir(parents=True, exist_ok=True)
 
     lines = [
         f"[{_WRAP_SECTION}]",
@@ -140,20 +139,26 @@ def save_wrapper_config(config: WrapperConfig, path: Path | None = None) -> Path
         lines.append(f"model = {json.dumps(config.model, ensure_ascii=False)}")
     content = ("\n".join(lines) + "\n").replace("\x7f", "\\u007f")
 
+    try:
+        payload = content.encode("utf-8")
+        _parse_wrapper_config(content, resolved_path)
+    except (UnicodeEncodeError, ConfigError) as exc:
+        raise ConfigError(f"{resolved_path}: model value cannot be saved as UTF-8 TOML.") from exc
+
+    resolved_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path: Path | None = None
     try:
         with tempfile.NamedTemporaryFile(
-            mode="w",
-            encoding="utf-8",
+            mode="wb",
             dir=resolved_path.parent,
             prefix=f"{resolved_path.name}.",
             suffix=".tmp",
             delete=False,
         ) as stream:
             temp_path = Path(stream.name)
-            stream.write(content)
+            stream.write(payload)
         _retry_sharing_violation(lambda: temp_path.replace(resolved_path))
-    except (OSError, UnicodeError) as exc:
+    except OSError as exc:
         raise ConfigError(f"Could not write {resolved_path}: {exc}") from exc
     finally:
         if temp_path is not None:
