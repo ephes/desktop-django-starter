@@ -167,7 +167,10 @@ bundle. Wheel and sdist builds hold that same lock while validating and copying
 one generation to a private snapshot. Hatch discovers and reads the archive
 payload from that snapshot, so a sync can publish during archive creation.
 Leave the lock file in place. On Windows, retry the sync or build if the OS
-times out acquiring the lock. A complete tree replaces the old bundle,
+times out acquiring the lock. If explicit unlock fails, the handle still closes.
+A completed operation reports its success and logs the unlock failure. A failed
+operation raises its original error with the unlock failure in the diagnostics.
+A complete tree replaces the old bundle,
 removing stale files while preserving an existing `.gitkeep` and its contents.
 Copy failures leave the old bundle intact. A failed promotion attempts recovery
 under the same lock. If recovery fails, sync raises the original promotion

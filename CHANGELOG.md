@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Preserve the CLI asset publication result when explicit Windows unlock fails.
+  Close the lock handle and report the unlock failure alongside that result.
+
 - Refuse CLI asset recovery when the pending marker changes identity or length
   during admission, preserving the staged and previous generations.
 
