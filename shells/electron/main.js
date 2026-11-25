@@ -510,7 +510,8 @@ function runManageCommand(args, port, runtimeMode, backendRoot, authToken) {
     });
 
     child.on("error", reject);
-    child.on("exit", (code) => {
+    // Read the complete diagnostic before reporting a failed startup command.
+    child.on("close", (code) => {
       if (code === 0) {
         resolve();
         return;

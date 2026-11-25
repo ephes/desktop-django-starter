@@ -102,6 +102,44 @@ def test_secret_key_creation_keeps_the_key_another_process_created(
     assert [path.name for path in tmp_path.iterdir()] == [SECRET_KEY_FILENAME]
 
 
+@pytest.mark.skipif(os.name == "nt", reason="POSIX directory fsync")
+def test_secret_key_retries_directory_sync_without_replacing_published_key(
+    monkeypatch, tmp_path: Path
+) -> None:
+    events = []
+    real_link = os.link
+    real_fsync = os.fsync
+    sync_error = OSError("synthetic directory sync failure")
+
+    def link(source, destination):
+        real_link(source, destination)
+        events.append("link")
+
+    def fsync(descriptor):
+        if stat.S_ISDIR(os.fstat(descriptor).st_mode):
+            events.append("directory sync")
+            if events.count("directory sync") == 1:
+                raise sync_error
+        else:
+            events.append("file sync")
+        real_fsync(descriptor)
+
+    monkeypatch.setattr(runtime_secret.os, "link", link)
+    monkeypatch.setattr(runtime_secret.os, "fsync", fsync)
+    with pytest.raises(OSError) as exc:
+        load_or_create_secret_key(tmp_path)
+
+    key_path = tmp_path / SECRET_KEY_FILENAME
+    assert exc.value is sync_error
+    assert events == ["file sync", "link", "directory sync"]
+    published_key = key_path.read_bytes()
+    assert list(tmp_path.iterdir()) == [key_path]
+
+    assert load_or_create_secret_key(tmp_path).encode("ascii") == published_key
+    assert key_path.read_bytes() == published_key
+    assert events == ["file sync", "link", "directory sync", "directory sync"]
+
+
 @pytest.mark.parametrize("operation", ["fsync", "link"])
 def test_secret_key_stage_cleanup_preserves_creation_failure(
     monkeypatch, tmp_path: Path, operation: str

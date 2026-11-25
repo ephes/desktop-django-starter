@@ -1,11 +1,7 @@
-import logging
-
 from django.apps import apps
-from django.core.management.base import BaseCommand
-from django.db import OperationalError, ProgrammingError
+from django.core.management.base import BaseCommand, CommandError
+from django.db import DatabaseError
 from django.utils import timezone
-
-logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -25,5 +21,7 @@ class Command(BaseCommand):
                 result="Abandoned - app restarted",
                 completed_at=timezone.now(),
             )
-        except (OperationalError, ProgrammingError):
-            logger.warning("Routine startup recovery failed. Abandoned routines may remain active.")
+        except DatabaseError as error:
+            raise CommandError(
+                "Routine startup recovery failed: the routine database could not be updated."
+            ) from error

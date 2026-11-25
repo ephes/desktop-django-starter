@@ -112,8 +112,8 @@ this ownership. Native Windows process-tree acceptance remains required.
   without rewriting the published generation.
 
 - Shell startup explicitly calls `recover_stale_routines` after migrations
-  and previous-worker retirement. Django app initialization is read-only
-  for routine rows.
+  and previous-worker retirement. A database failure stops startup with a
+  recovery diagnostic. Django app initialization is read-only for routine rows.
 - Task polling uses partial active/history indexes and matching OR predicates.
   Shell counts filter READY/RUNNING and match the worker's
   `DESKTOP_DJANGO_WORKER_QUEUES` setting before one aggregate. The app owns

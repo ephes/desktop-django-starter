@@ -16,7 +16,14 @@ from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
 
-from .state_files import admit, directory_guard, identity, regular_reader, state_error
+from .state_files import (
+    admit,
+    directory_guard,
+    identity,
+    regular_reader,
+    state_error,
+    sync_directory,
+)
 from .state_markers import read_state_marker
 
 logger = logging.getLogger(__name__)
@@ -127,14 +134,6 @@ def sync_file(path: Path) -> None:
             import fcntl
 
             fcntl.fcntl(stream.fileno(), fcntl.F_FULLFSYNC)
-
-
-def sync_directory(path: Path) -> None:
-    # Python exposes no portable Windows directory FlushFileBuffers handle.
-    if os.name != "nt":
-        with directory_guard(path) as descriptor:
-            assert descriptor is not None
-            os.fsync(descriptor)
 
 
 def sync_tree(root: Path) -> None:
