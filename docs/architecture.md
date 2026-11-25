@@ -318,10 +318,11 @@ Current launcher contract:
   running keeps its polled snapshot until the next poll.
   Older terminal rows remain until Clear Finished Routines deletes them.
   Clearing uses batches of up to 100 routine rows in primary-key order.
-  Every batch selects and deletes within the same initial ID ceiling and
-  completion-time cutoff. Terminal rows without a completion timestamp are
-  eligible as legacy history. Routines completed after the cutoff stay for a
-  later clear.
+  The clear first snapshots the IDs of routines that are terminal under the
+  writer lock, including legacy rows without a completion timestamp. Every batch
+  selects and deletes only from that snapshot. A routine whose completion commits
+  after the snapshot stays for a later clear, whatever completion time its worker
+  recorded.
   Each batch commits its history deletion and verified backend deletions in the
   same SQLite transaction. A backend result qualifies if it has terminal status,
   matches the demo task path, backend and queue, carries the routine's integer

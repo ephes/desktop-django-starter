@@ -150,9 +150,9 @@ Extension (post-v1):
 - a conditional SQLite update claims each demo row from `PENDING` to `RUNNING`; only the winner executes the simulated workload. Duplicate execution returns the current row state, and terminal retries return the stored result without rerunning work. A duplicate reporting `RUNNING` cannot finalize the row; polling never claims or resets it. A worker interrupted after claiming does not automatically rerun that row; the shell marks abandoned demo rows failed after establishing profile ownership, retiring the previous worker and running migrations.
 - worker completion conditionally updates only its current running claim. Polling validates terminal backend payloads before recovery and leaves running claims alive if queue metadata disappears; Clear cannot retire those live claims. See [the task persistence contract](architecture.md).
 - routine creation, database-backed enqueue, and backend ID storage commit in one transaction. A failure rolls back both the demo and queue rows and returns JSON HTTP 503 (`Routine could not be queued. Please try again.`). The refusal is returned even if logging the failure raises an error. Retrying Start Routine creates a new routine. This boundary relies on the configured queue using the same SQLite database, and must be revisited before switching to an external queue.
-- Clear Finished Routines deletes `DONE` and `FAILED` demo history completed by
-  the start of the clear, including legacy terminal rows without a completion
-  timestamp. It also deletes their verified, exclusively owned terminal backend
+- Clear Finished Routines deletes `DONE` and `FAILED` demo history that is
+  finished when the clear starts, including legacy terminal rows without a
+  completion timestamp. It also deletes their verified, exclusively owned terminal backend
   results. Active routines can finish normally and their later completions
   remain available for the next clear. Active, shared, or unrecognized backend
   results are retained.

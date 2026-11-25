@@ -150,27 +150,24 @@ def visible_tasks() -> list[SimulatedTask]:
 
 
 def clear_finished_routines() -> None:
-    completion_cutoff = timezone.now()
-    last_id = SimulatedTask.objects.order_by("-pk").values_list("pk", flat=True).first()
-    if last_id is None:
-        return
-
     history = SimulatedTask.objects.filter(
-        # Legacy terminal rows without a completion time remain clearable.
-        Q(completed_at__lte=completion_cutoff) | Q(completed_at__isnull=True),
-        pk__lte=last_id,
-        status__in=[SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED],
+        status__in=[SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED]
     ).order_by("pk")
-    batch = history
+    with transaction.atomic():
+        _lock_routine_writes()
+        # Snapshot history finished when the clear starts. A routine whose
+        # completion commits later stays for the next clear, even when its
+        # worker computed the completion time before this snapshot.
+        eligible_ids = list(history.values_list("pk", flat=True))
+
     shared_ids: set[UUID] = set()
-    while True:
+    for start in range(0, len(eligible_ids), CLEAR_BATCH_SIZE):
         with transaction.atomic():
-            # Serialize selection and deletion with queue writers on SQLite,
-            # including development connections with deferred transactions.
-            SimulatedTask.objects.filter(pk=0).update(status=F("status"))
-            rows = list(batch.values_list("pk", "backend_task_id")[:CLEAR_BATCH_SIZE])
+            _lock_routine_writes()
+            batch_ids = eligible_ids[start : start + CLEAR_BATCH_SIZE]
+            rows = list(history.filter(pk__in=batch_ids).values_list("pk", "backend_task_id"))
             if not rows:
-                return
+                continue
 
             routine_ids = {}
             for pk, backend_id in rows:
@@ -203,7 +200,12 @@ def clear_finished_routines() -> None:
             ]
             DBTaskResult.objects.filter(pk__in=owned_ids).delete()
             history.filter(pk__in=[pk for pk, _ in rows]).delete()
-        batch = history.filter(pk__gt=rows[-1][0])
+
+
+def _lock_routine_writes() -> None:
+    # Serialize selection and deletion with queue writers on SQLite,
+    # including development connections with deferred transactions.
+    SimulatedTask.objects.filter(pk=0).update(status=F("status"))
 
 
 def _shared_backend_ids(result_ids: set[UUID]) -> set[UUID]:

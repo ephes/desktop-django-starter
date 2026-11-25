@@ -548,7 +548,10 @@ class TestTaskClear:
         assert DBTaskResult.objects.filter(pk=backend.pk).exists()
 
     @pytest.mark.django_db(transaction=True)
-    def test_clear_preserves_completion_between_batches(self, client):
+    @pytest.mark.parametrize("completion_offset", [timedelta(0), -timedelta(minutes=1)])
+    def test_clear_preserves_completion_between_batches(self, client, completion_offset):
+        # A negative offset models a worker that computed its completion time
+        # before the clear started but committed it between batches.
         finished = SimulatedTask.objects.create(
             label="Earlier completion", status="DONE", completed_at=timezone.now()
         )
@@ -560,7 +563,7 @@ class TestTaskClear:
         def finish_routine():
             assert not SimulatedTask.objects.filter(pk=finished.pk).exists()
             SimulatedTask.objects.filter(pk=running.pk).update(
-                status="DONE", completed_at=timezone.now()
+                status="DONE", completed_at=timezone.now() + completion_offset
             )
             backend.set_successful("Synthetic result")
 
