@@ -78,6 +78,8 @@ the same setup flow inline. Non-interactive runs never prompt; if the harness
 is ambiguous they fail and point to `dds init` or `--harness`.
 A config file that disappears before it can be opened follows the same missing
 config flow. Other read failures stop harness resolution and report the path.
+Setup validates the new configuration as UTF-8 TOML before saving it. An
+unrepresentable model value reports an error and preserves the saved defaults.
 
 On Unix-like systems, both commands use `$XDG_CONFIG_HOME/dds/config.toml`
 when `XDG_CONFIG_HOME` is absolute. An unset, empty, or relative value selects

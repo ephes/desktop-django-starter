@@ -31,7 +31,9 @@ supported harnesses (`claude`, `pi`, `codex`), lets you pick one default
 harness, optionally saves a freeform default model string, and writes
 user-level config. On Unix-like systems, an absolute `XDG_CONFIG_HOME` places
 it at `$XDG_CONFIG_HOME/dds/config.toml`. If the variable is unset, empty, or
-relative, DDS uses `~/.config/dds/config.toml`.
+relative, DDS uses `~/.config/dds/config.toml`. DDS checks that the new
+configuration is readable as UTF-8 TOML before saving it. An unrepresentable
+model value reports an error and leaves any existing defaults in place.
 
 ### `dds wrap`
 

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reject wrapper model values that cannot be saved as UTF-8 TOML before
+  staging a config replacement. Existing defaults remain available.
+
 - Derive both `just loc` tables from the same `cloc` scan.
 
 - Keep routines completed during Clear Finished Routines and their queue results

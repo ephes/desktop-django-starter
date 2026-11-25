@@ -273,10 +273,31 @@ def test_invalid_utf8_raises_config_error(tmp_path):
         load_wrapper_config(path)
 
 
-def test_unencodable_model_raises_config_error_and_cleans_temp(tmp_path):
+@pytest.mark.parametrize("invalid_toml", [False, True])
+def test_invalid_model_preserves_config_before_staging(tmp_path, monkeypatch, invalid_toml):
+    from unittest.mock import Mock
+
     path = tmp_path / "config.toml"
-    save_wrapper_config(WrapperConfig("codex", "original"), path)
-    with pytest.raises(ConfigError, match="config.toml"):
-        save_wrapper_config(WrapperConfig("pi", "a\udc80"), path)
-    assert load_wrapper_config(path) == WrapperConfig("codex", "original")
+    original = WrapperConfig("codex", "original")
+    save_wrapper_config(original, path)
+    before = path.read_bytes()
+    model = "a\udc80"
+    if invalid_toml:
+        model = "raw-control"
+        dumps = config_module.json.dumps
+
+        def dump_with_raw_control(value, **kwargs):
+            # Simulate a serializer emitting a UTF-8 string TOML cannot parse.
+            return '"a\x00"' if value == model else dumps(value, **kwargs)
+
+        monkeypatch.setattr(config_module.json, "dumps", dump_with_raw_control)
+
+    stage = Mock(wraps=config_module.tempfile.NamedTemporaryFile)
+    monkeypatch.setattr(config_module.tempfile, "NamedTemporaryFile", stage)
+    with pytest.raises(ConfigError, match=r"config\.toml: model value"):
+        save_wrapper_config(WrapperConfig("pi", model), path)
+
+    stage.assert_not_called()
+    assert path.read_bytes() == before
+    assert load_wrapper_config(path) == original
     assert list(tmp_path.iterdir()) == [path]
