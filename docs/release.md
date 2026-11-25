@@ -175,7 +175,7 @@ That path intentionally stays narrower than Electron:
 - it now applies a minimal CSP to Tauri-served shell assets such as the local splash window, without claiming production-hardening for the Django pages served over localhost
 - on Windows, the current scope is limited to generating the local NSIS installer path; install/run still needs a real live Windows machine test
 - the current `tauri.conf.json` makes `downloadBootstrapper` explicit for WebView2 installation, matching Tauri's default Windows installer behavior
-- the build wrapper now prints a Windows NSIS validation checklist, but that checklist is still preparation work rather than proof
+- the build wrapper prints the Windows NSIS validation checklist when exactly one NSIS installer changed. Multiple changed NSIS installers fail the build wrapper. Follow the checklist on a real Windows machine
 - it should still be described as experimental artifact scope rather than release parity
 
 ## Tauri GitHub Workflow Scope

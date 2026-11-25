@@ -53,7 +53,7 @@ Scope boundaries:
 - the current Windows config keeps Tauri's default `downloadBootstrapper` WebView2 installer behavior rather than an offline-ready embedded runtime
 - the hosted Linux AppImage job currently applies `NO_STRIP=true` as an upstream `linuxdeploy` workaround rather than a claim of finished Linux release hardening
 - local `just tauri-build` runs now pass `--no-sign` automatically when `TAURI_SIGNING_PRIVATE_KEY` is absent so unsigned local bundles still build even though `createUpdaterArtifacts` is enabled in config
-- `just tauri-build` now also prints a Windows NSIS validation checklist when run on Windows, while `/docs/release.md` keeps the canonical written checklist
+- `just tauri-build` now also prints a Windows NSIS validation checklist when exactly one NSIS installer changed, while `/docs/release.md` keeps the canonical written checklist
 - installer install/run validation still needs a real live Windows machine and is not automated in this repo
 - on macOS the default Quit menu item is replaced by a custom item with the same Cmd+Q shortcut, because the native `terminate:` path reaches Tauri only as the unpreventable `RunEvent::Exit`. Quitting from the Dock menu, logging out or shutting down still uses `terminate:` and skips the background-task prompt (the children are still stopped)
 - the Windows parts of the lifecycle work (the guard's Job Object, the PowerShell process listing and `taskkill` orphan cleanup) compile only under `#[cfg(windows)]` and are not yet validated on a live Windows machine; the stdin watchdog, orphan cleanup and version-isolated state were validated on macOS
@@ -79,34 +79,39 @@ smokes exactly one runnable bundle changed by that invocation. Cargo metadata
 resolves custom target directories (including `CARGO_TARGET_DIR` and Cargo config);
 `--target`/`-t` or `CARGO_BUILD_TARGET` restrict the target triple. Forwarded
 Cargo `--target-dir` arguments override that directory and resolve relative to
-`src-tauri`; `--debug`/`-d` and forwarded `--profile` select the output profile. With an implicit
+`src-tauri`; `--debug`/`-d` and forwarded `--profile` select the output profile.
+The wrapper accepts a single Cargo profile name before scanning for artifacts.
+The `dev` profile uses Cargo's `debug` output directory. With an implicit
 Cargo `build.target`, host and target subdirectories are observed and only the
 single changed bundle is admitted. Existing unrelated bundles remain untouched;
 directories whose names are not target triples (for example in a shared target
-directory) are skipped. Every build, smoked or not, lists only bundles the
-bundler wrote during that invocation, so stale bundles from other triples are
-not reported.
+directory) are skipped. The build wrapper compares metadata fingerprints before
+and after building and lists new or changed bundles. It prints the Windows NSIS
+checklist for a single changed NSIS installer and fails on multiple changed
+NSIS installers.
 No changed bundle, multiple changed bundles or multiple executable files in a
 macOS app fail before launch. Run builds exclusively in that target directory;
 concurrent builds cannot provide trustworthy smoke evidence. Windows installers
 still require manual installed-app validation.
 
-Each smoke snapshot shares a 100,000-entry budget across bundle discovery and
+Each artifact snapshot shares a 100,000-entry budget across bundle discovery and
 metadata fingerprinting, including root probes and entries revisited during
-fingerprinting. It admits up to 128 runnable candidates. Cargo target-directory
-enumeration and build artifact reporting have independent entry budgets, and
-reporting also caps matching artifacts at 128. An exceeded limit aborts the
-command. Retry with an explicit target where applicable or a dedicated
+fingerprinting. It admits up to 128 matching candidates. Cargo target-directory
+enumeration has a separate entry budget. An exceeded limit aborts the command.
+Retry with an explicit target where applicable or a dedicated
 `CARGO_TARGET_DIR`.
 
 Smoke execution defaults to 120 seconds. Set
 `DESKTOP_DJANGO_PACKAGED_SMOKE_TIMEOUT_MS` to an integer from 1 through 600000
 for a different finite deadline. This applies only to the packaged executable,
 not staging or compilation. The wrapper retains at most 8 KiB of diagnostic
-output and retires the owned Unix process group with SIGKILL on timeout and
-leader exit, including leftover descendants. The execution deadline ends at
-exit or launch failure. Cleanup has its own 3-second confirmation limit, so a
-timely exit can succeed even if cleanup finishes after the execution deadline.
-Timeout, failed launch, nonzero exit or uncertain cleanup fails the smoke. Processes that deliberately escape the group are outside this
-build-helper ownership contract. This wrapper validates only the locally built
-platform; it does not provide Windows install/run or cross-platform proof.
+output and retires the owned Unix process group with SIGKILL when the
+executable exits, times out, or the wrapper receives SIGINT or SIGTERM during
+the smoke. Retirement includes leftover descendants. Cleanup has its own
+3-second confirmation limit measured on a monotonic clock. A timely exit can
+succeed even if cleanup finishes after the execution deadline. SIGINT and
+SIGTERM exit with status 130 and 143 respectively after attempting cleanup.
+Timeout, failed launch, nonzero exit or uncertain cleanup fails the smoke.
+The build helper owns the Unix process group. Processes that leave the group
+can outlive the smoke. This wrapper validates the locally built macOS or Linux
+bundle. Windows installers require a separate manual install and run.

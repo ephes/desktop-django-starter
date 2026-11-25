@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Retire the owned Tauri packaged-smoke process group when the build wrapper
+  receives SIGINT or SIGTERM, then return the corresponding interrupt status.
+
+- Validate the Cargo profile name before discovering Tauri build artifacts.
+
+- Measure Tauri packaged-smoke process-group retirement on a monotonic clock.
+
+- Report only new or changed Tauri build bundles and require a single changed
+  NSIS installer for the Windows validation checklist.
+
 - Treat wrapper config that disappears before opening as missing and report
   other read failures with the config path.
 
