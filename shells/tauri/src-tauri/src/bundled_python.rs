@@ -149,7 +149,33 @@ fn usable(root: &Path, executable: PathBuf) -> Result<PathBuf, String> {
     Ok(executable)
 }
 
-fn open_manifest(path: &Path, expected: &fs::Metadata) -> Result<fs::File, String> {
+fn same_manifest_generation(before: &fs::Metadata, after: &fs::Metadata) -> bool {
+    if !after.is_file() || before.len() != after.len() {
+        return false;
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        before.dev() == after.dev()
+            && before.ino() == after.ino()
+            && before.mtime() == after.mtime()
+            && before.mtime_nsec() == after.mtime_nsec()
+            && before.ctime() == after.ctime()
+            && before.ctime_nsec() == after.ctime_nsec()
+    }
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::MetadataExt;
+        const FILE_ATTRIBUTE_REPARSE_POINT: u32 = 0x400;
+        (before.file_attributes() | after.file_attributes()) & FILE_ATTRIBUTE_REPARSE_POINT == 0
+            && before.creation_time() == after.creation_time()
+            && before.last_write_time() == after.last_write_time()
+    }
+    #[cfg(not(any(unix, windows)))]
+    false
+}
+
+fn open_manifest(path: &Path, expected: &fs::Metadata) -> Result<(fs::File, fs::Metadata), String> {
     let mut options = fs::OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
@@ -160,38 +186,35 @@ fn open_manifest(path: &Path, expected: &fs::Metadata) -> Result<fs::File, Strin
     #[cfg(windows)]
     {
         use std::os::windows::fs::OpenOptionsExt;
-        // FILE_FLAG_OPEN_REPARSE_POINT: inspect the entry itself, never its target.
-        options.custom_flags(0x00200000);
+        const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
+        const FILE_SHARE_READ: u32 = 1;
+        // Inspect the entry itself and exclude writers and renames during the read.
+        options
+            .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT)
+            .share_mode(FILE_SHARE_READ);
     }
     #[cfg(not(any(unix, windows)))]
     return Err("Unsupported manifest descriptor policy".into());
     let file = options.open(path).map_err(|e| e.to_string())?;
     let opened = file.metadata().map_err(|e| e.to_string())?;
-    if !opened.is_file() || opened.len() > MAX_MANIFEST_BYTES {
-        return Err("Expected a bounded regular file".into());
+    if !same_manifest_generation(expected, &opened) {
+        return Err("Runtime manifest changed or is not a direct regular file".into());
     }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        if (expected.dev(), expected.ino()) != (opened.dev(), opened.ino()) {
-            return Err("Runtime manifest changed before open".into());
-        }
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        if opened.file_attributes() & 0x400 != 0
-            || expected.creation_time() != opened.creation_time()
-            || expected.last_write_time() != opened.last_write_time()
-            || expected.file_size() != opened.file_size()
-        {
-            return Err("Runtime manifest changed or is a reparse point".into());
-        }
-    }
-    Ok(file)
+    Ok((file, opened))
 }
 
 pub(super) fn resolve_bundled_python_executable(root: &Path) -> Result<PathBuf, String> {
+    resolve_with_manifest_reader(root, |reader| {
+        let mut bytes = Vec::new();
+        reader.read_to_end(&mut bytes)?;
+        Ok(bytes)
+    })
+}
+
+fn resolve_with_manifest_reader(
+    root: &Path,
+    read_bytes: impl FnOnce(&mut dyn Read) -> std::io::Result<Vec<u8>>,
+) -> Result<PathBuf, String> {
     let manifest_path = root.join("runtime-manifest.json");
     let metadata = match fs::symlink_metadata(&manifest_path) {
         Ok(metadata) => Some(metadata),
@@ -203,17 +226,16 @@ pub(super) fn resolve_bundled_python_executable(root: &Path) -> Result<PathBuf, 
             if !metadata.is_file() || metadata.len() > MAX_MANIFEST_BYTES {
                 return Err("Expected a regular file of at most 65536 bytes".into());
             }
-            let file = open_manifest(&manifest_path, &metadata)?;
-            let opened = file.metadata().map_err(|e| e.to_string())?;
-            if !opened.is_file() || opened.len() > MAX_MANIFEST_BYTES {
-                return Err("Expected a bounded regular file".into());
-            }
-            let mut bytes = Vec::new();
-            file.take(MAX_MANIFEST_BYTES + 1)
-                .read_to_end(&mut bytes)
-                .map_err(|e| e.to_string())?;
-            if bytes.len() as u64 > MAX_MANIFEST_BYTES {
-                return Err("Manifest exceeds 65536 bytes".into());
+            let (mut file, opened) = open_manifest(&manifest_path, &metadata)?;
+            let bytes =
+                read_bytes(&mut file.by_ref().take(opened.len() + 1)).map_err(|e| e.to_string())?;
+            let finished = file.metadata().map_err(|e| e.to_string())?;
+            let named = fs::symlink_metadata(&manifest_path).map_err(|e| e.to_string())?;
+            if bytes.len() as u64 != opened.len()
+                || !same_manifest_generation(&opened, &finished)
+                || !same_manifest_generation(&opened, &named)
+            {
+                return Err("Runtime manifest changed during reading".into());
             }
             let ManifestValue(manifest) =
                 serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
@@ -296,6 +318,58 @@ mod tests {
         fs::rename(&path, root.join("previous")).unwrap();
         fs::write(&path, manifest().to_string()).unwrap();
         assert!(open_manifest(&path, &before).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn changed_manifest_during_read_refuses_runtime_resolution() {
+        use std::io::{Seek, SeekFrom, Write};
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = std::env::temp_dir().join(format!("dds-read-manifest-{}", std::process::id()));
+        fs::create_dir_all(root.join("python/bin")).unwrap();
+        let python = root.join("python/bin/python3");
+        fs::write(&python, b"synthetic interpreter").unwrap();
+        fs::set_permissions(&python, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(resolve_bundled_python_executable(&root).unwrap(), python);
+
+        let path = root.join("runtime-manifest.json");
+        let original = manifest().to_string() + " ";
+        for change in ["rewrite", "truncate", "replace"] {
+            fs::write(&path, &original).unwrap();
+            assert_eq!(resolve_bundled_python_executable(&root).unwrap(), python);
+            let result = resolve_with_manifest_reader(&root, |reader| {
+                let mut first_byte = [0];
+                reader.read_exact(&mut first_byte)?;
+                match change {
+                    "rewrite" => {
+                        let mut writer = fs::OpenOptions::new().write(true).open(&path)?;
+                        writer.seek(SeekFrom::End(-1))?;
+                        writer.write_all(b"\n")?;
+                        writer.set_modified(std::time::SystemTime::UNIX_EPOCH)?;
+                    }
+                    "truncate" => fs::OpenOptions::new()
+                        .write(true)
+                        .open(&path)?
+                        .set_len(original.len() as u64 - 1)?,
+                    "replace" => {
+                        let replacement = root.join("replacement.json");
+                        fs::write(&replacement, &original)?;
+                        fs::rename(replacement, &path)?;
+                    }
+                    _ => unreachable!(),
+                }
+                let mut bytes = first_byte.to_vec();
+                reader.read_to_end(&mut bytes)?;
+                Ok(bytes)
+            });
+            assert!(
+                matches!(&result, Err(error) if error.contains("Invalid runtime manifest")
+                    && error.contains("changed during reading")),
+                "{change}: {result:?}",
+            );
+        }
         fs::remove_dir_all(root).unwrap();
     }
 

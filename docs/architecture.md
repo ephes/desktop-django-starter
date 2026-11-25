@@ -229,6 +229,9 @@ Current staged backend contract:
   interpreter symlinks remain valid. Present invalid/future manifests refuse
   launch with an `Invalid runtime manifest` diagnostic; only absence enables
   legacy discovery, subject to the same interpreter checks.
+  Tauri reads through one open file handle and verifies the exact byte count
+  and that the file and its path still match the admitted generation before
+  parsing. Changes detected during the read stop startup with the same diagnostic.
 - Runtime materialization and the initial downloaded-runtime copy first walk
   the expanded source graph by real directory identities. Cycles, directory
   targets outside the runtime and special files refuse before copying. File

@@ -5,6 +5,9 @@
 - Refuse Positron startup when the profile lock is not a direct regular file
   or its path changes during acquisition.
 
+- Refuse Tauri packaged startup when the runtime manifest changes during the
+  read. A changed manifest produces the existing error without legacy discovery.
+
 - Show a restart dialog and exit when Positron loses its running local server.
   An intentional shutdown closes the listener quietly.
 
