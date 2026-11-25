@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refuse Positron startup when the profile lock is not a direct regular file
+  or its path changes during acquisition.
+
 - Show a restart dialog and exit when Positron loses its running local server.
   An intentional shutdown closes the listener quietly.
 

@@ -50,6 +50,11 @@ restart message. If the WSGI server stops after readiness, the server thread
 closes its listener and the UI shows a terminal error. Dismissing the dialog
 exits the app so it can be relaunched. A normal quit shows no service error.
 
+Positron requires a direct regular profile lock file. After taking the lock,
+it verifies that the lock path still names the opened file before writing the
+PID or starting Django. An unsafe or replaced lock stops startup with a
+restart message. Keep the lock file in place while the app is running.
+
 Lock acquisition and PID initialization failures close the opened handle and
 release any acquired lock. Shutdown also closes the handle when explicit unlock
 fails. Cleanup preserves the original failure, so a retained traceback does not

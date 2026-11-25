@@ -571,6 +571,45 @@ def running_positron_shell(positron_app_module, monkeypatch, tmp_path):
     return app
 
 
+@pytest.mark.skipif(os.name != "posix", reason="requires renaming an open lock file")
+def test_positron_refuses_startup_if_the_open_lock_is_replaced(
+    monkeypatch, positron_app_module, running_positron_shell
+) -> None:
+    from desktop_django_starter_positron import runtime
+
+    app = running_positron_shell
+    lock_path = runtime.instance_lock_path(app.paths.data)
+    retired = lock_path.with_suffix(".retired")
+    lock_path.write_bytes(b"old PID\n")
+    real_lock = runtime.locks.lock
+    handles = []
+
+    def replace_then_lock(handle, flags):
+        handles.append(handle)
+        lock_path.rename(retired)
+        lock_path.write_bytes(b"new lock\n")
+        return real_lock(handle, flags)
+
+    server_thread = Mock()
+    monkeypatch.setattr(runtime.locks, "lock", replace_then_lock)
+    monkeypatch.setattr(positron_app_module, "Thread", server_thread)
+
+    async def exercise():
+        app.startup()
+        try:
+            server_thread.assert_not_called()
+            with pytest.raises(OSError, match="instance lock changed"):
+                await app.server_ready
+            assert app._instance_lock is None
+            assert handles[0].closed
+            assert retired.read_bytes() == b"old PID\n"
+            assert lock_path.read_bytes() == b"new lock\n"
+        finally:
+            runtime.release_instance_lock(app._instance_lock)
+
+    asyncio.run(exercise())
+
+
 def test_positron_closes_listener_when_handler_setup_fails(
     monkeypatch, positron_app_module, running_positron_shell
 ) -> None:

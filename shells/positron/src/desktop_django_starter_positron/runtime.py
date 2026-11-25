@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import os
+import stat
 import sys
 from contextlib import suppress
 from pathlib import Path
@@ -90,15 +91,42 @@ def instance_lock_path(app_data_dir: Path) -> Path:
     return app_data_dir / POSITRON_INSTANCE_LOCK_FILENAME
 
 
+def _is_regular_lock(info: os.stat_result) -> bool:
+    return stat.S_ISREG(info.st_mode) and not (
+        getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+    )
+
+
+def _open_instance_lock(path: str, flags: int) -> int:
+    flags |= getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0)
+    return os.open(path, flags, 0o600)
+
+
 def acquire_instance_lock(app_data_dir: Path) -> BinaryIO | None:
     app_data_dir.mkdir(parents=True, exist_ok=True)
-    lock_file = instance_lock_path(app_data_dir).open("a+b")
+    path = instance_lock_path(app_data_dir)
+    try:
+        existing = path.lstat()
+    except FileNotFoundError:
+        pass
+    else:
+        if not _is_regular_lock(existing):
+            raise OSError("Positron instance lock must be a direct regular file")
+
+    lock_file = open(path, "a+b", opener=_open_instance_lock)
     acquired = False
     try:
+        opened = os.fstat(lock_file.fileno())
+        if not _is_regular_lock(opened):
+            raise OSError("Positron instance lock must be a direct regular file")
         acquired = locks.lock(lock_file, locks.LOCK_EX | locks.LOCK_NB)
         if not acquired:
             lock_file.close()
             return None
+
+        named = path.lstat()
+        if not _is_regular_lock(named) or not os.path.samestat(opened, named):
+            raise OSError("Positron instance lock changed during acquisition")
 
         lock_file.seek(0)
         lock_file.truncate()

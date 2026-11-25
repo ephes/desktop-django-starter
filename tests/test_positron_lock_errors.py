@@ -46,13 +46,12 @@ class FailingHandle:
 def test_acquisition_error_closes_handle_and_preserves_error(
     tmp_path, monkeypatch, runtime, failure, cleanup_error
 ):
-    real_open = Path.open
     real_lock = runtime.locks.lock
     handles = []
     unlock_calls = []
 
     def open_handle(path, *args, **kwargs):
-        handle = FailingHandle(real_open(path, *args, **kwargs), failure, cleanup_error)
+        handle = FailingHandle(open(path, *args, **kwargs), failure, cleanup_error)
         handles.append(handle)
         return handle
 
@@ -76,7 +75,7 @@ def test_acquisition_error_closes_handle_and_preserves_error(
         return real_unlock(handle)
 
     with monkeypatch.context() as patch:
-        patch.setattr(Path, "open", open_handle)
+        patch.setattr(runtime, "open", open_handle, raising=False)
         patch.setattr(runtime.locks, "lock", lock)
         patch.setattr(runtime.locks, "unlock", unlock)
         with pytest.raises(OSError, match=f"injected {failure}") as error:
