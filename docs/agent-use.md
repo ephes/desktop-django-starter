@@ -76,6 +76,12 @@ flags, saved config, then auto-detect when exactly one supported harness is
 installed. If no config exists yet and stdin is a TTY, `wrap --run` launches
 the same setup flow inline. Non-interactive runs never prompt; if the harness
 is ambiguous they fail and point to `dds init` or `--harness`.
+A config file that disappears before it can be opened follows the same missing
+config flow. Other read failures stop harness resolution and report the path.
+
+On Unix-like systems, both commands use `$XDG_CONFIG_HOME/dds/config.toml`
+when `XDG_CONFIG_HOME` is absolute. An unset, empty, or relative value selects
+`~/.config/dds/config.toml` regardless of the working directory.
 
 When using the `claude` harness, current `dds` builds stream concise progress
 while the agent works. Successfully decoded JSON records that are not objects

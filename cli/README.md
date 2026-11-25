@@ -29,7 +29,9 @@ dds wrap --run --harness pi --model openai-codex/gpt-6.2-sol
 Interactive first-run setup for wrapper defaults. It detects installed
 supported harnesses (`claude`, `pi`, `codex`), lets you pick one default
 harness, optionally saves a freeform default model string, and writes
-user-level config under `~/.config/dds/config.toml` on Unix-like systems.
+user-level config. On Unix-like systems, an absolute `XDG_CONFIG_HOME` places
+it at `$XDG_CONFIG_HOME/dds/config.toml`. If the variable is unset, empty, or
+relative, DDS uses `~/.config/dds/config.toml`.
 
 ### `dds wrap`
 
@@ -41,6 +43,9 @@ config, then auto-detect when exactly one supported harness is installed. If no
 config exists yet and stdin is a TTY, `wrap --run` launches the same setup flow
 inline. Non-interactive runs never prompt; when the harness is ambiguous they
 fail with a message that points to `dds init` or `--harness`.
+A config file that disappears before it can be opened is treated as missing.
+Other read failures, such as permission errors, stop harness resolution and
+report the config path.
 
 When using the `claude` harness, `--run` streams concise progress lines while
 Claude works. Older `dds` builds delegated to Claude's default text output,
