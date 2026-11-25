@@ -268,8 +268,9 @@ Current launcher contract:
   links and success redirects accept only positive page numbers written with up
   to 19 ASCII digits. Missing or invalid values return to the first page.
   Accepted values clamp to the current last page, using the new count after a
-  successful mutation. The release modal follows that redirect, and Release All
-  Ponies returns to the first page.
+  successful mutation. If the count fails after a pony is saved during creation,
+  the success redirect opens the first page. The release modal follows its
+  success redirect, and Release All Ponies returns to the first page.
 - Edit and release requests carry a signed digest of the displayed pony's ID,
   editable content and update timestamp. SQLite's writer lock is acquired before
   reloading and comparing that revision, and is held through save/delete. Missing,

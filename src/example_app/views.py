@@ -1,7 +1,7 @@
 from contextlib import contextmanager
 
 from django.core.paginator import Paginator
-from django.db import transaction
+from django.db import DatabaseError, transaction
 from django.http import HttpResponseRedirect, JsonResponse
 from django.urls import reverse_lazy
 from django.views.decorators.http import require_POST
@@ -88,6 +88,15 @@ class ItemCreateView(ItemReturnNavigation, CreateView):
     form_class = ItemForm
     model = Item
     success_url = reverse_lazy("example_app:item-list")
+
+    def form_valid(self, form):
+        self.object = form.save()
+        try:
+            return_url = self.get_success_url()
+        except DatabaseError:
+            # The pony is already saved. Page counting only refines navigation.
+            return_url = str(self.success_url)
+        return HttpResponseRedirect(return_url)
 
 
 class ItemUpdateView(ItemReturnNavigation, UpdateView):

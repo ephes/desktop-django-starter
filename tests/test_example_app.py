@@ -1,5 +1,7 @@
 import pytest
 from django.core.management import call_command
+from django.core.paginator import Paginator
+from django.db import OperationalError, connection
 from django.urls import reverse
 
 from example_app.demo_content import FIRST_RUN_PONIES
@@ -46,6 +48,25 @@ def test_item_create_returns_to_displayed_page(client):
         {"title": "New pony", "notes": "Synthetic", "status": Item.Status.ACTIVE},
     )
     assert response.url == reverse("example_app:item-list") + "?page=2"
+
+
+@pytest.mark.django_db(transaction=True)
+def test_item_create_redirects_when_return_page_count_fails(client, monkeypatch):
+    def fail_page_count(paginator):
+        assert connection.get_autocommit()
+        assert Item.objects.get().title == "New pony"
+        raise OperationalError("Synthetic return page count failure")
+
+    monkeypatch.setattr(Paginator, "num_pages", property(fail_page_count))
+    client.raise_request_exception = False
+    response = client.post(
+        reverse("example_app:item-create") + "?page=2",
+        {"title": "New pony", "notes": "Synthetic", "status": Item.Status.ACTIVE},
+    )
+
+    assert Item.objects.count() == 1
+    assert response.status_code == 302
+    assert response.url == reverse("example_app:item-list")
 
 
 def test_seed_demo_content_seeds_brand_new_database() -> None:

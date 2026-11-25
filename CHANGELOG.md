@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Redirect to My Ponies after a successful create if counting pages for the
+  numbered return link fails.
+
 - Preserve the CLI asset publication result when explicit Windows unlock fails.
   Close the lock handle and report the unlock failure alongside that result.
 
