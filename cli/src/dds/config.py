@@ -82,8 +82,9 @@ def default_config_path() -> Path:
         appdata = os.environ.get("APPDATA")
         base = Path(appdata) if appdata else Path.home() / "AppData" / "Roaming"
     else:
-        xdg_config_home = os.environ.get("XDG_CONFIG_HOME")
-        base = Path(xdg_config_home) if xdg_config_home else Path.home() / ".config"
+        base = Path(os.environ.get("XDG_CONFIG_HOME", ""))
+        if not base.is_absolute():
+            base = Path.home() / ".config"
     return base / "dds" / "config.toml"
 
 
@@ -102,11 +103,10 @@ def detect_installed_harnesses(
 def load_wrapper_config(path: Path | None = None) -> WrapperConfig | None:
     """Load wrapper defaults from disk, if present."""
     resolved_path = path or default_config_path()
-    if not resolved_path.exists():
-        return None
-
     try:
         content: str = _retry_sharing_violation(lambda: resolved_path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return None
     except (OSError, UnicodeError) as exc:
         raise ConfigError(f"Could not read {resolved_path}: {exc}") from exc
 

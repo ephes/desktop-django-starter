@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Treat wrapper config that disappears before opening as missing and report
+  other read failures with the config path.
+
+- Use an absolute `XDG_CONFIG_HOME` for wrapper config on Unix-like systems.
+  Fall back to `~/.config/dds/config.toml` for unset, empty, or relative values.
+
 - Cap packaged media migration at 64 directory levels below the media root.
   Deeper trees fail before publication and leave the predecessor available.
 

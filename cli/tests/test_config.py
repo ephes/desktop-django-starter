@@ -2,10 +2,33 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from threading import Barrier
+from types import SimpleNamespace
 
 import pytest
 from dds import config as config_module
 from dds.config import ConfigError, WrapperConfig, load_wrapper_config, save_wrapper_config
+
+
+def test_relative_xdg_config_home_uses_one_user_config(tmp_path, monkeypatch, isolated_user_dirs):
+    init_dir = tmp_path / "init"
+    wrap_dir = tmp_path / "wrap"
+    init_dir.mkdir()
+    wrap_dir.mkdir()
+    # Exercise the Unix branch without changing pathlib's host flavour.
+    monkeypatch.setattr(config_module, "os", SimpleNamespace(name="posix", environ=os.environ))
+    monkeypatch.setenv("XDG_CONFIG_HOME", "local-config")
+    config = WrapperConfig("codex", "saved-model")
+
+    monkeypatch.chdir(init_dir)
+    saved_path = save_wrapper_config(config)
+
+    monkeypatch.chdir(wrap_dir)
+    explicit_path = Path("local-config/dds/config.toml")
+    other_config = WrapperConfig("pi")
+    assert save_wrapper_config(other_config, explicit_path) == explicit_path
+    assert load_wrapper_config(explicit_path) == other_config
+    assert load_wrapper_config() == config
+    assert saved_path == isolated_user_dirs / "home" / ".config" / "dds" / "config.toml"
 
 
 def test_concurrent_saves_use_unique_closed_sibling_files(tmp_path, monkeypatch):
@@ -103,6 +126,24 @@ def test_load_retries_read_after_transient_sharing_violation(tmp_path, monkeypat
 
     assert load_wrapper_config(destination) == WrapperConfig("codex", "original")
     assert attempts == [destination] * 3
+
+
+def test_config_disappearing_at_open_is_treated_as_missing(tmp_path, monkeypatch):
+    destination = tmp_path / "config.toml"
+    config = WrapperConfig("codex", "original")
+    save_wrapper_config(config, destination)
+    assert load_wrapper_config(destination) == config
+    original_open = Path.open
+
+    def open_after_removal(path, *args, **kwargs):
+        if path == destination:
+            path.unlink()
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", open_after_removal)
+
+    assert load_wrapper_config(destination) is None
+    assert not destination.exists()
 
 
 @pytest.mark.parametrize("delays", [(), (0, 0)])
