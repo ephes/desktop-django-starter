@@ -13,29 +13,37 @@ function artifact(root, name, platform) {
   return target;
 }
 
+async function smokeFixtures(platform) {
+  const { snapshotBundleArtifacts, changedArtifacts, resolveSmokeBinary } = await helpers;
+  const snapshot = roots => snapshotBundleArtifacts(roots, { platform, smokeTest: true });
+  const resolve = (roots, before) => resolveSmokeBinary(changedArtifacts(before, snapshot(roots)), roots, platform);
+  return { snapshot, resolve };
+}
+
 for (const platform of ['darwin', 'linux']) {
   test(`only the changed ${platform} artifact is smoked; ambiguity and stale-only fail`, async () => {
-    const { snapshotArtifacts, resolveSmokeBinary } = await helpers;
+    const { snapshot, resolve } = await smokeFixtures(platform);
     const root = fixture();
     try {
       artifact(root, 'a-stale', platform);
       artifact(root, 'b-stale', platform);
-      const before = snapshotArtifacts(root, platform);
-      assert.throws(() => resolveSmokeBinary(root, before, platform), /current|changed/i);
+      const before = snapshot(root);
+      assert.throws(() => resolve(root, before), /current|changed/i);
       const current = artifact(root, 'z-current', platform);
-      assert.equal(resolveSmokeBinary(root, before, platform).command, current);
+      assert.equal(resolve(root, before).command, current);
       artifact(root, 'y-ambiguous', platform);
-      assert.throws(() => resolveSmokeBinary(root, before, platform), /ambiguous/i);
-      const prior = snapshotArtifacts(root, platform);
+      assert.throws(() => resolve(root, before), /ambiguous/i);
+      const prior = snapshot(root);
       fs.appendFileSync(current, 'rebuilt');
-      assert.equal(resolveSmokeBinary(root, prior, platform).command, current);
+      assert.equal(resolve(root, prior).command, current);
       assert.ok(fs.existsSync(path.join(root, 'a-stale' + (platform === 'darwin' ? '.app' : '.AppImage'))));
     } finally { fs.rmSync(root, { recursive: true, force: true }); }
   });
 }
 
 test('smoke snapshots share a walk limit across discovery and bundle fingerprints', async t => {
-  const { snapshotArtifacts, resolveSmokeBinary, buildOutputRoots } = await helpers;
+  const { buildOutputRoots } = await helpers;
+  const { snapshot, resolve } = await smokeFixtures('darwin');
   const root = fixture();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   artifact(root, 'a-stale', 'darwin');
@@ -55,24 +63,24 @@ test('smoke snapshots share a walk limit across discovery and bundle fingerprint
     return {
       readSync() {
         reads++;
-        return remaining-- > 0 ? { name: 'ignored', isDirectory: () => false } : null;
+        return remaining-- > 0 ? { name: 'ignored', isDirectory: () => false, isFile: () => true } : null;
       },
       closeSync() { closes++; },
     };
   });
   const stat = t.mock.method(fs, 'lstatSync');
 
-  const before = snapshotArtifacts(root, 'darwin');
+  const before = snapshot(root);
   assert.deepEqual([...before.keys()], [path.join(root, 'a-stale.app'), path.join(root, 'nested/z-current.app')]);
   assert.equal(reads, extraEntries + 1);
   assert.equal(stat.mock.callCount(), 8);
-  assert.throws(() => resolveSmokeBinary(root, before, 'darwin'), /no current changed/i);
+  assert.throws(() => resolve(root, before), /no current changed/i);
   fs.appendFileSync(current, 'rebuilt');
-  assert.equal(resolveSmokeBinary(root, before, 'darwin').command, current);
+  assert.equal(resolve(root, before).command, current);
 
   extraEntries++;
   stat.mock.resetCalls();
-  assert.throws(() => snapshotArtifacts(root, 'darwin'), /entry limit.*100000/i);
+  assert.throws(() => snapshot(root), /entry limit.*100000/i);
   assert.ok(stat.mock.callCount() < 8);
 
   extraEntries = entryLimit + 1000;
@@ -84,7 +92,7 @@ test('smoke snapshots share a walk limit across discovery and bundle fingerprint
 });
 
 test('smoke rejects too many candidates across roots before fingerprinting', async t => {
-  const { snapshotArtifacts } = await helpers;
+  const { snapshot } = await smokeFixtures('linux');
   const root = fixture();
   t.after(() => fs.rmSync(root, { recursive: true, force: true }));
   const roots = [path.join(root, 'b'), path.join(root, 'a')];
@@ -92,11 +100,11 @@ test('smoke rejects too many candidates across roots before fingerprinting', asy
     for (let index = 0; index < 64; index++) artifact(dir, String(index), 'linux');
   }
   const stat = t.mock.method(fs, 'lstatSync');
-  assert.equal(snapshotArtifacts(roots, 'linux').size, 128);
+  assert.equal(snapshot(roots).size, 128);
   assert.equal(stat.mock.callCount(), 128);
   artifact(roots[1], 'extra', 'linux');
   stat.mock.resetCalls();
-  assert.throws(() => snapshotArtifacts(roots, 'linux'), /candidate limit.*128/i);
+  assert.throws(() => snapshot(roots), /candidate limit.*128/i);
   assert.equal(stat.mock.callCount(), 0);
 });
 
@@ -251,16 +259,17 @@ test('successful smoke leader cannot leave its owned child running', { skip: pro
 });
 
 test('Cargo configured target output is observed without admitting stale other targets', async () => {
-  const { buildOutputRoots, snapshotArtifacts, resolveSmokeBinary } = await helpers;
+  const { buildOutputRoots } = await helpers;
+  const { snapshot, resolve } = await smokeFixtures('linux');
   const root = fixture();
   try {
     const options = { targetDirectory: root, profile: 'release' };
     artifact(path.join(root, 'old-triple/release/bundle'), 'old', 'linux');
-    const before = snapshotArtifacts(buildOutputRoots(options), 'linux');
+    const before = snapshot(buildOutputRoots(options));
     const current = artifact(path.join(root, 'configured-triple/release/bundle'), 'current', 'linux');
-    assert.equal(resolveSmokeBinary(buildOutputRoots(options), before, 'linux').command, current);
+    assert.equal(resolve(buildOutputRoots(options), before).command, current);
     const explicit = { ...options, target: 'old-triple' };
-    assert.throws(() => resolveSmokeBinary(buildOutputRoots(explicit), before, 'linux'), /current|changed/i);
+    assert.throws(() => resolve(buildOutputRoots(explicit), before), /current|changed/i);
     // A stray non-triple directory in a shared target dir is skipped, not fatal.
     fs.mkdirSync(path.join(root, 'shared cache+tmp'));
     assert.ok(buildOutputRoots(options).every(entry => !entry.includes('shared cache+tmp')));
@@ -332,6 +341,47 @@ for (const [name, cargoBody, diagnostic] of [
   });
 }
 
+test('build wrapper rejects invalid Cargo target-directory metadata before staging', { skip: process.platform === 'win32' }, t => {
+  const { spawnSync } = require('node:child_process');
+  const fixtures = [
+    ['missing field', '{}'], ['relative path', '{"target_directory":"relative/target"}'],
+    ['empty path', '{"target_directory":""}'], ['numeric path', '{"target_directory":1}'],
+    ['null metadata', 'null'], ['array metadata', '[]'], ['invalid JSON', '{'],
+  ];
+  for (const [name, stdout] of fixtures) {
+    const root = fixture();
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const staged = path.join(root, 'staged');
+    const { entry, env } = stubBuild(root, path.join(root, 'built'), '', {
+      cargoBody: `console.log(${JSON.stringify(stdout)});`,
+      stageBody: `require('node:fs').writeFileSync(${JSON.stringify(staged)}, 'staged');`,
+    });
+    const result = spawnSync(process.execPath, [entry], { env, encoding: 'utf8', timeout: 5000 });
+    assert.ifError(result.error);
+    assert.equal(fs.existsSync(staged), false, name);
+    assert.equal(result.status, 1, name);
+    assert.match(result.stderr, /Cargo metadata.*target_directory.*absolute path/i, name);
+  }
+});
+
+test('an explicit Cargo target directory takes precedence over unusable metadata', { skip: process.platform === 'win32' }, t => {
+  const { spawnSync } = require('node:child_process');
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, 'explicit-target');
+  const output = path.join(target, 'release/bundle', process.platform === 'darwin' ? 'macos' : 'appimage');
+  const current = artifact(output, 'override', process.platform);
+  const { entry, env } = stubBuild(root, current, 'synthetic rebuild', {
+    cargoBody: 'console.log("{}");',
+  });
+  const result = spawnSync(process.execPath, [entry, '--', '--target-dir', target], {
+    env, encoding: 'utf8', timeout: 5000,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Built Tauri artifacts:[\s\S]*explicit-target[\s\S]*override/);
+});
+
 for (const buildArgs of [
   [],
   ['--debug', '--target', 'synthetic-triple'],
@@ -361,6 +411,54 @@ for (const buildArgs of [
     assert.doesNotMatch(result.stdout, /a-stale/);
     if (smoke) assert.equal(fs.readFileSync(marker, 'utf8'), 'current');
     else assert.equal(fs.existsSync(marker), false);
+  });
+}
+
+for (const change of ['replace', 'add']) {
+  test(`build wrapper handles artifact ${change} after reporting its inventory`, { skip: process.platform === 'win32' }, t => {
+    const { spawnSync } = require('node:child_process');
+    const root = fixture();
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const output = path.join(root, 'custom-target/release/bundle', process.platform === 'darwin' ? 'macos' : 'appimage');
+    const current = artifact(output, 'current', process.platform);
+    const marker = path.join(root, 'ran');
+    const program = value => '#!' + process.execPath + '\n'
+      + `require('node:fs').writeFileSync(${JSON.stringify(marker)}, '${value}');\n`;
+    const { entry, env } = stubBuild(root, current, program('built'));
+    const other = path.join(root, 'other');
+    fs.writeFileSync(other, program('replacement'), { mode: 0o755 });
+    const destination = change === 'replace' ? current : current.replace('current.', 'late.');
+
+    // Mutate synchronously after the inventory has been taken, just as its first
+    // artifact is reported. No scheduling assumptions about a competing writer.
+    const preload = path.join(root, 'on-report.cjs');
+    fs.writeFileSync(preload, `
+      const fs = require('node:fs');
+      const path = require('node:path');
+      const write = process.stdout.write;
+      process.stdout.write = function (chunk, ...args) {
+        if (chunk === 'Built Tauri artifacts:\\n') {
+          const destination = ${JSON.stringify(destination)};
+          fs.mkdirSync(path.dirname(destination), { recursive: true });
+          fs.renameSync(${JSON.stringify(other)}, destination);
+        }
+        return write.call(this, chunk, ...args);
+      };
+    `);
+    const result = spawnSync(process.execPath, ['--require', preload, entry, '--smoke-test'], {
+      env, encoding: 'utf8', timeout: 10000,
+    });
+    assert.ifError(result.error);
+    assert.match(result.stdout, /Built Tauri artifacts:[\s\S]*current/);
+    assert.doesNotMatch(result.stdout, /late\.(app|AppImage)/);
+    if (change === 'replace') {
+      assert.equal(fs.existsSync(marker), false, 'the replacement must never launch');
+      assert.equal(result.status, 1, result.stderr);
+      assert.match(result.stderr, /Tauri smoke artifact generation changed/);
+    } else {
+      assert.equal(result.status, 0, result.stderr);
+      assert.equal(fs.readFileSync(marker, 'utf8'), 'built');
+    }
   });
 }
 

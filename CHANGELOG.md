@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Use one Tauri artifact inventory for build reporting and smoke selection.
+  Refuse to launch a smoke bundle whose generation changed before execution.
+
+- Require an absolute `target_directory` in Cargo metadata before staging a
+  Tauri build. A forwarded `--target-dir` still takes precedence.
+
 - Fail Tauri packaged smoke when the executable's exit is observed at or after
   the monotonic runtime deadline.
 

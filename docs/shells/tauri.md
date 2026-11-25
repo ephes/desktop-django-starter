@@ -80,6 +80,11 @@ Cargo metadata has a 60-second deadline before backend staging starts. Set
 to adjust this preflight. On timeout, check for a stuck Cargo process or wrapper
 before retrying.
 
+Without a forwarded `--target-dir`, the wrapper requires a Cargo metadata JSON
+object with an absolute `target_directory` path and rejects invalid output before
+artifact discovery or backend staging. A forwarded `--target-dir` takes precedence
+over the metadata output after the Cargo command succeeds.
+
 ## Current-build packaged smoke
 
 `npm --prefix shells/tauri run smoke:build` stages and builds normally, then
@@ -94,13 +99,16 @@ Cargo `build.target`, host and target subdirectories are observed and only the
 single changed bundle is admitted. Existing unrelated bundles remain untouched;
 directories whose names are not target triples (for example in a shared target
 directory) are skipped. The build wrapper compares metadata fingerprints before
-and after building and lists new or changed bundles. It prints the Windows NSIS
-checklist for a single changed NSIS installer and fails on multiple changed
-NSIS installers.
-No changed bundle, multiple changed bundles or multiple executable files in a
-macOS app fail before launch. Run builds exclusively in that target directory;
-concurrent builds cannot provide trustworthy smoke evidence. Windows installers
-still require manual installed-app validation.
+and after building. One post-build inventory supplies both the list of changed
+bundles and the runnable smoke candidate. The wrapper verifies the chosen bundle's
+fingerprint just before launch and fails if that generation changed or cannot be
+verified. Bundles that appear after the inventory are ineligible for that smoke.
+The wrapper prints the Windows NSIS checklist for a single changed NSIS
+installer and fails on multiple changed NSIS installers.
+The smoke fails before launch if there are zero or multiple changed runnable
+bundles, or if a macOS app lacks exactly one executable. Run builds exclusively
+in that target directory. Concurrent builds cannot provide trustworthy smoke
+evidence. Windows installers still require manual installed-app validation.
 
 Each artifact snapshot shares a 100,000-entry budget across bundle discovery and
 metadata fingerprinting, including root probes and entries revisited during

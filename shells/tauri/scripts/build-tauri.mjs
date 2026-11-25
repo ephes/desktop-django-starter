@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { constants } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildOutputRoots, changedArtifacts, snapshotBundleArtifacts, snapshotArtifacts, resolveSmokeBinary, runPackagedSmoke, smokeTimeout } from "./packaged-smoke.mjs";
+import { buildOutputRoots, changedArtifacts, snapshotBundleArtifacts, resolveSmokeBinary, runPackagedSmoke, smokeTimeout } from "./packaged-smoke.mjs";
 
 const tauriRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = path.resolve(tauriRoot, "..", "..");
@@ -70,22 +70,6 @@ function run(command, args, options = {}) {
   }
 }
 
-function matchesBuildArtifact(name, entry, root) {
-  if (process.platform === "darwin") {
-    return (entry.isFile() && name.startsWith(path.join(root, "dmg") + path.sep) && name.endsWith(".dmg"))
-      || (entry.isDirectory() && name.startsWith(path.join(root, "macos") + path.sep) && name.endsWith(".app"));
-  }
-
-  if (process.platform === "win32") {
-    return entry.isFile() && (
-      (name.includes(`${path.sep}nsis${path.sep}`) && name.endsWith(".exe"))
-      || (name.includes(`${path.sep}msi${path.sep}`) && name.endsWith(".msi"))
-    );
-  }
-
-  return process.platform === "linux" && entry.isFile() && name.endsWith(".AppImage");
-}
-
 function printWindowsValidationChecklist(artifacts) {
   if (process.platform !== "win32") return;
   const installers = artifacts.filter(name => name.endsWith(".exe"));
@@ -126,6 +110,23 @@ function argumentValue(name, short) {
   }
   return values[0];
 }
+
+function cargoTargetDirectory(stdout) {
+  const message = 'Expected Cargo metadata JSON object with target_directory set to an absolute path';
+  let metadata;
+  try {
+    metadata = JSON.parse(stdout);
+  } catch {
+    throw new Error(message);
+  }
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)
+    || typeof metadata.target_directory !== 'string' || !path.isAbsolute(metadata.target_directory)
+    || metadata.target_directory.includes('\0')) {
+    throw new Error(message);
+  }
+  return metadata.target_directory;
+}
+
 const metadataTimeoutMs = Number(process.env.DESKTOP_DJANGO_CARGO_METADATA_TIMEOUT_MS ?? 60000);
 if (!Number.isSafeInteger(metadataTimeoutMs) || metadataTimeoutMs < 1 || metadataTimeoutMs > 600000) {
   throw new Error('DESKTOP_DJANGO_CARGO_METADATA_TIMEOUT_MS must be 1..600000');
@@ -147,23 +148,23 @@ const profile = argumentValue('--profile') || (buildArgs.includes('--debug') || 
 const runnerTargetDir = argumentValue('--target-dir');
 const layout = { tauriRoot,
   targetDirectory: runnerTargetDir ? path.resolve(tauriRoot, 'src-tauri', runnerTargetDir)
-    : JSON.parse(metadata.stdout).target_directory,
+    : cargoTargetDirectory(metadata.stdout),
   target: argumentValue('--target', '-t') || process.env.CARGO_BUILD_TARGET,
   profile };
 const bundleRoots = buildOutputRoots(layout);
 const timeoutMs = smokeTest ? smokeTimeout() : undefined;
-const beforeBuild = snapshotBundleArtifacts(bundleRoots, matchesBuildArtifact);
-const beforeSmoke = smokeTest ? snapshotArtifacts(bundleRoots) : null;
+const beforeBuild = snapshotBundleArtifacts(bundleRoots, { smokeTest });
 
 run(npmCommand, ["run", "stage-backend"], { cwd: tauriRoot });
 run(tauriBinary, ["build", ...buildArgs], { cwd: tauriRoot, env: process.env });
 // Re-evaluate roots after the build to admit a newly created configured target.
 const currentRoots = buildOutputRoots(layout);
-const changed = changedArtifacts(beforeBuild, snapshotBundleArtifacts(currentRoots, matchesBuildArtifact));
+const changed = changedArtifacts(beforeBuild, snapshotBundleArtifacts(currentRoots, { smokeTest }));
+const changedPaths = [...changed.keys()];
 const preferredExtension = process.platform === "darwin" ? ".dmg" : ".exe";
 const builtArtifacts = [
-  ...changed.filter(name => name.endsWith(preferredExtension)),
-  ...changed.filter(name => !name.endsWith(preferredExtension)),
+  ...changedPaths.filter(name => name.endsWith(preferredExtension)),
+  ...changedPaths.filter(name => !name.endsWith(preferredExtension)),
 ];
 if (builtArtifacts.length > 0) {
   process.stdout.write("Built Tauri artifacts:\n");
@@ -171,14 +172,14 @@ if (builtArtifacts.length > 0) {
 }
 printWindowsValidationChecklist(builtArtifacts);
 if (smokeTest) {
-  const smokeBinary = resolveSmokeBinary(currentRoots, beforeSmoke);
+  const smokeBinary = resolveSmokeBinary(changed, currentRoots);
   const controller = new AbortController();
   const interrupt = signal => controller.abort(signal);
   process.on("SIGINT", interrupt);
   process.on("SIGTERM", interrupt);
   try {
     await runPackagedSmoke(smokeBinary.command, smokeBinary.args, {
-      timeoutMs, signal: controller.signal, cwd: repoRoot,
+      artifact: smokeBinary.artifact, timeoutMs, signal: controller.signal, cwd: repoRoot,
       env: { ...process.env, DESKTOP_DJANGO_SMOKE_TEST: "1" }
     });
   } catch (error) {
