@@ -302,6 +302,51 @@ def test_success_replaces_stale_assets(asset_tree: tuple[Path, Path]) -> None:
     assert set(assets.parent.iterdir()) == {assets, assets.parent / ".assets-sync-lock"}
 
 
+@pytest.mark.parametrize("change", ["replace", "truncate"])
+def test_recovery_refuses_marker_changed_before_open(
+    asset_tree: tuple[Path, Path], monkeypatch: pytest.MonkeyPatch, change: str
+) -> None:
+    _, assets = asset_tree
+    work = assets.parent / ".assets-sync-abandoned"
+    staged = work / "staged"
+    staged.mkdir(parents=True)
+    (staged / "new.txt").write_bytes(b"staged assets")
+    marker = assets.parent / ASSET_MARKER
+    backup = work / "previous"
+    mark_asset_replacement(assets, work)
+    assets.rename(backup)
+
+    record = marker.read_bytes()
+    if change == "replace":
+        replacement = assets.parent / "replacement"
+        replacement.write_bytes(record)
+    else:
+        marker.write_bytes(record + b"x")
+    lstat = Path.lstat
+    changed = False
+
+    def change_after_observation(path: Path) -> os.stat_result:
+        nonlocal changed
+        info = lstat(path)
+        if path == marker and not changed:
+            changed = True
+            if change == "replace":
+                replacement.replace(marker)
+            else:
+                marker.write_bytes(record)
+        return info
+
+    before = tree_bytes(work)
+    with monkeypatch.context() as patch, asset_lock(assets.parent):
+        patch.setattr(Path, "lstat", change_after_observation)
+        with pytest.raises(RuntimeError, match="Cannot reconcile pending asset replacement"):
+            recover_asset_replacement(assets)
+    assert changed
+    assert marker.read_bytes() == record
+    assert not assets.exists()
+    assert tree_bytes(work) == before
+
+
 @pytest.mark.skipif(os.name == "nt", reason="POSIX barrier")
 @pytest.mark.parametrize("operation", ["publish", "restore", "rollback"])
 def test_namespace_barrier_failure_preserves_recoverable_generations(

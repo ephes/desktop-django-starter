@@ -187,8 +187,10 @@ recovery flush the selected directory entry before removing the journal, then
 flush the journal removal before discarding the work directory. A failed
 namespace flush keeps the recorded generations and journal available for retry.
 If the flush after journal removal fails, the work directory remains available
-in case the journal reappears after restart. An ambiguous marker or directory
-stops the operation. Inspect the retained paths with syncs and builds stopped.
+in case the journal reappears after restart. Recovery reads only from the
+opened regular marker file and verifies its identity and length before applying
+the record. A changed marker, a reparse point, or ambiguous directory identities
+stop recovery. Inspect the retained paths with syncs and builds stopped.
 Git and the build configuration exclude the lock, marker and work directories.
 If old-tree cleanup fails after publication, sync reports the cleanup failure
 and keeps the complete new bundle live.
