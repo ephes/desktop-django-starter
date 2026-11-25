@@ -203,6 +203,36 @@ def test_media_copy_refuses_uncontained_or_over_budget_tree(monkeypatch, tmp_pat
     ) == ["1.0.0"]
 
 
+def test_media_depth_override_is_capped(monkeypatch, tmp_path_factory):
+    app_data = tmp_path_factory.mktemp("d")
+    old = previous(app_data)
+    media = old / "media"
+    supported = media.joinpath(*(["d"] * 64))
+    too_deep = supported / "d"
+    too_deep.mkdir(parents=True)
+    upload = supported / "u"
+    upload.write_bytes(b"synthetic media")
+    marker = old / "state.json"
+    database = old / "app.sqlite3"
+    original_marker = marker.read_bytes()
+    original_database = database.read_bytes()
+    monkeypatch.setenv("DESKTOP_DJANGO_MEDIA_MAX_DEPTH", "10000")
+
+    with pytest.raises(ImproperlyConfigured, match="media tree refused") as caught:
+        app_state.prepare_versioned_state(app_data, "2.0.0")
+
+    assert "media depth budget exceeded" in str(caught.value.__cause__)
+    assert sorted(p.name for p in old.parent.iterdir()) == [".initialize.lock", "1.0.0"]
+    assert marker.read_bytes() == original_marker
+    assert database.read_bytes() == original_database
+    assert upload.read_bytes() == b"synthetic media"
+    assert too_deep.is_dir()
+
+    too_deep.rmdir()
+    upgraded = app_state.prepare_versioned_state(app_data, "2.0.0")
+    assert (upgraded / "media" / upload.relative_to(media)).read_bytes() == b"synthetic media"
+
+
 def test_short_media_write_does_not_publish_generation(monkeypatch, tmp_path):
     old = previous(tmp_path)
     upload = old / "media" / "upload"

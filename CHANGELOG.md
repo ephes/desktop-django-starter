@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Cap packaged media migration at 64 directory levels below the media root.
+  Deeper trees fail before publication and leave the predecessor available.
+
+- Reject nonfinite numbers in packaged completion and stage-owner JSON markers,
+  including nested metadata and exponent overflow.
+
 - Refuse packaged startup when the secret key path is removed or replaced
   during admission. Concurrent first starts still use the published key.
 

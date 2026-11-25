@@ -496,6 +496,8 @@ format; it does not claim that migrations have completed or inspect DB schema.
 Both completion and stage-owner markers use one bounded JSON object reader
 (16 KiB and 4 KiB respectively). Duplicate decoded member names are rejected at
 every object depth, including identical values and escaped name spellings.
+Both readers also reject nonstandard numeric constants and floats that decode
+to infinity. Completion markers can still include ordinary JSON metadata.
 A repeated claim cannot authorize reuse, predecessor copying or stage deletion.
 Malformed/missing markers and incomplete restored layouts stop startup without
 replacing the generation. The selected predecessor (the newest older version
@@ -519,11 +521,12 @@ System parent aliases such as macOS `/tmp` are allowed.
 
 Media copies stream a direct tree and refuse all links (including internal
 links), special files and hard-linked files. Limits count both directories and
-files, bytes read from the admitted sources and depth (root is zero). Each
-file is read only to its initial size. Early EOF and short destination writes
-fail the copy before the staged tree is synced. Admission, opened-descriptor
-and final named-file metadata must agree on device/inode, size, nanosecond
-mtime and ctime.
+files, bytes read from the admitted sources and depth (root is zero). The media
+depth override is capped at 64. This bounds the recursive copy, sync and cleanup
+walks. Each file is read only to its initial size. Early EOF and short
+destination writes fail the copy before the staged tree is synced. Admission,
+opened-descriptor and final named-file metadata must agree on device/inode,
+size, nanosecond mtime and ctime.
 Detected in-place edits, growth, truncation or replacement refuse publication.
 After copying media, startup backs up SQLite, then checks each visited directory
 and copied file again for matching identity, size, mtime and ctime. This detects

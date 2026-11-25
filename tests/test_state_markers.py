@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
-from desktop_django_starter import app_state, state_staging
+from desktop_django_starter import app_state, state_markers, state_staging
 
 
 def snapshot(root: Path):
@@ -81,6 +81,53 @@ def test_nested_duplicate_completion_members_refuse(tmp_path, extra):
     with pytest.raises(ImproperlyConfigured, match="completion marker"):
         app_state.prepare_versioned_state(tmp_path, "1.0.0")
     assert snapshot(state) == before
+
+
+@pytest.mark.parametrize("number", ["NaN", "Infinity", "-Infinity", "1e400", "-1e400"])
+def test_nonfinite_completion_marker_extension_refuses_reuse(tmp_path, number):
+    state = app_state.prepare_versioned_state(tmp_path, "1.0.0")
+    marker = state / "state.json"
+    marker.write_text('{"extra":[{"value":' + number + "}]," + marker.read_text()[1:])
+    before = snapshot(state)
+
+    with pytest.raises(ImproperlyConfigured, match="completion marker"):
+        app_state.prepare_versioned_state(tmp_path, "1.0.0")
+
+    assert snapshot(state) == before
+
+
+def test_finite_completion_marker_extension_allows_reuse(tmp_path):
+    state = app_state.prepare_versioned_state(tmp_path, "1.0.0")
+    marker = state / "state.json"
+    marker.write_text('{"extra":[{"value":1.25e2}],' + marker.read_text()[1:])
+    before = snapshot(state)
+
+    assert app_state.prepare_versioned_state(tmp_path, "1.0.0") == state
+    assert snapshot(state) == before
+
+
+@pytest.mark.parametrize("number", ["1e400", "1.25e2"])
+def test_owner_marker_extension_is_decoded_strictly_and_retained(tmp_path, number):
+    app_state.prepare_versioned_state(tmp_path, "1.0.0")
+    stage = tmp_path / "state" / (".dds-stage-" + "e" * 32)
+    stage.mkdir()
+    owner = {"schema": 1, "stage": stage.name, "kind": "dds-state-initialization"}
+    marker = stage / ".stage-owner.json"
+    marker.write_text('{"extra":[{"value":' + number + "}]," + json.dumps(owner)[1:])
+    before = snapshot(stage)
+
+    # Stage recovery also requires the exact ownership record, so both files
+    # must be retained even though only one violates the shared JSON contract.
+    app_state.prepare_versioned_state(tmp_path, "2.0.0")
+    assert snapshot(stage) == before
+    if number == "1e400":
+        with pytest.raises(ValueError, match="nonfinite"):
+            state_markers.read_state_marker(marker, max_bytes=4096)
+    else:
+        assert state_markers.read_state_marker(marker, max_bytes=4096) == {
+            **owner,
+            "extra": [{"value": 125.0}],
+        }
 
 
 def test_ordinary_owned_abandoned_stage_is_still_recovered(tmp_path):

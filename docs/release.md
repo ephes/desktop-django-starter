@@ -807,9 +807,11 @@ and identities; hostile concurrent changes by the same account are unsupported.
 
 Media upgrade limits default to 100,000 entries (files plus directories),
 2 GiB of source bytes and 64 directory levels below the media root.
-Operators can increase positive integer environment values before launching:
-`DESKTOP_DJANGO_MEDIA_MAX_ENTRIES`, `DESKTOP_DJANGO_MEDIA_MAX_BYTES`, and
-`DESKTOP_DJANGO_MEDIA_MAX_DEPTH`. Limits apply per attempt. All media symlinks,
+Set `DESKTOP_DJANGO_MEDIA_MAX_ENTRIES` and `DESKTOP_DJANGO_MEDIA_MAX_BYTES` to
+positive integers to change those limits before launching.
+`DESKTOP_DJANGO_MEDIA_MAX_DEPTH` also accepts a positive integer, with values
+above 64 capped at 64. A deeper tree must be flattened while the app is closed
+before retrying. Limits apply per attempt. All media symlinks,
 including internal links, are refused. A refusal retains the predecessor and
 removes unpublished staging; repair the synthetic/imported tree or adjust the
 budget with enough free disk space, then retry. Each file is read only to its
@@ -838,7 +840,10 @@ to 100,016 entries and 65 levels. Larger trees (including stages produced using
 raised media budgets), unknown contents, links or missing/invalid owner records
 remain for inspection. Duplicate JSON members in owner or completion markers
 are invalid, even if their values agree or names use JSON escapes; nested
-objects are checked too. Ambiguous owner claims retain the entire stage.
+objects are checked too. Both markers reject `NaN`, `Infinity`, `-Infinity` and
+exponents that overflow to infinity, including in nested metadata. Completion
+markers can include ordinary JSON metadata. Ambiguous owner claims retain the
+entire stage.
 Recovery rechecks the state root and stage identities before detaching the stage
 into a private `.dds-retired-<uuid>` directory and verifies its identity again
 before removal. A failure before detaching removes the empty retirement
