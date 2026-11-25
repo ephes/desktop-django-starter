@@ -138,8 +138,11 @@ test('smoke execution and process group cleanup have independent deadlines', { s
   const { EventEmitter } = require('node:events');
   const { PassThrough } = require('node:stream');
   const { syncBuiltinESMExports } = require('node:module');
+  const { performance } = require('node:perf_hooks');
   const { runPackagedSmoke } = await helpers;
-  t.mock.timers.enable({ apis: ['setTimeout', 'Date'] });
+  let now = 0;
+  t.mock.method(performance, 'now', () => now);
+  t.mock.timers.enable({ apis: ['setTimeout'] });
   const spawn = t.mock.method(childProcess, 'spawn', () => {
     const child = new EventEmitter();
     Object.assign(child, { pid: 12345, stdout: new PassThrough(), stderr: new PassThrough() });
@@ -158,18 +161,31 @@ test('smoke execution and process group cleanup have independent deadlines', { s
   const lastChild = () => spawn.mock.calls.at(-1).result;
 
   const timely = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
+  now += 99;
   t.mock.timers.tick(99);
   lastChild().emit('exit', 0, null);
   await Promise.resolve();
   assert.equal(kill.mock.callCount(), 2);
   groupAlive = false;
+  now += 25;
   t.mock.timers.tick(25);
   await timely;
 
   const late = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
+  now += 100;
   t.mock.timers.tick(100);
   lastChild().emit('exit', 0, null);
   await assert.rejects(late, /deadline exceeded/);
+
+  // Observe a late exit before the event loop dispatches the runtime timer.
+  kill.mock.resetCalls();
+  const delayedExit = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
+  const child = lastChild();
+  now += 101;
+  child.emit('exit', 0, null);
+  await assert.rejects(delayedExit, /deadline exceeded/);
+  assert.deepEqual(kill.mock.calls.map(call => call.arguments), [[-12345, 'SIGKILL'], [-12345, 0]]);
+  assert.ok(child.stdout.destroyed && child.stderr.destroyed);
 
   cleanupRefused = true;
   const uncertain = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
@@ -269,7 +285,7 @@ test('launch errors and nonzero smoke outcomes fail with bounded output', async 
   });
 });
 
-function stubBuild(root, current, program) {
+function stubBuild(root, current, program, { cargoBody, stageBody = 'process.exit(0);' } = {}) {
   const tauri = path.join(root, 'shells/tauri');
   const scripts = path.join(tauri, 'scripts');
   const tools = path.join(root, 'tools');
@@ -281,14 +297,39 @@ function stubBuild(root, current, program) {
   }
   const executable = (name, body) => fs.writeFileSync(name, '#!' + process.execPath + '\n' + body + '\n', { mode: 0o755 });
   const metadata = JSON.stringify({ target_directory: path.join(root, 'custom-target') });
-  executable(path.join(tools, 'cargo'), 'console.log(' + JSON.stringify(metadata) + ');');
-  executable(path.join(tools, 'npm'), 'process.exit(0);');
+  executable(path.join(tools, 'cargo'), cargoBody ?? 'console.log(' + JSON.stringify(metadata) + ');');
+  executable(path.join(tools, 'npm'), stageBody);
   const bundler = `require('node:fs').writeFileSync(${JSON.stringify(current)}, ${JSON.stringify(program)}, { mode: 0o755 });`;
   executable(path.join(tauri, 'node_modules/.bin/tauri'), bundler);
   return {
     entry: path.join(scripts, 'build-tauri.mjs'),
     env: { ...process.env, PATH: tools + path.delimiter + process.env.PATH },
   };
+}
+
+for (const [name, cargoBody, diagnostic] of [
+  ['stalled', "process.on('SIGTERM', () => {}); setTimeout(() => console.log('{}'), 1500);",
+    /Cargo metadata timed out after 200 ms.*check for a stuck Cargo process/i],
+  ['failed', "console.error('synthetic Cargo manifest error'); process.exit(7);", /synthetic Cargo manifest error/],
+]) {
+  test(`build wrapper stops before staging when Cargo metadata is ${name}`, { skip: process.platform === 'win32' }, t => {
+    const { spawnSync } = require('node:child_process');
+    const root = fixture();
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const staged = path.join(root, 'staged');
+    const { entry, env } = stubBuild(root, path.join(root, 'built'), '', {
+      cargoBody,
+      stageBody: `require('node:fs').writeFileSync(${JSON.stringify(staged)}, 'staged');`,
+    });
+    const result = spawnSync(process.execPath, [entry], {
+      env: { ...env, DESKTOP_DJANGO_CARGO_METADATA_TIMEOUT_MS: name === 'stalled' ? '200' : '10000' },
+      encoding: 'utf8', timeout: 5000,
+    });
+    assert.ifError(result.error);
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, diagnostic);
+    assert.equal(fs.existsSync(staged), false);
+  });
 }
 
 for (const buildArgs of [

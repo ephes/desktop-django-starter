@@ -164,6 +164,7 @@ export async function runPackagedSmoke(command, args, { timeoutMs = smokeTimeout
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 600000) throw new Error('Invalid smoke deadline');
   if (signal?.aborted) throw new Error(`Packaged smoke interrupted by ${signal.reason}`);
   const windows = process.platform === 'win32';
+  const deadline = performance.now() + timeoutMs;
   const child = spawn(command, args, { ...options, detached: !windows, stdio: ['ignore', 'pipe', 'pipe'] });
   let diagnostics = Buffer.alloc(0);
   const collect = chunk => {
@@ -183,9 +184,12 @@ export async function runPackagedSmoke(command, args, { timeoutMs = smokeTimeout
       resolve(result);
     };
     const interrupt = () => finish({});
-    const timer = setTimeout(() => finish({ timedOut: true }), timeoutMs);
+    const remainingMs = Math.max(1, Math.ceil(deadline - performance.now()));
+    const timer = setTimeout(() => finish({ timedOut: true }), remainingMs);
     child.once('error', error => finish({ error }));
-    child.once('exit', (status, exitSignal) => finish({ status, signal: exitSignal }));
+    child.once('exit', (status, exitSignal) => {
+      finish(performance.now() >= deadline ? { timedOut: true } : { status, signal: exitSignal });
+    });
     signal?.addEventListener('abort', interrupt);
     if (signal?.aborted) interrupt();
   });

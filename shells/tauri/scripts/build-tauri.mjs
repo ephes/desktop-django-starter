@@ -126,11 +126,23 @@ function argumentValue(name, short) {
   }
   return values[0];
 }
+const metadataTimeoutMs = Number(process.env.DESKTOP_DJANGO_CARGO_METADATA_TIMEOUT_MS ?? 60000);
+if (!Number.isSafeInteger(metadataTimeoutMs) || metadataTimeoutMs < 1 || metadataTimeoutMs > 600000) {
+  throw new Error('DESKTOP_DJANGO_CARGO_METADATA_TIMEOUT_MS must be 1..600000');
+}
 const metadata = spawnSync('cargo', ['metadata', '--format-version', '1', '--no-deps',
   '--manifest-path', path.join(tauriRoot, 'src-tauri/Cargo.toml')], {
-  cwd: tauriRoot, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024
+  cwd: tauriRoot, encoding: 'utf8', maxBuffer: 4 * 1024 * 1024,
+  // spawnSync waits for Cargo to exit, so an ignored SIGTERM could stall it.
+  timeout: metadataTimeoutMs, killSignal: 'SIGKILL'
 });
-if (metadata.error || metadata.status !== 0) throw new Error(`Unable to determine Cargo target directory: ${metadata.error?.message || metadata.stderr}`);
+if (metadata.error?.code === 'ETIMEDOUT') {
+  throw new Error(`Cargo metadata timed out after ${metadataTimeoutMs} ms. Check for a stuck Cargo process or wrapper before retrying.`);
+}
+if (metadata.error || metadata.status !== 0) {
+  const reason = metadata.error?.message || metadata.stderr.trim() || `Cargo exited with ${metadata.signal ?? metadata.status}`;
+  throw new Error(`Unable to determine Cargo target directory: ${reason}`);
+}
 const profile = argumentValue('--profile') || (buildArgs.includes('--debug') || buildArgs.includes('-d') ? 'debug' : 'release');
 const runnerTargetDir = argumentValue('--target-dir');
 const layout = { tauriRoot,

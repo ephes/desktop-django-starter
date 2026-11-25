@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fail Tauri packaged smoke when the executable's exit is observed at or after
+  the monotonic runtime deadline.
+
+- Bound Tauri build Cargo metadata discovery to 60 seconds by default and
+  stop before staging when it times out.
+
 - Retire the owned Tauri packaged-smoke process group when the build wrapper
   receives SIGINT or SIGTERM, then return the corresponding interrupt status.
 
