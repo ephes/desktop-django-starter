@@ -167,7 +167,10 @@ bundle. Wheel and sdist builds hold that same lock while validating and copying
 one generation to a private snapshot. Hatch discovers and reads the archive
 payload from that snapshot, so a sync can publish during archive creation.
 Leave the lock file in place. On Windows, retry the sync or build if the OS
-times out acquiring the lock. A complete tree replaces the old bundle,
+times out acquiring the lock. If explicit unlock fails, the handle still closes.
+A completed operation reports its success and logs the unlock failure. A failed
+operation raises its original error with the unlock failure in the diagnostics.
+A complete tree replaces the old bundle,
 removing stale files while preserving an existing `.gitkeep` and its contents.
 Copy failures leave the old bundle intact. A failed promotion attempts recovery
 under the same lock. If recovery fails, sync raises the original promotion
@@ -187,8 +190,10 @@ recovery flush the selected directory entry before removing the journal, then
 flush the journal removal before discarding the work directory. A failed
 namespace flush keeps the recorded generations and journal available for retry.
 If the flush after journal removal fails, the work directory remains available
-in case the journal reappears after restart. An ambiguous marker or directory
-stops the operation. Inspect the retained paths with syncs and builds stopped.
+in case the journal reappears after restart. Recovery reads only from the
+opened regular marker file and verifies its identity and length before applying
+the record. A changed marker, a reparse point, or ambiguous directory identities
+stop recovery. Inspect the retained paths with syncs and builds stopped.
 Git and the build configuration exclude the lock, marker and work directories.
 If old-tree cleanup fails after publication, sync reports the cleanup failure
 and keeps the complete new bundle live.

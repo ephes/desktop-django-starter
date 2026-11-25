@@ -1,5 +1,6 @@
 """Coordinate staged asset publication and build snapshots."""
 
+import logging
 import os
 import re
 import shutil
@@ -11,6 +12,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 ASSET_MARKER = ".assets-sync-pending"
+MARKER_READ_LIMIT = 256
 
 
 def directory_identity(path: Path) -> str | None:
@@ -98,6 +100,22 @@ def retire_asset_replacement(assets: Path, work: Path) -> None:
     sync_directory(package)
 
 
+def _marker_generation(info: os.stat_result) -> tuple[int, ...] | None:
+    if (
+        not stat.S_ISREG(info.st_mode)
+        or getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+        or not info.st_ino
+        or not 0 < info.st_size < MARKER_READ_LIMIT
+    ):
+        return None
+    return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns
+
+
+def _open_marker(path: str, flags: int) -> int:
+    # Keep a swapped symlink or FIFO from redirecting or blocking a POSIX open.
+    return os.open(path, flags | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+
+
 def recover_asset_replacement(assets: Path) -> None:
     """Reconcile a pending publication while the caller holds the asset lock."""
     marker = assets.parent / ASSET_MARKER
@@ -106,17 +124,27 @@ def recover_asset_replacement(assets: Path) -> None:
     except FileNotFoundError:
         return
     error = f"Cannot reconcile pending asset replacement. Inspect {marker} with builds stopped."
-    if not stat.S_ISREG(info.st_mode) or (
-        getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
-    ):
+    generation = _marker_generation(info)
+    if generation is None:
         raise RuntimeError(error)
-    with marker.open("rb") as pending:
-        record = pending.read(256)
+    try:
+        with open(marker, "rb", opener=_open_marker) as pending:
+            if _marker_generation(os.fstat(pending.fileno())) != generation:
+                raise RuntimeError(error)
+            record = pending.read(MARKER_READ_LIMIT)
+            if (
+                len(record) != info.st_size
+                or _marker_generation(os.fstat(pending.fileno())) != generation
+                or _marker_generation(marker.lstat()) != generation
+            ):
+                raise RuntimeError(error)
+    except OSError as read_error:
+        raise RuntimeError(error) from read_error
     match = re.fullmatch(
         rb"(\.assets-sync-[a-z0-9_]{8,32}) ([0-9]+:[0-9]+) ([0-9]+:[0-9]+) ([0-9]+:[0-9]+)\n",
         record,
     )
-    if match is None or len(record) == 256:
+    if match is None:
         raise RuntimeError(error)
     work_name, work_id, previous_id, staged_id = (group.decode("ascii") for group in match.groups())
     work = assets.parent / work_name
@@ -141,17 +169,32 @@ def asset_lock(package_dir: Path) -> Iterator[None]:
     # Keep the same lock file across runs, including while a publisher waits.
     # On POSIX, closing the handle releases the lock. Windows unlocks explicitly
     # because the CRT may release leftover locks only after a delay.
-    with (package_dir / ".assets-sync-lock").open("a+b") as lock:
+    lock_path = package_dir / ".assets-sync-lock"
+    with lock_path.open("a+b") as lock:
         if os.name == "nt":
             import msvcrt
 
             lock.seek(0)
             msvcrt.locking(lock.fileno(), msvcrt.LK_LOCK, 1)
+            primary = None
             try:
                 yield
+            except BaseException as operation_error:
+                primary = operation_error
+                raise
             finally:
-                lock.seek(0)
-                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+                try:
+                    lock.seek(0)
+                    msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+                except OSError as release_error:
+                    detail = f"Explicit Windows unlock failed for {lock_path}: {release_error}"
+                    logger = logging.getLogger(__name__)
+                    if primary is None:
+                        logger.warning("Asset operation completed. %s", detail)
+                    elif hasattr(primary, "add_note"):
+                        primary.add_note(detail)
+                    else:
+                        logger.warning("%s", detail)
         else:
             import fcntl
 
