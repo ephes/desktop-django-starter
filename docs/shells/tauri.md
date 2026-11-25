@@ -79,7 +79,9 @@ smokes exactly one runnable bundle changed by that invocation. Cargo metadata
 resolves custom target directories (including `CARGO_TARGET_DIR` and Cargo config);
 `--target`/`-t` or `CARGO_BUILD_TARGET` restrict the target triple. Forwarded
 Cargo `--target-dir` arguments override that directory and resolve relative to
-`src-tauri`; `--debug`/`-d` and forwarded `--profile` select the output profile. With an implicit
+`src-tauri`; `--debug`/`-d` and forwarded `--profile` select the output profile.
+The wrapper accepts a single Cargo profile name before scanning for artifacts.
+The `dev` profile uses Cargo's `debug` output directory. With an implicit
 Cargo `build.target`, host and target subdirectories are observed and only the
 single changed bundle is admitted. Existing unrelated bundles remain untouched;
 directories whose names are not target triples (for example in a shared target
@@ -94,19 +96,22 @@ still require manual installed-app validation.
 
 Each artifact snapshot shares a 100,000-entry budget across bundle discovery and
 metadata fingerprinting, including root probes and entries revisited during
-fingerprinting. It admits up to 128 matching candidates. Cargo target-directory enumeration
-has a separate entry budget. An exceeded limit aborts the
-command. Retry with an explicit target where applicable or a dedicated
+fingerprinting. It admits up to 128 matching candidates. Cargo target-directory
+enumeration has a separate entry budget. An exceeded limit aborts the command.
+Retry with an explicit target where applicable or a dedicated
 `CARGO_TARGET_DIR`.
 
 Smoke execution defaults to 120 seconds. Set
 `DESKTOP_DJANGO_PACKAGED_SMOKE_TIMEOUT_MS` to an integer from 1 through 600000
 for a different finite deadline. This applies only to the packaged executable,
 not staging or compilation. The wrapper retains at most 8 KiB of diagnostic
-output and retires the owned Unix process group with SIGKILL on timeout and
-leader exit, including leftover descendants. The execution deadline ends at
-exit or launch failure. Cleanup has its own 3-second confirmation limit measured on a monotonic clock.
-A timely exit can succeed even if cleanup finishes after the execution deadline.
-Timeout, failed launch, nonzero exit or uncertain cleanup fails the smoke. Processes that deliberately escape the group are outside this
-build-helper ownership contract. This wrapper validates only the locally built
-platform; it does not provide Windows install/run or cross-platform proof.
+output and retires the owned Unix process group with SIGKILL when the
+executable exits, times out, or the wrapper receives SIGINT or SIGTERM during
+the smoke. Retirement includes leftover descendants. Cleanup has its own
+3-second confirmation limit measured on a monotonic clock. A timely exit can
+succeed even if cleanup finishes after the execution deadline. SIGINT and
+SIGTERM exit with status 130 and 143 respectively after attempting cleanup.
+Timeout, failed launch, nonzero exit or uncertain cleanup fails the smoke.
+The build helper owns the Unix process group. Processes that leave the group
+can outlive the smoke. This wrapper validates the locally built macOS or Linux
+bundle. Windows installers require a separate manual install and run.

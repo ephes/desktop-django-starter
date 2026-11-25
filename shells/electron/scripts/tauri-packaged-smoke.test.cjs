@@ -105,6 +105,27 @@ test('target directory and explicit target triple determine artifact root', asyn
   assert.equal(buildOutputRoot({ tauriRoot: '/repo/shells/tauri', targetDirectory: '/custom/target', target: 'aarch64-apple-darwin', profile: 'debug' }), '/custom/target/aarch64-apple-darwin/debug/bundle');
 });
 
+test('Cargo profiles are admitted before the artifact filesystem is inspected', async t => {
+  const { buildOutputRoot, buildOutputRoots } = await helpers;
+  const targetDirectory = path.join(os.tmpdir(), 'synthetic-cargo-target');
+  const options = { targetDirectory };
+  const exists = t.mock.method(fs, 'existsSync', () => false);
+  const open = t.mock.method(fs, 'opendirSync');
+
+  for (const profile of ['..', '../outside', 'nested/build', 'nested\\build', 'C:debug', '.', '', 'release\n']) {
+    assert.throws(() => buildOutputRoot({ ...options, profile }), /Cargo profile name/i);
+    assert.throws(() => buildOutputRoots({ ...options, profile }), /Cargo profile name/i);
+  }
+  assert.equal(exists.mock.callCount(), 0);
+  assert.equal(open.mock.callCount(), 0);
+
+  assert.deepEqual(buildOutputRoots(options), [path.join(targetDirectory, 'release', 'bundle')]);
+  assert.deepEqual(buildOutputRoots({ ...options, profile: 'dev' }), [path.join(targetDirectory, 'debug', 'bundle')]);
+  assert.deepEqual(buildOutputRoots({ ...options, profile: 'optimisé_2-lto' }), [
+    path.join(targetDirectory, 'optimisé_2-lto', 'bundle'),
+  ]);
+});
+
 test('packaged smoke has a deadline and bounded diagnostics', async () => {
   const { runPackagedSmoke } = await helpers;
   const started = Date.now();
@@ -248,50 +269,103 @@ test('launch errors and nonzero smoke outcomes fail with bounded output', async 
   });
 });
 
+function stubBuild(root, current, program) {
+  const tauri = path.join(root, 'shells/tauri');
+  const scripts = path.join(tauri, 'scripts');
+  const tools = path.join(root, 'tools');
+  fs.mkdirSync(scripts, { recursive: true });
+  fs.mkdirSync(path.join(tauri, 'node_modules/.bin'), { recursive: true });
+  fs.mkdirSync(tools);
+  for (const file of ['build-tauri.mjs', 'packaged-smoke.mjs']) {
+    fs.copyFileSync(path.join(__dirname, '../../tauri/scripts', file), path.join(scripts, file));
+  }
+  const executable = (name, body) => fs.writeFileSync(name, '#!' + process.execPath + '\n' + body + '\n', { mode: 0o755 });
+  const metadata = JSON.stringify({ target_directory: path.join(root, 'custom-target') });
+  executable(path.join(tools, 'cargo'), 'console.log(' + JSON.stringify(metadata) + ');');
+  executable(path.join(tools, 'npm'), 'process.exit(0);');
+  const bundler = `require('node:fs').writeFileSync(${JSON.stringify(current)}, ${JSON.stringify(program)}, { mode: 0o755 });`;
+  executable(path.join(tauri, 'node_modules/.bin/tauri'), bundler);
+  return {
+    entry: path.join(scripts, 'build-tauri.mjs'),
+    env: { ...process.env, PATH: tools + path.delimiter + process.env.PATH },
+  };
+}
+
 for (const buildArgs of [
   [],
   ['--debug', '--target', 'synthetic-triple'],
   ['-d', '-tsynthetic-triple'],
   ['--target=synthetic-triple', '--', '--profile', 'dev', '--target-dir', '../../../custom-target']
 ]) {
- test(`build wrapper reports only changed artifacts: ${buildArgs.join(' ') || 'ordinary release'}`, { skip: process.platform === 'win32' }, async () => {
-  const { spawnSync } = require('node:child_process');
-  const root = fixture();
-  try {
-    const tauri = path.join(root, 'shells/tauri');
-    const scripts = path.join(tauri, 'scripts');
-    const tools = path.join(root, 'tools');
+  test('build wrapper reports only changed artifacts: ' + (buildArgs.join(' ') || 'ordinary release'), { skip: process.platform === 'win32' }, t => {
+    const { spawnSync } = require('node:child_process');
+    const root = fixture();
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
     const smoke = buildArgs.length > 0;
     const profileDir = smoke ? 'custom-target/synthetic-triple/debug/bundle' : 'custom-target/release/bundle';
     const output = path.join(root, profileDir, process.platform === 'darwin' ? 'macos' : 'appimage');
     const marker = path.join(root, 'ran-current');
-    fs.mkdirSync(scripts, { recursive: true });
-    fs.mkdirSync(path.join(tauri, 'node_modules/.bin'), { recursive: true });
-    fs.mkdirSync(tools);
-    for (const file of ['build-tauri.mjs', 'packaged-smoke.mjs']) {
-      fs.copyFileSync(path.join(__dirname, '../../tauri/scripts', file), path.join(scripts, file));
-    }
-    const executable = (name, body) => fs.writeFileSync(name, `#!${process.execPath}\n${body}\n`, { mode: 0o755 });
-    executable(path.join(tools, 'cargo'), `console.log(JSON.stringify({target_directory:${JSON.stringify(path.join(root, 'custom-target'))}}));`);
-    executable(path.join(tools, 'npm'), 'process.exit(0);');
     const stale = artifact(output, 'a-stale', process.platform);
     const staleBundle = process.platform === 'darwin' ? path.join(stale, '../../..') : stale;
     const recent = new Date(Date.now() + 10000);
     fs.utimesSync(staleBundle, recent, recent);
+    // Changing a binary inside an existing macOS bundle must also count.
     const current = artifact(output, 'z-current', process.platform);
-    // Snapshot an existing current artifact too: changing a nested binary must count.
-    const program = `#!/bin/sh\nprintf current > '${marker}'\n`;
-    executable(path.join(tauri, 'node_modules/.bin/tauri'), `require('node:fs').writeFileSync(${JSON.stringify(current)}, ${JSON.stringify(program)}, {mode:0o755});`);
-    const result = spawnSync(process.execPath, [path.join(scripts, 'build-tauri.mjs'), ...(smoke ? ['--smoke-test', ...buildArgs] : [])], {
-      env: { ...process.env, PATH: tools + path.delimiter + process.env.PATH },
-      encoding: 'utf8', timeout: 10000
-    });
+    const program = "#!/bin/sh\nprintf current > '" + marker + "'\n";
+    const { entry, env } = stubBuild(root, current, program);
+    const args = smoke ? ['--smoke-test', ...buildArgs] : buildArgs;
+    const result = spawnSync(process.execPath, [entry, ...args], { env, encoding: 'utf8', timeout: 10000 });
     assert.equal(result.status, 0, result.stderr);
     assert.match(result.stdout, /Built Tauri artifacts:[\s\S]*z-current/);
     assert.doesNotMatch(result.stdout, /a-stale/);
     if (smoke) assert.equal(fs.readFileSync(marker, 'utf8'), 'current');
     else assert.equal(fs.existsSync(marker), false);
-  } finally { fs.rmSync(root, { recursive: true, force: true }); }
-});
+  });
+}
 
+for (const signal of ['SIGINT', 'SIGTERM']) {
+  test('build wrapper retires the packaged smoke on ' + signal, { skip: process.platform === 'win32' }, async t => {
+    const { spawn } = require('node:child_process');
+    const { once } = require('node:events');
+    const { setTimeout: sleep } = require('node:timers/promises');
+    const root = fixture();
+    const marker = path.join(root, 'smoke-pid');
+    const current = artifact(path.join(root, 'custom-target/release/bundle'), 'current', process.platform);
+    const program = [
+      '#!' + process.execPath,
+      'const fs = require("node:fs");',
+      'const marker = ' + JSON.stringify(marker) + ';',
+      'fs.writeFileSync(marker + ".tmp", String(process.pid));',
+      'fs.renameSync(marker + ".tmp", marker);',
+      'setTimeout(() => {}, 15000);',
+    ].join('\n');
+    const { entry, env } = stubBuild(root, current, program);
+    const wrapper = spawn(process.execPath, [entry, '--smoke-test'], {
+      env: { ...env, DESKTOP_DJANGO_PACKAGED_SMOKE_TIMEOUT_MS: '10000' },
+      stdio: ['ignore', 'ignore', 'pipe'], timeout: 12000, killSignal: 'SIGKILL',
+    });
+    const closed = once(wrapper, 'close');
+    t.after(() => {
+      if (wrapper.exitCode === null && wrapper.signalCode === null) wrapper.kill('SIGKILL');
+      if (fs.existsSync(marker)) {
+        try { process.kill(Number(fs.readFileSync(marker, 'utf8')), 'SIGKILL'); } catch {}
+      }
+      fs.rmSync(root, { recursive: true, force: true });
+    });
+    let stderr = '';
+    wrapper.stderr.setEncoding('utf8').on('data', chunk => { stderr += chunk; });
+    const startupDeadline = performance.now() + 5000;
+    while (!fs.existsSync(marker) && wrapper.exitCode === null && wrapper.signalCode === null
+      && performance.now() < startupDeadline) {
+      await sleep(10);
+    }
+    assert.ok(fs.existsSync(marker), stderr);
+    const pid = Number(fs.readFileSync(marker, 'utf8'));
+    assert.ok(wrapper.kill(signal));
+    const [code, exitSignal] = await closed;
+    assert.throws(() => process.kill(-pid, 0), { code: 'ESRCH' });
+    assert.equal(exitSignal, null);
+    assert.equal(code, 128 + os.constants.signals[signal], stderr);
+    assert.match(stderr, new RegExp('interrupted by ' + signal));
+  });
 }

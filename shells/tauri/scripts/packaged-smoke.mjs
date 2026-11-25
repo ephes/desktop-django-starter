@@ -33,7 +33,11 @@ export function buildOutputRoot({ tauriRoot, targetDirectory, target, profile = 
   if (target && (!/^[A-Za-z0-9_.-]+$/.test(target) || target === '.' || target === '..')) {
     throw new Error('Unsupported smoke target; pass a target triple');
   }
-  return path.join(targetDirectory || path.join(tauriRoot, 'src-tauri', 'target'), ...(target ? [target] : []), profile, 'bundle');
+  if (typeof profile !== 'string' || !/^[\p{Alphabetic}\p{Number}_-]+$/u.test(profile)) {
+    throw new Error('Expected a single Cargo profile name');
+  }
+  const profileDirectory = profile === 'dev' ? 'debug' : profile;
+  return path.join(targetDirectory || path.join(tauriRoot, 'src-tauri', 'target'), ...(target ? [target] : []), profileDirectory, 'bundle');
 }
 
 // Cargo metadata resolves target-dir from environment/config. With no explicit
@@ -156,8 +160,9 @@ async function retireGroup(pid) {
   throw new Error('Owned smoke process group retirement is uncertain');
 }
 
-export async function runPackagedSmoke(command, args, { timeoutMs = smokeTimeout(), ...options } = {}) {
+export async function runPackagedSmoke(command, args, { timeoutMs = smokeTimeout(), signal, ...options } = {}) {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 600000) throw new Error('Invalid smoke deadline');
+  if (signal?.aborted) throw new Error(`Packaged smoke interrupted by ${signal.reason}`);
   const windows = process.platform === 'win32';
   const child = spawn(command, args, { ...options, detached: !windows, stdio: ['ignore', 'pipe', 'pipe'] });
   let diagnostics = Buffer.alloc(0);
@@ -169,13 +174,20 @@ export async function runPackagedSmoke(command, args, { timeoutMs = smokeTimeout
   // Settle execution on the first terminal event, before starting cleanup.
   // Do not wait for close: descendants can keep inherited pipes open.
   const result = await new Promise(resolve => {
+    let settled = false;
     const finish = result => {
+      if (settled) return;
+      settled = true;
       clearTimeout(timer);
+      signal?.removeEventListener('abort', interrupt);
       resolve(result);
     };
+    const interrupt = () => finish({});
     const timer = setTimeout(() => finish({ timedOut: true }), timeoutMs);
     child.once('error', error => finish({ error }));
-    child.once('exit', (status, signal) => finish({ status, signal }));
+    child.once('exit', (status, exitSignal) => finish({ status, signal: exitSignal }));
+    signal?.addEventListener('abort', interrupt);
+    if (signal?.aborted) interrupt();
   });
   let cleanupError;
   try {
@@ -191,9 +203,11 @@ export async function runPackagedSmoke(command, args, { timeoutMs = smokeTimeout
     child.stdout.destroy();
     child.stderr.destroy();
   }
-  if (result.timedOut || cleanupError || result.error || result.status !== 0) {
-    const reason = [result.timedOut ? 'deadline exceeded' : result.error?.message
-      || (result.status !== 0 ? `exit ${result.status} (${result.signal || 'no signal'})` : ''),
+  if (signal?.aborted || result.timedOut || cleanupError || result.error || result.status !== 0) {
+    const failure = signal?.aborted ? `interrupted by ${signal.reason}`
+      : result.timedOut ? 'deadline exceeded'
+      : result.error?.message || (result.status !== 0 ? `exit ${result.status} (${result.signal || 'no signal'})` : '');
+    const reason = [failure,
       cleanupError?.message].filter(Boolean).join('; ');
     throw new Error(`Packaged smoke failed: ${reason}\n${diagnostics.toString('utf8')}`);
   }

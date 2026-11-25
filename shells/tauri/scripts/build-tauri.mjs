@@ -1,4 +1,5 @@
 import { spawnSync } from "node:child_process";
+import { constants } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildOutputRoots, changedArtifacts, snapshotBundleArtifacts, snapshotArtifacts, resolveSmokeBinary, runPackagedSmoke, smokeTimeout } from "./packaged-smoke.mjs";
@@ -136,7 +137,7 @@ const layout = { tauriRoot,
   targetDirectory: runnerTargetDir ? path.resolve(tauriRoot, 'src-tauri', runnerTargetDir)
     : JSON.parse(metadata.stdout).target_directory,
   target: argumentValue('--target', '-t') || process.env.CARGO_BUILD_TARGET,
-  profile: profile === 'dev' ? 'debug' : profile };
+  profile };
 const bundleRoots = buildOutputRoots(layout);
 const timeoutMs = smokeTest ? smokeTimeout() : undefined;
 const beforeBuild = snapshotBundleArtifacts(bundleRoots, matchesBuildArtifact);
@@ -159,8 +160,21 @@ if (builtArtifacts.length > 0) {
 printWindowsValidationChecklist(builtArtifacts);
 if (smokeTest) {
   const smokeBinary = resolveSmokeBinary(currentRoots, beforeSmoke);
-  await runPackagedSmoke(smokeBinary.command, smokeBinary.args, {
-    timeoutMs, cwd: repoRoot,
-    env: { ...process.env, DESKTOP_DJANGO_SMOKE_TEST: "1" }
-  });
+  const controller = new AbortController();
+  const interrupt = signal => controller.abort(signal);
+  process.on("SIGINT", interrupt);
+  process.on("SIGTERM", interrupt);
+  try {
+    await runPackagedSmoke(smokeBinary.command, smokeBinary.args, {
+      timeoutMs, signal: controller.signal, cwd: repoRoot,
+      env: { ...process.env, DESKTOP_DJANGO_SMOKE_TEST: "1" }
+    });
+  } catch (error) {
+    if (!controller.signal.aborted) throw error;
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 128 + constants.signals[controller.signal.reason];
+  } finally {
+    process.off("SIGINT", interrupt);
+    process.off("SIGTERM", interrupt);
+  }
 }

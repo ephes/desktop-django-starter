@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Retire the owned Tauri packaged-smoke process group when the build wrapper
+  receives SIGINT or SIGTERM, then return the corresponding interrupt status.
+
+- Validate the Cargo profile name before discovering Tauri build artifacts.
+
 - Measure Tauri packaged-smoke process-group retirement on a monotonic clock.
 
 - Report only new or changed Tauri build bundles and require a single changed
