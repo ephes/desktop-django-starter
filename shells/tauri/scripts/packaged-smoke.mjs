@@ -91,7 +91,7 @@ function fingerprint(name, visit) {
     const info = fs.lstatSync(current, { bigint: true });
     if (info.isSymbolicLink()) throw new Error('Symlink in Tauri bundle artifact');
     const directory = info.isDirectory();
-    const metadata = [info.ino, info.size, info.mtimeNs, info.ctimeNs].map(String);
+    const metadata = [info.dev, info.ino, info.size, info.mtimeNs, info.ctimeNs].map(String);
     hash.update(JSON.stringify([current.slice(name.length), directory, ...metadata]) + '\n');
     if (directory) {
       const names = Array.from(directoryEntries(current, visit), entry => entry.name).sort();
@@ -103,30 +103,32 @@ function fingerprint(name, visit) {
   return hash.digest('hex');
 }
 
-export function snapshotBundleArtifacts(root, matches) {
+export function snapshotBundleArtifacts(root, { platform = process.platform, smokeTest = false } = {}) {
+  const matches = (name, entry, bundleRoot) => {
+    if (platform === 'darwin') {
+      return (entry.isFile() && name.startsWith(path.join(bundleRoot, 'dmg') + path.sep) && name.endsWith('.dmg'))
+        || (entry.isDirectory() && name.endsWith('.app')
+          && (smokeTest || name.startsWith(path.join(bundleRoot, 'macos') + path.sep)));
+    }
+    if (platform === 'win32') {
+      return entry.isFile() && (
+        (name.includes(`${path.sep}nsis${path.sep}`) && name.endsWith('.exe'))
+        || (name.includes(`${path.sep}msi${path.sep}`) && name.endsWith('.msi'))
+      );
+    }
+    return platform === 'linux' && entry.isFile() && name.endsWith('.AppImage');
+  };
   const visit = scanBudget();
   const found = findBundleArtifacts(Array.isArray(root) ? root : [root], matches, visit);
   return new Map(found.map(name => [name, fingerprint(name, visit)]));
 }
 
-export function snapshotArtifacts(root, platform = process.platform) {
-  return snapshotBundleArtifacts(root, (name, entry) => (
-    (platform === 'darwin' && entry.isDirectory() && name.endsWith('.app'))
-    || (platform === 'linux' && entry.isFile() && name.endsWith('.AppImage'))
-  ));
-}
-
 export function changedArtifacts(before, after) {
-  return [...after].filter(([name, state]) => before.get(name) !== state).map(([name]) => name);
+  return new Map([...after].filter(([name, state]) => before.get(name) !== state));
 }
 
-export function resolveSmokeBinary(root, before, platform = process.platform) {
-  if (platform === 'win32') throw new Error('Windows installers require manual installed-app smoke validation');
-  const found = changedArtifacts(before, snapshotArtifacts(root, platform));
-  if (!found.length) throw new Error(`No current changed runnable artifact under ${root}; check --target and Cargo configuration`);
-  if (found.length !== 1) throw new Error(`Ambiguous current smoke artifacts under ${root}`);
-  if (platform === 'linux') return { command: found[0], args: [] };
-  const bin = path.join(found[0], 'Contents/MacOS');
+function macBundleExecutable(bundle) {
+  const bin = path.join(bundle, 'Contents/MacOS');
   let executable;
   for (const entry of directoryEntries(bin, scanBudget())) {
     const name = path.join(bin, entry.name);
@@ -136,7 +138,35 @@ export function resolveSmokeBinary(root, before, platform = process.platform) {
     executable = name;
   }
   if (!executable) throw new Error('Ambiguous or missing app bundle executable');
-  return { command: executable, args: [] };
+  return executable;
+}
+
+function assertArtifactGeneration({ name, state }) {
+  const message = `Tauri smoke artifact generation changed or could not be verified: ${name}`;
+  let current;
+  try {
+    current = fingerprint(name, scanBudget());
+  } catch (error) {
+    throw new Error(message, { cause: error });
+  }
+  if (current !== state) throw new Error(message);
+}
+
+export function resolveSmokeBinary(changed, roots, platform = process.platform) {
+  if (platform === 'win32') throw new Error('Windows installers require manual installed-app smoke validation');
+  const suffix = platform === 'darwin' ? '.app' : '.AppImage';
+  const found = [...changed.keys()].filter(name => name.endsWith(suffix));
+  if (!found.length) throw new Error(`No current changed runnable artifact under ${roots}; check --target and Cargo configuration`);
+  if (found.length !== 1) throw new Error(`Ambiguous current smoke artifacts under ${roots}`);
+  const [name] = found;
+  const artifact = { name, state: changed.get(name) };
+  if (platform === 'linux') return { command: name, args: [], artifact };
+  try {
+    return { command: macBundleExecutable(name), args: [], artifact };
+  } catch (error) {
+    assertArtifactGeneration(artifact);
+    throw error;
+  }
 }
 
 export function smokeTimeout(env = process.env) {
@@ -160,10 +190,11 @@ async function retireGroup(pid) {
   throw new Error('Owned smoke process group retirement is uncertain');
 }
 
-export async function runPackagedSmoke(command, args, { timeoutMs = smokeTimeout(), signal, ...options } = {}) {
+export async function runPackagedSmoke(command, args, { artifact, timeoutMs = smokeTimeout(), signal, ...options } = {}) {
   if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 1 || timeoutMs > 600000) throw new Error('Invalid smoke deadline');
   if (signal?.aborted) throw new Error(`Packaged smoke interrupted by ${signal.reason}`);
   const windows = process.platform === 'win32';
+  if (artifact) assertArtifactGeneration(artifact);
   const deadline = performance.now() + timeoutMs;
   const child = spawn(command, args, { ...options, detached: !windows, stdio: ['ignore', 'pipe', 'pipe'] });
   let diagnostics = Buffer.alloc(0);
