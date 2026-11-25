@@ -2,6 +2,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 
 const ENTRY_LIMIT = 100000;
 const CANDIDATE_LIMIT = 128;
@@ -84,7 +85,7 @@ function fingerprint(name, visit) {
   while (pending.length) {
     const current = pending.pop();
     const info = fs.lstatSync(current, { bigint: true });
-    if (info.isSymbolicLink()) throw new Error('Symlink in smoke artifact');
+    if (info.isSymbolicLink()) throw new Error('Symlink in Tauri bundle artifact');
     const directory = info.isDirectory();
     const metadata = [info.ino, info.size, info.mtimeNs, info.ctimeNs].map(String);
     hash.update(JSON.stringify([current.slice(name.length), directory, ...metadata]) + '\n');
@@ -98,19 +99,26 @@ function fingerprint(name, visit) {
   return hash.digest('hex');
 }
 
-export function snapshotArtifacts(root, platform = process.platform) {
+export function snapshotBundleArtifacts(root, matches) {
   const visit = scanBudget();
-  const found = findBundleArtifacts(Array.isArray(root) ? root : [root], (name, entry) => (
+  const found = findBundleArtifacts(Array.isArray(root) ? root : [root], matches, visit);
+  return new Map(found.map(name => [name, fingerprint(name, visit)]));
+}
+
+export function snapshotArtifacts(root, platform = process.platform) {
+  return snapshotBundleArtifacts(root, (name, entry) => (
     (platform === 'darwin' && entry.isDirectory() && name.endsWith('.app'))
     || (platform === 'linux' && entry.isFile() && name.endsWith('.AppImage'))
-  ), visit);
-  return new Map(found.map(name => [name, fingerprint(name, visit)]));
+  ));
+}
+
+export function changedArtifacts(before, after) {
+  return [...after].filter(([name, state]) => before.get(name) !== state).map(([name]) => name);
 }
 
 export function resolveSmokeBinary(root, before, platform = process.platform) {
   if (platform === 'win32') throw new Error('Windows installers require manual installed-app smoke validation');
-  const found = [...snapshotArtifacts(root, platform)]
-    .filter(([name, state]) => before.get(name) !== state).map(([name]) => name);
+  const found = changedArtifacts(before, snapshotArtifacts(root, platform));
   if (!found.length) throw new Error(`No current changed runnable artifact under ${root}; check --target and Cargo configuration`);
   if (found.length !== 1) throw new Error(`Ambiguous current smoke artifacts under ${root}`);
   if (platform === 'linux') return { command: found[0], args: [] };
@@ -139,8 +147,8 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 async function retireGroup(pid) {
   try { process.kill(-pid, 'SIGKILL'); }
   catch (error) { if (error.code === 'ESRCH') return; throw error; }
-  const until = Date.now() + 3000;
-  while (Date.now() < until) {
+  const until = performance.now() + 3000;
+  while (performance.now() < until) {
     try { process.kill(-pid, 0); }
     catch (error) { if (error.code === 'ESRCH') return; throw error; }
     await delay(25);

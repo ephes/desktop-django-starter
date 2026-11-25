@@ -156,6 +156,46 @@ test('smoke execution and process group cleanup have independent deadlines', { s
   await assert.rejects(uncertain, /cleanup refused/);
 });
 
+test('smoke retirement follows monotonic time through wall-clock jumps', { skip: process.platform === 'win32' }, async t => {
+  const childProcess = require('node:child_process');
+  const { EventEmitter } = require('node:events');
+  const { PassThrough } = require('node:stream');
+  const { syncBuiltinESMExports } = require('node:module');
+  const { performance } = require('node:perf_hooks');
+  const { runPackagedSmoke } = await helpers;
+  const child = Object.assign(new EventEmitter(), {
+    pid: 12345, stdout: new PassThrough(), stderr: new PassThrough()
+  });
+  const spawn = t.mock.method(childProcess, 'spawn', () => child);
+  t.after(() => { spawn.mock.restore(); syncBuiltinESMExports(); });
+  syncBuiltinESMExports();
+
+  let elapsed = 0;
+  let wall = 100000;
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  t.mock.method(performance, 'now', () => elapsed);
+  t.mock.method(Date, 'now', () => wall);
+  const kill = t.mock.method(process, 'kill', () => {});
+  const smoke = runPackagedSmoke('fixture', [], { timeoutMs: 100 });
+  const failed = assert.rejects(smoke, /retirement is uncertain/);
+  child.emit('exit', 0, null);
+  await Promise.resolve();
+  assert.equal(kill.mock.callCount(), 2);
+
+  wall += 86400000;
+  elapsed = 25;
+  t.mock.timers.tick(25);
+  await Promise.resolve();
+  assert.equal(kill.mock.callCount(), 3);
+
+  wall -= 2 * 86400000;
+  elapsed = 3000;
+  t.mock.timers.tick(2975);
+  await Promise.resolve();
+  assert.equal(kill.mock.callCount(), 3);
+  await failed;
+});
+
 test('successful smoke leader cannot leave its owned child running', { skip: process.platform === 'win32' }, async () => {
   const { runPackagedSmoke } = await helpers;
   const root = fixture();
@@ -209,18 +249,21 @@ test('launch errors and nonzero smoke outcomes fail with bounded output', async 
 });
 
 for (const buildArgs of [
+  [],
   ['--debug', '--target', 'synthetic-triple'],
   ['-d', '-tsynthetic-triple'],
   ['--target=synthetic-triple', '--', '--profile', 'dev', '--target-dir', '../../../custom-target']
 ]) {
- test(`build wrapper runs the newly built artifact from the explicit custom target: ${buildArgs.join(' ')}`, { skip: process.platform === 'win32' }, async () => {
+ test(`build wrapper reports only changed artifacts: ${buildArgs.join(' ') || 'ordinary release'}`, { skip: process.platform === 'win32' }, async () => {
   const { spawnSync } = require('node:child_process');
   const root = fixture();
   try {
     const tauri = path.join(root, 'shells/tauri');
     const scripts = path.join(tauri, 'scripts');
     const tools = path.join(root, 'tools');
-    const output = path.join(root, 'custom-target/synthetic-triple/debug/bundle');
+    const smoke = buildArgs.length > 0;
+    const profileDir = smoke ? 'custom-target/synthetic-triple/debug/bundle' : 'custom-target/release/bundle';
+    const output = path.join(root, profileDir, process.platform === 'darwin' ? 'macos' : 'appimage');
     const marker = path.join(root, 'ran-current');
     fs.mkdirSync(scripts, { recursive: true });
     fs.mkdirSync(path.join(tauri, 'node_modules/.bin'), { recursive: true });
@@ -231,17 +274,23 @@ for (const buildArgs of [
     const executable = (name, body) => fs.writeFileSync(name, `#!${process.execPath}\n${body}\n`, { mode: 0o755 });
     executable(path.join(tools, 'cargo'), `console.log(JSON.stringify({target_directory:${JSON.stringify(path.join(root, 'custom-target'))}}));`);
     executable(path.join(tools, 'npm'), 'process.exit(0);');
-    artifact(output, 'a-stale', process.platform);
+    const stale = artifact(output, 'a-stale', process.platform);
+    const staleBundle = process.platform === 'darwin' ? path.join(stale, '../../..') : stale;
+    const recent = new Date(Date.now() + 10000);
+    fs.utimesSync(staleBundle, recent, recent);
     const current = artifact(output, 'z-current', process.platform);
     // Snapshot an existing current artifact too: changing a nested binary must count.
     const program = `#!/bin/sh\nprintf current > '${marker}'\n`;
     executable(path.join(tauri, 'node_modules/.bin/tauri'), `require('node:fs').writeFileSync(${JSON.stringify(current)}, ${JSON.stringify(program)}, {mode:0o755});`);
-    const result = spawnSync(process.execPath, [path.join(scripts, 'build-tauri.mjs'), '--smoke-test', ...buildArgs], {
+    const result = spawnSync(process.execPath, [path.join(scripts, 'build-tauri.mjs'), ...(smoke ? ['--smoke-test', ...buildArgs] : [])], {
       env: { ...process.env, PATH: tools + path.delimiter + process.env.PATH },
       encoding: 'utf8', timeout: 10000
     });
     assert.equal(result.status, 0, result.stderr);
-    assert.equal(fs.readFileSync(marker, 'utf8'), 'current');
+    assert.match(result.stdout, /Built Tauri artifacts:[\s\S]*z-current/);
+    assert.doesNotMatch(result.stdout, /a-stale/);
+    if (smoke) assert.equal(fs.readFileSync(marker, 'utf8'), 'current');
+    else assert.equal(fs.existsSync(marker), false);
   } finally { fs.rmSync(root, { recursive: true, force: true }); }
 });
 

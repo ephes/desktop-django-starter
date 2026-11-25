@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Measure Tauri packaged-smoke process-group retirement on a monotonic clock.
+
+- Report only new or changed Tauri build bundles and require a single changed
+  NSIS installer for the Windows validation checklist.
+
 - Treat wrapper config that disappears before opening as missing and report
   other read failures with the config path.
 
