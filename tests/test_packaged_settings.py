@@ -354,11 +354,47 @@ def test_secret_key_permissions_follow_descriptor_after_path_replacement(
         original_fchmod(descriptor, mode)
 
     monkeypatch.setattr(runtime_secret.os, "fchmod", replace_path_and_repair)
-    assert load_or_create_secret_key(tmp_path) == "original-key"
+    with pytest.raises(ImproperlyConfigured, match="secret key path .* changed while being read"):
+        load_or_create_secret_key(tmp_path)
     assert changed == [True]
     assert stat.S_IMODE((tmp_path / "saved-key").stat().st_mode) == 0o600
     assert unrelated.stat().st_mode == unrelated_mode
     assert unrelated.read_text() == "unrelated"
+
+
+@pytest.mark.parametrize("replace_key", [False, True], ids=["removed", "replaced"])
+def test_secret_key_path_changes_after_final_descriptor_check(
+    monkeypatch, tmp_path: Path, replace_key: bool
+) -> None:
+    key_path = tmp_path / SECRET_KEY_FILENAME
+    key_path.write_bytes(b"original-key")
+    key_path.chmod(0o600)
+    replacement = tmp_path / "replacement"
+    replacement.write_bytes(b"new-key-data")
+    real_fstat = os.fstat
+    calls = 0
+
+    def change_path_after_final_check(descriptor):
+        nonlocal calls
+        info = real_fstat(descriptor)
+        calls += 1
+        if calls == 2:
+            key_path.rename(tmp_path / "saved-key")
+            if replace_key:
+                replacement.replace(key_path)
+        return info
+
+    with monkeypatch.context() as patch:
+        patch.setattr(runtime_secret.os, "fstat", change_path_after_final_check)
+        with pytest.raises(
+            ImproperlyConfigured, match="secret key path .* changed while being read"
+        ):
+            load_or_create_secret_key(tmp_path)
+
+    if replace_key:
+        assert load_or_create_secret_key(tmp_path) == "new-key-data"
+    else:
+        assert not key_path.exists()
 
 
 def test_concurrent_secret_creators_read_one_complete_key(tmp_path: Path) -> None:
@@ -371,18 +407,33 @@ def test_concurrent_secret_creators_read_one_complete_key(tmp_path: Path) -> Non
     assert [p.name for p in tmp_path.iterdir()] == [SECRET_KEY_FILENAME]
 
 
+@pytest.mark.parametrize("retire_after_descriptor_check", [False, True])
 def test_secret_key_read_survives_creator_retiring_its_temp_link(
-    monkeypatch, tmp_path: Path
+    monkeypatch, tmp_path: Path, retire_after_descriptor_check: bool
 ) -> None:
     key_path = tmp_path / SECRET_KEY_FILENAME
     temp_path = tmp_path / ".secret_key.synthetic.tmp"
     temp_path.write_bytes(b"published-key")
     os.link(temp_path, key_path)
     original_fdopen = os.fdopen
+    original_fstat = os.fstat
+    checks = 0
 
     def retire_temp_link(descriptor, mode, **kwargs):
         temp_path.unlink()
         return original_fdopen(descriptor, mode, **kwargs)
 
-    monkeypatch.setattr(runtime_secret.os, "fdopen", retire_temp_link)
+    def retire_after_check(descriptor):
+        nonlocal checks
+        info = original_fstat(descriptor)
+        checks += 1
+        if checks == 2:
+            temp_path.unlink()
+        return info
+
+    if retire_after_descriptor_check:
+        monkeypatch.setattr(runtime_secret.os, "fstat", retire_after_check)
+    else:
+        monkeypatch.setattr(runtime_secret.os, "fdopen", retire_temp_link)
     assert load_or_create_secret_key(tmp_path) == "published-key"
+    assert not temp_path.exists()

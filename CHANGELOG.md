@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Refuse packaged startup when the secret key path is removed or replaced
+  during admission. Concurrent first starts still use the published key.
+
 - Preserve the original packaged secret key publication error when temporary
   cleanup also fails. Once a key is published, warn about failed cleanup and
   reuse the published key.

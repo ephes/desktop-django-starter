@@ -89,7 +89,9 @@ Open SQLite backup sources in read-only URI mode so vanished sources cannot be
 recreated empty. Read an existing secret key through one bounded descriptor,
 refusing special files and final symlinks/reparse points before reading. Use
 POSIX descriptor ownership/permissions, and Windows' public CreateFile API plus
-the existing per-user app-data ACL boundary.
+the existing per-user app-data ACL boundary. Before accepting the key, verify
+that its direct path still names the open file. Removing the first-start
+temporary hard link preserves that identity.
 
 ## D-019: Keep the last successful staged backend
 
