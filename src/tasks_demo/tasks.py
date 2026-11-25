@@ -150,12 +150,16 @@ def visible_tasks() -> list[SimulatedTask]:
 
 
 def clear_finished_routines() -> None:
+    completion_cutoff = timezone.now()
     last_id = SimulatedTask.objects.order_by("-pk").values_list("pk", flat=True).first()
     if last_id is None:
         return
 
     history = SimulatedTask.objects.filter(
-        pk__lte=last_id, status__in=[SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED]
+        # Legacy terminal rows without a completion time remain clearable.
+        Q(completed_at__lte=completion_cutoff) | Q(completed_at__isnull=True),
+        pk__lte=last_id,
+        status__in=[SimulatedTask.Status.DONE, SimulatedTask.Status.FAILED],
     ).order_by("pk")
     batch = history
     shared_ids: set[UUID] = set()

@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Keep routines completed during Clear Finished Routines and their queue results
+  available for the next clear.
+
 - Redirect to My Ponies after a successful create if counting pages for the
   numbered return link fails.
 
