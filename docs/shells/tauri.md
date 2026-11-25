@@ -72,6 +72,14 @@ Current minimal CSP posture:
 - Tauri follows the same staged-backend subprocess model as Electron and starts `db_worker` after Django passes the `/health/` readiness check
 
 
+## Local build preflight
+
+For both `just tauri-build` and `npm --prefix shells/tauri run smoke:build`,
+Cargo metadata has a 60-second deadline before backend staging starts. Set
+`DESKTOP_DJANGO_CARGO_METADATA_TIMEOUT_MS` to an integer from 1 through 600000
+to adjust this preflight. On timeout, check for a stuck Cargo process or wrapper
+before retrying.
+
 ## Current-build packaged smoke
 
 `npm --prefix shells/tauri run smoke:build` stages and builds normally, then
@@ -103,11 +111,13 @@ Retry with an explicit target where applicable or a dedicated
 
 Smoke execution defaults to 120 seconds. Set
 `DESKTOP_DJANGO_PACKAGED_SMOKE_TIMEOUT_MS` to an integer from 1 through 600000
-for a different finite deadline. This applies only to the packaged executable,
-not staging or compilation. The wrapper retains at most 8 KiB of diagnostic
-output and retires the owned Unix process group with SIGKILL when the
-executable exits, times out, or the wrapper receives SIGINT or SIGTERM during
-the smoke. Retirement includes leftover descendants. Cleanup has its own
+for a different finite deadline. The monotonic execution deadline starts when
+the wrapper launches the packaged executable. The wrapper must observe its
+exit before the deadline, even if the timeout callback has yet to run.
+The wrapper retains at most 8 KiB of diagnostic output and retires the owned
+Unix process group with SIGKILL when the executable exits, times out, or the
+wrapper receives SIGINT or SIGTERM during the smoke. Retirement includes
+leftover descendants. Cleanup has its own
 3-second confirmation limit measured on a monotonic clock. A timely exit can
 succeed even if cleanup finishes after the execution deadline. SIGINT and
 SIGTERM exit with status 130 and 143 respectively after attempting cleanup.
