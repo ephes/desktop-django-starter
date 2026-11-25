@@ -102,6 +102,55 @@ def test_secret_key_creation_keeps_the_key_another_process_created(
     assert [path.name for path in tmp_path.iterdir()] == [SECRET_KEY_FILENAME]
 
 
+@pytest.mark.parametrize("operation", ["fsync", "link"])
+def test_secret_key_stage_cleanup_preserves_creation_failure(
+    monkeypatch, tmp_path: Path, operation: str
+) -> None:
+    creation_error = OSError(f"synthetic {operation} failure")
+
+    def fail_creation(*args):
+        raise creation_error
+
+    def fail_cleanup(path, *, missing_ok=False):
+        raise PermissionError("synthetic stage cleanup failure")
+
+    monkeypatch.setattr(runtime_secret.os, operation, fail_creation)
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", fail_cleanup)
+        with pytest.raises(OSError) as exc:
+            load_or_create_secret_key(tmp_path)
+
+    assert exc.value is creation_error
+    assert any("synthetic stage cleanup failure" in note for note in exc.value.__notes__)
+    assert not (tmp_path / SECRET_KEY_FILENAME).exists()
+
+
+@pytest.mark.parametrize("another_creator_wins", [False, True])
+def test_secret_key_stage_cleanup_failure_keeps_published_key(
+    monkeypatch, tmp_path: Path, caplog, another_creator_wins: bool
+) -> None:
+    key_path = tmp_path / SECRET_KEY_FILENAME
+    real_link = os.link
+
+    def publish(source, destination):
+        if another_creator_wins:
+            key_path.write_text("winner-secret")
+        real_link(source, destination)
+
+    def fail_cleanup(path, *, missing_ok=False):
+        raise PermissionError("synthetic stage cleanup failure")
+
+    monkeypatch.setattr(runtime_secret.os, "link", publish)
+    monkeypatch.setattr(runtime_secret.secrets, "token_urlsafe", lambda _: "our-secret")
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", fail_cleanup)
+        key = load_or_create_secret_key(tmp_path)
+
+    assert key == ("winner-secret" if another_creator_wins else "our-secret")
+    assert load_or_create_secret_key(tmp_path) == key_path.read_text() == key
+    assert "synthetic stage cleanup failure" in caplog.text
+
+
 def test_packaged_settings_use_app_data_dir(monkeypatch, tmp_path: Path) -> None:
     bundle_dir = tmp_path / "bundle"
     monkeypatch.setenv("DJANGO_SECRET_KEY", "packaged-test-secret")

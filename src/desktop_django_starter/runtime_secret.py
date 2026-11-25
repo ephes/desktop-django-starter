@@ -8,6 +8,7 @@ random key per app-data directory on first start and reuse it afterwards.
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 import stat
@@ -15,6 +16,8 @@ import sys
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+
+logger = logging.getLogger(__name__)
 
 SECRET_KEY_FILENAME = "secret_key"
 SECRET_KEY_FILE_MODE = 0o600
@@ -50,8 +53,17 @@ def load_or_create_secret_key(app_data_dir: Path) -> str:
         except FileExistsError:
             # Another process created the key first; use theirs.
             pass
-    finally:
+    except BaseException as publication_error:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError as cleanup_error:
+            publication_error.add_note(f"Could not remove temporary secret key: {cleanup_error}")
+        raise
+
+    try:
         temp_path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("Could not remove temporary secret key at %s", temp_path, exc_info=True)
 
     created_key = _read_secret_key(key_path)
     if created_key is None:

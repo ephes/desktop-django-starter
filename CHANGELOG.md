@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Preserve the original packaged secret key publication error when temporary
+  cleanup also fails. Once a key is published, warn about failed cleanup and
+  reuse the published key.
+
 - Refuse Positron startup when the profile lock is not a direct regular file
   or its path changes during acquisition.
 
