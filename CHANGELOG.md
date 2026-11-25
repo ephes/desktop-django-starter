@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reject nonfinite numbers in packaged completion and stage-owner JSON markers,
+  including nested metadata and exponent overflow.
+
 - Refuse packaged startup when the secret key path is removed or replaced
   during admission. Concurrent first starts still use the published key.
 

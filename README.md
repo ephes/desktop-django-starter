@@ -436,9 +436,9 @@ private snapshot taken under the asset sync lock.
 Packaged state startup validates `state.json` and the direct database/media/cache
 layout before reuse, before renaming a new stage and again after publication.
 An invalid stage leaves the final version path free for retry. Completion and
-stage-owner markers reject duplicate JSON members at every depth, including
-escaped spellings of the same name. Ambiguous stage ownership retains the whole
-stage for inspection with the app closed.
+stage-owner markers reject duplicate JSON members and nonfinite numbers at every
+depth, including escaped duplicate names and exponent overflow. Ambiguous stage
+ownership retains the whole stage for inspection with the app closed.
 Incomplete restores stop with repair guidance and remain
 untouched; only a marker with `copied_from: null` permits an absent first-use DB.
 Symlink/reparse-point state roots and database leaves are refused. Media upgrades

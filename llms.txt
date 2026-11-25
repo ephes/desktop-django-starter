@@ -104,10 +104,10 @@ this ownership. Native Windows process-tree acceptance remains required.
   backup. The media copy precedes the backup. Detected changes refuse
   publication. Close writers and retry from the retained predecessor.
 
-- Completion and stage-owner JSON markers reject duplicate decoded members at
-  every depth, including escaped names and equal values. Ambiguous owner records
-  retain the entire stage for offline inspection; ambiguous completion records
-  stop reuse/import without rewriting the published generation.
+- Completion and stage-owner JSON markers reject duplicate decoded members and
+  nonfinite numbers at every depth. Ambiguous owner records retain the entire
+  stage for offline inspection. Ambiguous completion records stop reuse/import
+  without rewriting the published generation.
 
 - Shell startup explicitly calls `recover_stale_routines` after migrations
   and previous-worker retirement. Django app initialization is read-only

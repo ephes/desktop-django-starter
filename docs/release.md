@@ -838,7 +838,10 @@ to 100,016 entries and 65 levels. Larger trees (including stages produced using
 raised media budgets), unknown contents, links or missing/invalid owner records
 remain for inspection. Duplicate JSON members in owner or completion markers
 are invalid, even if their values agree or names use JSON escapes; nested
-objects are checked too. Ambiguous owner claims retain the entire stage.
+objects are checked too. Both markers reject `NaN`, `Infinity`, `-Infinity` and
+exponents that overflow to infinity, including in nested metadata. Completion
+markers can include ordinary JSON metadata. Ambiguous owner claims retain the
+entire stage.
 Recovery rechecks the state root and stage identities before detaching the stage
 into a private `.dds-retired-<uuid>` directory and verifies its identity again
 before removal. A failure before detaching removes the empty retirement
