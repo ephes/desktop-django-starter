@@ -442,11 +442,12 @@ ownership retains the whole stage for inspection with the app closed.
 Incomplete restores stop with repair guidance and remain
 untouched; only a marker with `copied_from: null` permits an absent first-use DB.
 Symlink/reparse-point state roots and database leaves are refused. Media upgrades
-copy only regular files/directories, with defaults of 100,000 entries, 2 GiB and
-64 levels. Each file is bounded by its initial size. Startup copies media before
-the SQLite backup and rechecks source media metadata afterwards. Detected
-changes stop publication. Close the previous app and any media writers before
-upgrading or retrying from the retained predecessor.
+copy only regular files/directories, with defaults of 100,000 entries and
+2 GiB. Media depth defaults to 64 levels below the root and stays capped at 64
+even with a higher override. Each file is bounded by its initial size.
+Startup copies media before the SQLite backup and rechecks source media metadata
+afterwards. Detected changes stop publication. Close the previous app and any
+media writers before upgrading or retrying from the retained predecessor.
 See [state recovery and limits](docs/release.md#upgrades-and-rollbacks).
 
 State initialization holds a persistent OS lock across recovery and publication.

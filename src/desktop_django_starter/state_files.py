@@ -13,6 +13,9 @@ from django.core.exceptions import ImproperlyConfigured
 
 from .runtime_secret import _open_key_windows
 
+# Keep recursive copy, sync, and cleanup below the runtime stack limit.
+_MAX_MEDIA_DEPTH = 64
+
 
 def state_error(detail: str) -> ImproperlyConfigured:
     return ImproperlyConfigured(
@@ -133,7 +136,11 @@ def copy_media(source: Path, destination: Path) -> Iterator[None]:
         raise state_error("media tree appeared during database backup")
 
     limits = []
-    for suffix, default in [("ENTRIES", 100_000), ("BYTES", 2 * 1024**3), ("DEPTH", 64)]:
+    for suffix, default in [
+        ("ENTRIES", 100_000),
+        ("BYTES", 2 * 1024**3),
+        ("DEPTH", _MAX_MEDIA_DEPTH),
+    ]:
         try:
             limit = int(os.environ.get(f"DESKTOP_DJANGO_MEDIA_MAX_{suffix}", str(default)))
             if limit <= 0:
@@ -143,7 +150,8 @@ def copy_media(source: Path, destination: Path) -> Iterator[None]:
                 f"media {suffix.lower()} budget must be a positive integer"
             ) from error
         limits.append(limit)
-    max_entries, max_bytes, max_depth = limits
+    max_entries, max_bytes, configured_depth = limits
+    max_depth = min(configured_depth, _MAX_MEDIA_DEPTH)
     entries = 0
     source_bytes = 0
     directories: list[tuple[Path, tuple[int, ...]]] = []

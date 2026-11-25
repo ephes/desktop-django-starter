@@ -807,9 +807,11 @@ and identities; hostile concurrent changes by the same account are unsupported.
 
 Media upgrade limits default to 100,000 entries (files plus directories),
 2 GiB of source bytes and 64 directory levels below the media root.
-Operators can increase positive integer environment values before launching:
-`DESKTOP_DJANGO_MEDIA_MAX_ENTRIES`, `DESKTOP_DJANGO_MEDIA_MAX_BYTES`, and
-`DESKTOP_DJANGO_MEDIA_MAX_DEPTH`. Limits apply per attempt. All media symlinks,
+Set `DESKTOP_DJANGO_MEDIA_MAX_ENTRIES` and `DESKTOP_DJANGO_MEDIA_MAX_BYTES` to
+positive integers to change those limits before launching.
+`DESKTOP_DJANGO_MEDIA_MAX_DEPTH` also accepts a positive integer, with values
+above 64 capped at 64. A deeper tree must be flattened while the app is closed
+before retrying. Limits apply per attempt. All media symlinks,
 including internal links, are refused. A refusal retains the predecessor and
 removes unpublished staging; repair the synthetic/imported tree or adjust the
 budget with enough free disk space, then retry. Each file is read only to its
