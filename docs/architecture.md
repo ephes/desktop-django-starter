@@ -268,8 +268,9 @@ Current launcher contract:
   links and success redirects accept only positive page numbers written with up
   to 19 ASCII digits. Missing or invalid values return to the first page.
   Accepted values clamp to the current last page, using the new count after a
-  successful mutation. The release modal follows that redirect, and Release All
-  Ponies returns to the first page.
+  successful mutation. If the count fails after a pony is saved during creation,
+  the success redirect opens the first page. The release modal follows its
+  success redirect, and Release All Ponies returns to the first page.
 - Edit and release requests carry a signed digest of the displayed pony's ID,
   editable content and update timestamp. SQLite's writer lock is acquired before
   reloading and comparing that revision, and is held through save/delete. Missing,
@@ -317,6 +318,11 @@ Current launcher contract:
   running keeps its polled snapshot until the next poll.
   Older terminal rows remain until Clear Finished Routines deletes them.
   Clearing uses batches of up to 100 routine rows in primary-key order.
+  The clear first snapshots the IDs of routines that are terminal under the
+  writer lock, including legacy rows without a completion timestamp. Every batch
+  selects and deletes only from that snapshot. A routine whose completion commits
+  after the snapshot stays for a later clear, whatever completion time its worker
+  recorded.
   Each batch commits its history deletion and verified backend deletions in the
   same SQLite transaction. A backend result qualifies if it has terminal status,
   matches the demo task path, backend and queue, carries the routine's integer

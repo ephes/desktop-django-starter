@@ -12,7 +12,7 @@ from uuid import UUID
 
 import pytest
 from django.core.management import call_command
-from django.db import OperationalError, ProgrammingError, close_old_connections
+from django.db import OperationalError, ProgrammingError, close_old_connections, transaction
 from django.db.models import QuerySet
 from django.tasks import TaskResultStatus
 from django.urls import reverse
@@ -546,6 +546,47 @@ class TestTaskClear:
         assert response.status_code == 200
         assert not SimulatedTask.objects.exists()
         assert DBTaskResult.objects.filter(pk=backend.pk).exists()
+
+    @pytest.mark.django_db(transaction=True)
+    @pytest.mark.parametrize("completion_offset", [timedelta(0), -timedelta(minutes=1)])
+    def test_clear_preserves_completion_between_batches(self, client, completion_offset):
+        # A negative offset models a worker that computed its completion time
+        # before the clear started but committed it between batches.
+        finished = SimulatedTask.objects.create(
+            label="Earlier completion", status="DONE", completed_at=timezone.now()
+        )
+        running = SimulatedTask.objects.create(label="Still running", status="RUNNING")
+        backend = enqueue_demo_task(running)
+        backend.claim("synthetic-worker")
+        delete = QuerySet.delete
+
+        def finish_routine():
+            assert not SimulatedTask.objects.filter(pk=finished.pk).exists()
+            SimulatedTask.objects.filter(pk=running.pk).update(
+                status="DONE", completed_at=timezone.now() + completion_offset
+            )
+            backend.set_successful("Synthetic result")
+
+        def complete_after_first_batch(queryset):
+            if queryset.model is SimulatedTask and queryset.filter(pk=finished.pk).exists():
+                transaction.on_commit(finish_routine)
+            return delete(queryset)
+
+        url = reverse("tasks_demo:task-clear")
+        with (
+            mock.patch("tasks_demo.tasks.CLEAR_BATCH_SIZE", 1),
+            mock.patch.object(QuerySet, "delete", complete_after_first_batch),
+        ):
+            assert client.post(url).status_code == 200
+
+        assert list(SimulatedTask.objects.values_list("pk", "status")) == [(running.pk, "DONE")]
+        assert DBTaskResult.objects.filter(
+            pk=backend.pk, status=TaskResultStatus.SUCCESSFUL
+        ).exists()
+
+        assert client.post(url).status_code == 200
+        assert not SimulatedTask.objects.exists()
+        assert not DBTaskResult.objects.filter(pk=backend.pk).exists()
 
     def test_clear_rolls_back_backend_deletion_if_history_deletion_fails(self, client):
         task = SimulatedTask.objects.create(label="Finished", status="DONE")
