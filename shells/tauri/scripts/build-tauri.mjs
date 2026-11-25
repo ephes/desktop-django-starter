@@ -126,6 +126,23 @@ function argumentValue(name, short) {
   }
   return values[0];
 }
+
+function cargoTargetDirectory(stdout) {
+  const message = 'Expected Cargo metadata JSON object with target_directory set to an absolute path';
+  let metadata;
+  try {
+    metadata = JSON.parse(stdout);
+  } catch {
+    throw new Error(message);
+  }
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)
+    || typeof metadata.target_directory !== 'string' || !path.isAbsolute(metadata.target_directory)
+    || metadata.target_directory.includes('\0')) {
+    throw new Error(message);
+  }
+  return metadata.target_directory;
+}
+
 const metadataTimeoutMs = Number(process.env.DESKTOP_DJANGO_CARGO_METADATA_TIMEOUT_MS ?? 60000);
 if (!Number.isSafeInteger(metadataTimeoutMs) || metadataTimeoutMs < 1 || metadataTimeoutMs > 600000) {
   throw new Error('DESKTOP_DJANGO_CARGO_METADATA_TIMEOUT_MS must be 1..600000');
@@ -147,7 +164,7 @@ const profile = argumentValue('--profile') || (buildArgs.includes('--debug') || 
 const runnerTargetDir = argumentValue('--target-dir');
 const layout = { tauriRoot,
   targetDirectory: runnerTargetDir ? path.resolve(tauriRoot, 'src-tauri', runnerTargetDir)
-    : JSON.parse(metadata.stdout).target_directory,
+    : cargoTargetDirectory(metadata.stdout),
   target: argumentValue('--target', '-t') || process.env.CARGO_BUILD_TARGET,
   profile };
 const bundleRoots = buildOutputRoots(layout);

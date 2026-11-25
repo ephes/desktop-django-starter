@@ -80,6 +80,11 @@ Cargo metadata has a 60-second deadline before backend staging starts. Set
 to adjust this preflight. On timeout, check for a stuck Cargo process or wrapper
 before retrying.
 
+Without a forwarded `--target-dir`, the wrapper requires a Cargo metadata JSON
+object with an absolute `target_directory` path and rejects invalid output before
+artifact discovery or backend staging. A forwarded `--target-dir` takes precedence
+over the metadata output after the Cargo command succeeds.
+
 ## Current-build packaged smoke
 
 `npm --prefix shells/tauri run smoke:build` stages and builds normally, then

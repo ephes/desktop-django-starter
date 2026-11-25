@@ -332,6 +332,47 @@ for (const [name, cargoBody, diagnostic] of [
   });
 }
 
+test('build wrapper rejects invalid Cargo target-directory metadata before staging', { skip: process.platform === 'win32' }, t => {
+  const { spawnSync } = require('node:child_process');
+  const fixtures = [
+    ['missing field', '{}'], ['relative path', '{"target_directory":"relative/target"}'],
+    ['empty path', '{"target_directory":""}'], ['numeric path', '{"target_directory":1}'],
+    ['null metadata', 'null'], ['array metadata', '[]'], ['invalid JSON', '{'],
+  ];
+  for (const [name, stdout] of fixtures) {
+    const root = fixture();
+    t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+    const staged = path.join(root, 'staged');
+    const { entry, env } = stubBuild(root, path.join(root, 'built'), '', {
+      cargoBody: `console.log(${JSON.stringify(stdout)});`,
+      stageBody: `require('node:fs').writeFileSync(${JSON.stringify(staged)}, 'staged');`,
+    });
+    const result = spawnSync(process.execPath, [entry], { env, encoding: 'utf8', timeout: 5000 });
+    assert.ifError(result.error);
+    assert.equal(fs.existsSync(staged), false, name);
+    assert.equal(result.status, 1, name);
+    assert.match(result.stderr, /Cargo metadata.*target_directory.*absolute path/i, name);
+  }
+});
+
+test('an explicit Cargo target directory takes precedence over unusable metadata', { skip: process.platform === 'win32' }, t => {
+  const { spawnSync } = require('node:child_process');
+  const root = fixture();
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  const target = path.join(root, 'explicit-target');
+  const output = path.join(target, 'release/bundle', process.platform === 'darwin' ? 'macos' : 'appimage');
+  const current = artifact(output, 'override', process.platform);
+  const { entry, env } = stubBuild(root, current, 'synthetic rebuild', {
+    cargoBody: 'console.log("{}");',
+  });
+  const result = spawnSync(process.execPath, [entry, '--', '--target-dir', target], {
+    env, encoding: 'utf8', timeout: 5000,
+  });
+  assert.ifError(result.error);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /Built Tauri artifacts:[\s\S]*explicit-target[\s\S]*override/);
+});
+
 for (const buildArgs of [
   [],
   ['--debug', '--target', 'synthetic-triple'],
