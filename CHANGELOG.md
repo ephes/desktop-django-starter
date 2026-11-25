@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Prune nested tool caches and environments in the Python fallback for `just loc`.
+
 - Include Rust sources in the Python fallback for `just loc`.
 
 - Reject wrapper model values that cannot be saved as UTF-8 TOML before

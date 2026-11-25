@@ -38,32 +38,31 @@ FALLBACK_LANGUAGE_BY_SUFFIX = {
     ".yaml": "YAML",
     ".yml": "YAML",
 }
-FALLBACK_EXCLUDED_DIRS = {
+FALLBACK_EXCLUDED_DIR_NAMES = {
     ".git",
     ".mypy_cache",
     ".pytest_cache",
     ".ruff_cache",
-    ".stage",
     ".venv",
     "__pycache__",
+    "node_modules",
+}
+FALLBACK_EXCLUDED_DIR_PATHS = {
+    ".stage",
     "build",
     "dist",
     "docs/_build",
     "positron",
     "shells/electron/dist",
-    "shells/electron/node_modules",
     "shells/positron/.briefcase",
-    "shells/positron/.venv",
     "shells/positron/build",
     "shells/positron/dist",
     "shells/positron/linux",
     "shells/positron/logs",
     "shells/positron/macOS",
     "shells/positron/windows",
-    "shells/tauri/node_modules",
     "shells/tauri/src-tauri/target",
     "tauri",
-    "node_modules",
 }
 
 
@@ -231,7 +230,10 @@ def _iter_fallback_files(root: Path) -> Iterator[Path]:
 
 
 def _is_excluded_dir(path_fragment: str) -> bool:
-    return path_fragment in FALLBACK_EXCLUDED_DIRS
+    return (
+        Path(path_fragment).name in FALLBACK_EXCLUDED_DIR_NAMES
+        or path_fragment in FALLBACK_EXCLUDED_DIR_PATHS
+    )
 
 
 def _fallback_language_for_path(path: Path) -> str | None:

@@ -100,7 +100,13 @@ def test_excluded_dirs_cover_generated_shell_artifacts() -> None:
 
 
 def test_python_fallback_prunes_excluded_trees(monkeypatch, tmp_path, capsys) -> None:
-    excluded = {tmp_path / "node_modules", tmp_path / "shells/tauri/src-tauri/target"}
+    excluded = {
+        tmp_path / "node_modules",
+        tmp_path / "fixtures/project/.venv",
+        tmp_path / "fixtures/project/node_modules",
+        tmp_path / "src/app/__pycache__",
+        tmp_path / "shells/tauri/src-tauri/target",
+    }
     sources = {
         tmp_path / "src/app/models.py": "first\nsecond\n",
         tmp_path / "src/app/build/helper.py": "third\n",
