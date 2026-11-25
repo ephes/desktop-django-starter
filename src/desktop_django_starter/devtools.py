@@ -6,7 +6,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
@@ -75,15 +75,7 @@ def count_lines_of_code() -> int:
 
 
 def _count_with_cloc() -> int:
-    summary_cmd = [
-        "cloc",
-        ".",
-        "--vcs=git",
-        f"--exclude-lang={EXCLUDED_LANGUAGES}",
-        "--csv",
-        "--quiet",
-    ]
-    detail_cmd = [
+    command = [
         "cloc",
         ".",
         "--vcs=git",
@@ -92,26 +84,22 @@ def _count_with_cloc() -> int:
         "--csv",
         "--quiet",
     ]
-
-    summary_output = _run_cloc(summary_cmd)
-    detail_output = _run_cloc(detail_cmd)
-    summary_info = _parse_cloc_summary_csv(summary_output)
-    directory_stats = _aggregate_cloc_csv(detail_output)
+    metadata, summary_rows, directory_stats = _aggregate_cloc_csv(_run_cloc(command))
 
     if Console is not None:
         console = Console()
         console.print("[blue]Overall Summary:[/blue]")
-        if summary_info["metadata"]:
-            console.print(f"[dim]{summary_info['metadata']}[/dim]")
-        _print_rich_cloc_summary_table(console, summary_info["rows"])  # type: ignore[arg-type]
+        if metadata:
+            console.print(metadata, style="dim", markup=False)
+        _print_rich_cloc_summary_table(console, summary_rows)
         console.print()
         _print_rich_directory_table(console, directory_stats)
         console.print("[green]Lines of code counted successfully with cloc![/green]")
     else:
         print("Overall Summary:")
-        if summary_info["metadata"]:
-            print(summary_info["metadata"])
-        print(_render_cloc_summary_table(summary_info["rows"]))  # type: ignore[arg-type]
+        if metadata:
+            print(metadata)
+        print(_render_cloc_summary_table(summary_rows))
         print()
         print(_render_directory_table(directory_stats))
         print("Lines of code counted successfully with cloc!")
@@ -150,52 +138,44 @@ def _run_cloc(command: list[str]) -> str:
         raise SystemExit(1) from exc
 
 
-def _aggregate_cloc_csv(csv_output: str) -> dict[str, dict[str, int]]:
+def _aggregate_cloc_csv(
+    csv_output: str,
+) -> tuple[str, list[dict[str, int | str]], dict[str, dict[str, int]]]:
+    language_stats: dict[str, Counter[str]] = defaultdict(Counter)
     directory_stats: dict[str, dict[str, int]] = defaultdict(lambda: {"files": 0, "lines": 0})
+    totals: Counter[str] = Counter()
     reader = csv.DictReader(io.StringIO(csv_output))
+    metadata = reader.fieldnames[5] if reader.fieldnames and len(reader.fieldnames) > 5 else ""
 
     for row in reader:
-        file_path = row.get("filename", "").strip()
-        if not file_path or file_path == "SUM":
+        language = (row.get("language") or "").strip()
+        file_path = row.get("filename")
+        if not language or language == "SUM" or not file_path:
             continue
-
         try:
-            line_count = int(row["code"])
+            counts = {
+                "files": 1,
+                "blank": int(row["blank"]),
+                "comment": int(row["comment"]),
+                "code": int(row["code"]),
+            }
         except (KeyError, TypeError, ValueError):
             continue
 
+        language_stats[language].update(counts)
+        totals.update(counts)
         bucket = bucket_for_path(file_path)
         directory_stats[bucket]["files"] += 1
-        directory_stats[bucket]["lines"] += line_count
+        directory_stats[bucket]["lines"] += counts["code"]
 
-    return dict(directory_stats)
+    rows: list[dict[str, int | str]] = [
+        {"language": language, **counts}
+        for language, counts in sorted(language_stats.items(), key=lambda item: -item[1]["code"])
+    ]
+    if totals:
+        rows.append({"language": "SUM", **totals})
 
-
-def _parse_cloc_summary_csv(csv_output: str) -> dict[str, str | list[dict[str, int | str]]]:
-    reader = csv.DictReader(io.StringIO(csv_output))
-    metadata = ""
-    if reader.fieldnames and len(reader.fieldnames) > 5:
-        metadata = reader.fieldnames[5]
-
-    rows: list[dict[str, int | str]] = []
-    for row in reader:
-        language = row.get("language", "").strip()
-        if not language:
-            continue
-        try:
-            rows.append(
-                {
-                    "language": language,
-                    "files": int(row["files"]),
-                    "blank": int(row["blank"]),
-                    "comment": int(row["comment"]),
-                    "code": int(row["code"]),
-                }
-            )
-        except (KeyError, TypeError, ValueError):
-            continue
-
-    return {"metadata": metadata, "rows": rows}
+    return metadata, rows, dict(directory_stats)
 
 
 def _count_with_python() -> int:

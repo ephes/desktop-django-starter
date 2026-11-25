@@ -264,7 +264,9 @@ The generated Electron icon outputs under `shells/electron/assets/icons/` are ke
 - `just build`: build the Python package metadata scaffold
 - `just cli-build`: build the PyPI wrapper package used by `uvx desktop-django-starter ...`
 
-For `just loc`, each `cloc` invocation (summary and detail) has a 30-second execution timeout.
+For `just loc`, one `cloc` scan has a 30-second execution timeout. The language
+summary and directory breakdown use the same per-file counts, and the report
+shows the `cloc` version from that scan.
 A timeout, startup failure, or failed run exits nonzero without printing a success
 summary or falling back to Python; timed-out direct child processes are killed
 and reaped by `subprocess.run`. Output is captured in temporary files so inherited

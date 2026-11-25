@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Derive both `just loc` tables from the same `cloc` scan.
+
 - Keep routines completed during Clear Finished Routines and their queue results
   available for the next clear.
 
