@@ -8,6 +8,7 @@ random key per app-data directory on first start and reuse it afterwards.
 
 from __future__ import annotations
 
+import logging
 import os
 import secrets
 import stat
@@ -15,6 +16,8 @@ import sys
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
+
+logger = logging.getLogger(__name__)
 
 SECRET_KEY_FILENAME = "secret_key"
 SECRET_KEY_FILE_MODE = 0o600
@@ -50,8 +53,17 @@ def load_or_create_secret_key(app_data_dir: Path) -> str:
         except FileExistsError:
             # Another process created the key first; use theirs.
             pass
-    finally:
+    except BaseException as publication_error:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError as cleanup_error:
+            publication_error.add_note(f"Could not remove temporary secret key: {cleanup_error}")
+        raise
+
+    try:
         temp_path.unlink(missing_ok=True)
+    except OSError:
+        logger.warning("Could not remove temporary secret key at %s", temp_path, exc_info=True)
 
     created_key = _read_secret_key(key_path)
     if created_key is None:
@@ -95,19 +107,21 @@ def _open_key_windows(key_path: Path) -> int:
 def _read_secret_key(key_path: Path) -> str | None:
     descriptor = None
     try:
-        if sys.platform == "win32":
-            descriptor = _open_key_windows(key_path)
-        else:
-            descriptor = os.open(key_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        try:
+            if sys.platform == "win32":
+                descriptor = _open_key_windows(key_path)
+            else:
+                descriptor = os.open(key_path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+        except FileNotFoundError:
+            return None
         info = os.fstat(descriptor)
         if (
-            not stat.S_ISREG(info.st_mode)
-            or getattr(info, "st_file_attributes", 0) & 0x400  # reparse point
+            not _is_direct_regular_file(info)
             or info.st_size > SECRET_KEY_MAX_BYTES
             or (sys.platform != "win32" and info.st_uid != os.getuid())
         ):
             raise ValueError("expected a small, owner-held regular file")
-        # Bounded even if the file grows after fstat. No pathname is reopened.
+        # Read only from the admitted descriptor, even if the file grows after fstat.
         with os.fdopen(descriptor, "rb", buffering=0) as key_file:
             descriptor = None
             raw_key = key_file.read(SECRET_KEY_MAX_BYTES + 1)
@@ -139,9 +153,22 @@ def _read_secret_key(key_path: Path) -> str | None:
                 raise ValueError("key is empty")
             if sys.platform != "win32" and stat.S_IMODE(info.st_mode) & 0o077:
                 os.fchmod(key_file.fileno(), SECRET_KEY_FILE_MODE)
+
+            try:
+                named = key_path.lstat()
+            except FileNotFoundError:
+                named = None
+            # Permission repair and retiring the temporary link can change ctime.
+            if (
+                named is None
+                or not _is_direct_regular_file(named)
+                or not os.path.samestat(info, named)
+            ):
+                raise ImproperlyConfigured(
+                    f"The packaged secret key path {key_path} changed while being read. "
+                    "Close other app processes and finish any key maintenance before retrying."
+                )
         return key
-    except FileNotFoundError:
-        return None
     except (OSError, ValueError) as error:
         raise ImproperlyConfigured(
             f"The packaged secret key file {key_path} is unsafe or invalid. "
@@ -151,6 +178,12 @@ def _read_secret_key(key_path: Path) -> str | None:
     finally:
         if descriptor is not None:
             os.close(descriptor)
+
+
+def _is_direct_regular_file(info: os.stat_result) -> bool:
+    return stat.S_ISREG(info.st_mode) and not (
+        getattr(info, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+    )
 
 
 def _key_content_generation(info: os.stat_result) -> tuple[int, int, int, int]:
