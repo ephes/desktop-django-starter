@@ -97,7 +97,11 @@ class DesktopDjangoStarterPositron(toga.App):
         self.main_window = toga.MainWindow(title=self.formal_name)
         self.main_window.content = self.web_view
 
-        self._instance_lock = acquire_instance_lock(self.paths.data)
+        try:
+            self._instance_lock = acquire_instance_lock(self.paths.data)
+        except OSError as error:
+            self.server_ready.set_exception(error)
+            return
         if self._instance_lock is None:
             self._startup_error_message = (
                 "Desktop Django Starter Positron is already running for this user data directory."
