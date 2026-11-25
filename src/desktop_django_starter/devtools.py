@@ -32,6 +32,7 @@ FALLBACK_LANGUAGE_BY_SUFFIX = {
     ".js": "JavaScript",
     ".mjs": "JavaScript",
     ".py": "Python",
+    ".rs": "Rust",
     ".toml": "TOML",
     ".xml": "XML",
     ".yaml": "YAML",

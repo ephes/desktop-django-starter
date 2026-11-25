@@ -130,6 +130,29 @@ def test_python_fallback_prunes_excluded_trees(monkeypatch, tmp_path, capsys) ->
     assert not any(directory.is_relative_to(tree) for directory in scanned for tree in excluded)
 
 
+def test_python_fallback_counts_rust_sources_outside_tauri_target(
+    monkeypatch, tmp_path, capsys
+) -> None:
+    tauri = tmp_path / "shells/tauri/src-tauri"
+    sources = {
+        tauri / "src/main.rs": "fn main() {}\n",
+        tauri / "target/debug/build/generated.rs": "fn generated() {}\n",
+    }
+    for path, content in sources.items():
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
+
+    monkeypatch.setattr(devtools.shutil, "which", lambda _: None)
+    monkeypatch.setattr(devtools, "Console", None)
+    monkeypatch.chdir(tmp_path)
+
+    assert devtools.count_lines_of_code() == 0
+    output = capsys.readouterr().out
+    rows = [line.split() for line in output.splitlines() if line.startswith("|")]
+    assert "| Rust | 1 | 1 |".split() in rows
+    assert "| shells/tauri | 1 | 1 |".split() in rows
+
+
 @pytest.mark.parametrize("backend", ["cloc", "python"])
 def test_empty_plain_line_count_succeeds(backend, monkeypatch, tmp_path, capsys) -> None:
     monkeypatch.setattr(devtools, "Console", None)

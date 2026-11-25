@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Include Rust sources in the Python fallback for `just loc`.
+
 - Reject wrapper model values that cannot be saved as UTF-8 TOML before
   staging a config replacement. Existing defaults remain available.
 
