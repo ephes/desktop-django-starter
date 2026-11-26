@@ -61,6 +61,32 @@ def plant(root, paths):
         path.write_text("synthetic manage.py", encoding="utf-8")
 
 
+@pytest.mark.parametrize("probe", ["rev-parse", "status"])
+@pytest.mark.parametrize("force", [False, True])
+def test_git_probe_launch_failure_blocks_wrapper(preflight, monkeypatch, capsys, probe, force):
+    root, calls, launches = preflight
+    plant(root, ["manage.py"])
+    run_git = wrap.subprocess.run
+
+    def git(command, **kwargs):
+        if command[1] == probe:
+            raise FileNotFoundError("synthetic Git executable disappeared")
+        return run_git(command, **kwargs)
+
+    monkeypatch.setattr(wrap.subprocess, "run", git)
+    args = ["wrap", "--run", "--harness", "pi"] + (["--force"] if force else [])
+    with pytest.raises(SystemExit) as error:
+        main(args)
+    assert error.value.code == 1
+    output = capsys.readouterr()
+    assert f"Could not run git {probe}: synthetic Git executable disappeared" in output.err
+    assert "Preflight failed (1 error(s))." in output.out
+    if probe == "status":
+        assert ["git", "rev-parse", "--git-dir"] in calls
+        assert "Working tree clean" not in output.out
+    assert not launches
+
+
 @pytest.mark.parametrize(
     ("paths", "expected"),
     [

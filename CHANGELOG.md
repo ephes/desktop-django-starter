@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Report Git probe launch failures in `dds wrap` preflight, even with `--force`.
+
 - Reject Node runtime manifests that change between admission and reading.
   The startup error asks users to retry after staging completes.
 

@@ -640,14 +640,18 @@ def run_wrap(
     print()
 
     # 1. Git repo (hard error, always)
-    result = subprocess.run(
-        ["git", "rev-parse", "--git-dir"],
-        capture_output=True,
-    )
-    if result.returncode != 0:
-        pf.error("Not a git repository")
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--git-dir"],
+            capture_output=True,
+        )
+    except OSError as exc:
+        pf.error(f"Could not run git rev-parse: {_bounded_text(str(exc), 800)}")
     else:
-        pf.ok("Git repository")
+        if result.returncode != 0:
+            pf.error("Not a git repository")
+        else:
+            pf.ok("Git repository")
 
     # 2. Assets valid (hard error, always)
     if not SKILL_PATH.is_file():
@@ -656,21 +660,25 @@ def run_wrap(
         pf.ok(f"Assets: {ASSETS_PATH}")
 
     # 3. Status must succeed; --force only permits a known dirty worktree.
-    result = subprocess.run(
-        ["git", "status", "--porcelain"],
-        capture_output=True,
-        text=True,
-    )
-    if result.returncode != 0:
-        detail = _bounded_text((result.stderr or "no diagnostic output").strip(), 800)
-        pf.error(f"git status failed (exit {result.returncode}): {detail}")
-    elif result.stdout.strip():
-        if force:
-            pf.warn("Working tree has uncommitted changes (--force, continuing)")
-        else:
-            pf.error("Working tree has uncommitted changes (use --force to override)")
+    try:
+        status = subprocess.run(
+            ["git", "status", "--porcelain"],
+            capture_output=True,
+            text=True,
+        )
+    except OSError as exc:
+        pf.error(f"Could not run git status: {_bounded_text(str(exc), 800)}")
     else:
-        pf.ok("Working tree clean")
+        if status.returncode != 0:
+            detail = _bounded_text((status.stderr or "no diagnostic output").strip(), 800)
+            pf.error(f"git status failed (exit {status.returncode}): {detail}")
+        elif status.stdout.strip():
+            if force:
+                pf.warn("Working tree has uncommitted changes (--force, continuing)")
+            else:
+                pf.error("Working tree has uncommitted changes (use --force to override)")
+        else:
+            pf.ok("Working tree clean")
 
     # 4. manage.py discovery (at least one)
     manage_files = _find_manage_py()
