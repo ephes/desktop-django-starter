@@ -189,6 +189,27 @@ def test_secret_key_stage_cleanup_failure_keeps_published_key(
     assert "synthetic stage cleanup failure" in caplog.text
 
 
+def test_secret_key_survives_a_failed_temp_cleanup_warning(monkeypatch, tmp_path: Path) -> None:
+    key_path = tmp_path / SECRET_KEY_FILENAME
+    real_unlink = Path.unlink
+
+    def fail_temp_cleanup(path, *, missing_ok=False):
+        if path.parent == tmp_path and path.name.startswith(f".{SECRET_KEY_FILENAME}."):
+            raise PermissionError("synthetic stage cleanup failure")
+        return real_unlink(path, missing_ok=missing_ok)
+
+    def fail_warning(*args, **kwargs):
+        raise RuntimeError("synthetic warning failure")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "unlink", fail_temp_cleanup)
+        patch.setattr(runtime_secret.logger, "warning", fail_warning)
+        first = load_or_create_secret_key(tmp_path)
+
+    assert load_or_create_secret_key(tmp_path) == key_path.read_text() == first
+    assert len(first) >= 50
+
+
 def test_packaged_settings_use_app_data_dir(monkeypatch, tmp_path: Path) -> None:
     bundle_dir = tmp_path / "bundle"
     monkeypatch.setenv("DJANGO_SECRET_KEY", "packaged-test-secret")
