@@ -310,10 +310,12 @@ Current launcher contract:
   most 100 terminal rows, selected by newest completion time (then creation time
   and ID). Active queue results are loaded with the backend's public
   `DBTaskResult` model and `task_result` property in parameter-safe bulk batches.
-  Both bulk polling and single-result reconciliation require the matching task
-  function and the routine's integer ID as the sole positional argument, as
-  written by Start Routine. An argument mismatch follows the missing-result
-  policy and preserves running claims.
+  Before constructing a task result, bulk polling checks the stored task path,
+  backend, and queue against the configured routine task. Single-result
+  reconciliation uses Django's task lookup. Both paths require the routine's
+  integer ID as the sole positional argument, as written by Start Routine.
+  Identity and argument mismatches follow the missing-result policy and
+  preserve running claims.
   Fresh completions enter history in the same response. If reconciliation
   reloads a routine that was completed and cleared in the meantime, the
   response omits it; a routine whose backend result still reports it queued or

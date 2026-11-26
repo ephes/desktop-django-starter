@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Check stored routine task paths, backends, and queues before loading results
+  during polling so unrelated results cannot interrupt polling or supply a
+  routine's completion payload.
+
 - Stop `dds wrap` before launch when a file or dangling symlink occupies
   the `electron` output path, even with `--force`.
 

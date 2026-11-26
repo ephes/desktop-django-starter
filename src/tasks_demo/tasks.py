@@ -124,11 +124,14 @@ def visible_tasks() -> list[SimulatedTask]:
             backend_row = backend_rows[UUID(result_id)]
         except (KeyError, ValueError) as exc:
             raise TaskResultDoesNotExist(result_id) from exc
-        backend_row.traceback = backend_row.traceback_preview
-        result = backend_row.task_result
-        if result.task.func != run_simulated_task.func:
+        if (
+            backend_row.task_path != run_simulated_task.module_path
+            or backend_row.backend_name != run_simulated_task.backend
+            or backend_row.queue_name != run_simulated_task.queue_name
+        ):
             raise TaskResultMismatch("Task does not match")
-        return result
+        backend_row.traceback = backend_row.traceback_preview
+        return backend_row.task_result
 
     reconciled = (reconcile_task_with_backend(row, result_loader=load_result) for row in active)
     active = [row for row in reconciled if row is not None]
