@@ -314,8 +314,11 @@ Current launcher contract:
   backend, and queue against the configured routine task. Single-result
   reconciliation uses Django's task lookup. Both paths require the routine's
   integer ID as the sole positional argument, as written by Start Routine.
-  Identity and argument mismatches follow the missing-result policy and
-  preserve running claims.
+  Bulk polling also checks the stored status and the argument container before
+  constructing the result. A malformed status or argument container makes only
+  that result unavailable. Missing results and identity or argument mismatches
+  can fail a routine only while it is still pending. A worker claim made
+  during the poll is preserved. Database errors still surface to the caller.
   Fresh completions enter history in the same response. If reconciliation
   reloads a routine that was completed and cleared in the meantime, the
   response omits it; a routine whose backend result still reports it queued or

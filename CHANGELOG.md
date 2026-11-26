@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Keep reconciling healthy routines when a stored queue result has a malformed
+  status or argument container. Preserve running claims, including claims made
+  while a poll is in progress.
+
 - Check stored routine task paths, backends, and queues before loading results
   during polling so unrelated results cannot interrupt polling or supply a
   routine's completion payload.
