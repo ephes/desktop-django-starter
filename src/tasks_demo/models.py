@@ -1,6 +1,18 @@
 from django.db import models
 
 
+def normalized_backend_task_id() -> models.Func:
+    # SQLite matches expression indexes structurally, so the fixed replacement
+    # tokens must be SQL literals in both the index and the lookup predicate.
+    return models.Func(
+        "backend_task_id",
+        template=(
+            "REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(LOWER(%(expressions)s), "
+            "'urn:', ''), 'uuid:', ''), '{', ''), '}', ''), '-', '')"
+        ),
+    )
+
+
 class SimulatedTask(models.Model):
     class Status(models.TextChoices):
         PENDING = "PENDING", "Pending"
@@ -33,6 +45,7 @@ class SimulatedTask(models.Model):
                 condition=models.Q(status="DONE") | models.Q(status="FAILED"),
                 name="routine_history_order_idx",
             ),
+            models.Index(normalized_backend_task_id(), name="routine_backend_ref_hex_idx"),
         ]
 
     def __str__(self) -> str:

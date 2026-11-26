@@ -4,14 +4,19 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-from django.db import close_old_connections
+from django.db import close_old_connections, connection
 from django.tasks import TaskResultStatus
 from django.urls import reverse
 from django.utils import timezone
 from django_tasks_db.models import DBTaskResult
 
 from tasks_demo.models import SimulatedTask
-from tasks_demo.tasks import SimulatedTaskFailure, reconcile_task_with_backend, run_simulated_task
+from tasks_demo.tasks import (
+    SimulatedTaskFailure,
+    clear_finished_routines,
+    reconcile_task_with_backend,
+    run_simulated_task,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -180,6 +185,87 @@ def test_old_backend_completion_cannot_finalize_rebound_routine():
         assert current.result is None
         assert current.duration is None
         assert current.completed_at is None
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("backend_status", [TaskResultStatus.READY, TaskResultStatus.RUNNING])
+def test_poll_refreshes_active_rows_after_backend_observation(client, backend_status):
+    cleared, cleared_backend = queued_task()
+    claimed, _ = queued_task()
+    unchanged, _ = queued_task()
+    cleared_backend.status = backend_status
+    cleared_backend.save(update_fields=["status"])
+    load_result = DBTaskResult.task_result.fget
+
+    def finish_clear_and_claim():
+        try:
+            SimulatedTask.objects.filter(pk=cleared.pk).update(
+                status="DONE", completed_at=timezone.now()
+            )
+            cleared_backend.set_successful("Synthetic result")
+            clear_finished_routines()
+            SimulatedTask.objects.filter(pk=claimed.pk).update(status="RUNNING")
+        finally:
+            close_old_connections()
+
+    def read_result(backend):
+        result = load_result(backend)
+        if backend.pk == cleared_backend.pk:
+            assert result.status == backend_status
+            executor.submit(finish_clear_and_claim).result(timeout=10)
+        return result
+
+    with (
+        ThreadPoolExecutor(max_workers=1) as executor,
+        mock.patch.object(DBTaskResult, "task_result", property(read_result)),
+    ):
+        response = client.get(reverse("tasks_demo:task-status"))
+
+    assert response.status_code == 200
+    assert not SimulatedTask.objects.filter(pk=cleared.pk).exists()
+    assert {row["id"]: row["status"] for row in response.json()["tasks"]} == {
+        claimed.pk: "RUNNING",
+        unchanged.pk: "PENDING",
+    }
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("read", ["revalidation", "history"])
+def test_poll_keeps_routine_finished_before_a_final_read(client, read):
+    row, _ = queued_task()
+    triggered = []
+
+    def finish():
+        try:
+            SimulatedTask.objects.filter(pk=row.pk).update(
+                status="DONE", result="Synthetic result", completed_at=timezone.now()
+            )
+        finally:
+            close_old_connections()
+
+    def is_trigger(sql):
+        if not sql.startswith("SELECT") or '"tasks_demo_simulatedtask"' not in sql:
+            return False
+        if read == "history":
+            return "LIMIT" in sql
+        return '"tasks_demo_simulatedtask"."id" IN (' in sql
+
+    def finish_before_read(execute, sql, params, many, context):
+        if not triggered and is_trigger(sql):
+            triggered.append(sql)
+            executor.submit(finish).result(timeout=10)
+        return execute(sql, params, many, context)
+
+    with (
+        ThreadPoolExecutor(max_workers=1) as executor,
+        connection.execute_wrapper(finish_before_read),
+    ):
+        response = client.get(reverse("tasks_demo:task-status"))
+
+    assert response.status_code == 200
+    assert triggered
+    # Whichever final read runs second, the finished routine stays visible.
+    assert {task["id"]: task["status"] for task in response.json()["tasks"]} == {row.pk: "DONE"}
 
 
 @pytest.mark.django_db(transaction=True)

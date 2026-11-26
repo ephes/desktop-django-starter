@@ -319,10 +319,12 @@ Current launcher contract:
   that result unavailable. Missing results and identity or argument mismatches
   can fail a routine only while it is still pending. A worker claim made
   during the poll is preserved. Database errors still surface to the caller.
-  Fresh completions enter history in the same response. If reconciliation
-  reloads a routine that was completed and cleared in the meantime, the
-  response omits it; a routine whose backend result still reports it queued or
-  running keeps its polled snapshot until the next poll.
+  Fresh reconciled completions enter history in the same response. After
+  reconciliation, polling rechecks the initially observed active IDs and then
+  reads history, both on the database alias Django routes routine writes to.
+  The active list uses current pending or running rows and omits cleared IDs,
+  even when an earlier queue observation still reported an active result. A
+  routine that finishes between the two reads appears in history.
   Older terminal rows remain until Clear Finished Routines deletes them.
   Clearing uses batches of up to 100 routine rows in primary-key order.
   The clear first snapshots the IDs of routines that are terminal under the
@@ -334,8 +336,10 @@ Current launcher contract:
   same SQLite transaction. A backend result qualifies if it has terminal status,
   matches the demo task path, backend and queue, carries the routine's integer
   ID as its sole argument, and has a single routine reference. UUID spellings
-  are normalized when checking for sharing, and references found shared stay
-  protected across batches within the clear. Active jobs and unrecognized
+  are normalized when checking for sharing. Each batch looks up its candidate
+  UUIDs through a SQLite expression index over normalized references in every
+  state. References found shared stay protected across batches within the
+  clear. Active jobs and unrecognized
   results remain in the queue database.
   History pagination is outside this teaching demo.
   SQLite partial indexes cover active creation ordering and terminal completion,
@@ -354,9 +358,8 @@ Current launcher contract:
   the backend report zero without a database query. The HTTP activity endpoint sends
   `Cache-Control: no-store` even without shell authentication so each quit
   check reads fresh counts. Positron calls the count function directly.
-- Apply `tasks_demo.0003_routine_poll_indexes` and
-  `tasks_demo.0004_backend_activity_index` plus
-  `tasks_demo.0005_backend_activity_queues` with `just migrate` in
+- Apply the task demo migrations through
+  `tasks_demo.0006_routine_backend_reference_index` with `just migrate` in
   development. Packaged startup applies them before starting the web and worker
   processes, including to copied version state. Index creation may briefly lock
   a large local SQLite database. The migrations reverse without deleting task

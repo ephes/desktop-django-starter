@@ -22,6 +22,7 @@ def test_task_indexes_upgrade_reverse_and_preserve_rows():
         run_after=timezone.now(),
     )
     routine_indexes = {"routine_active_created_idx", "routine_history_order_idx"}
+    reference_index = "routine_backend_ref_hex_idx"
     old_backend_index = "dds_backend_status_idx"
     backend_index = "dds_backend_activity_idx"
 
@@ -39,6 +40,7 @@ def test_task_indexes_upgrade_reverse_and_preserve_rows():
         assert old_backend_index not in indexes(DBTaskResult)
         MigrationExecutor(connection).migrate(latest)
         assert routine_indexes <= indexes(SimulatedTask).keys()
+        assert indexes(SimulatedTask)[reference_index]["index"]
         constraints = indexes(DBTaskResult)
         assert old_backend_index not in constraints
         assert constraints[backend_index]["columns"] == ["status", "backend_name", "queue_name"]
@@ -47,6 +49,9 @@ def test_task_indexes_upgrade_reverse_and_preserve_rows():
         with connection.cursor() as cursor:
             cursor.execute("SELECT sql FROM sqlite_master WHERE name = %s", [backend_index])
             assert "WHERE" not in cursor.fetchone()[0]  # Ordinary, includes RUNNING.
+        MigrationExecutor(connection).migrate([("tasks_demo", "0005_backend_activity_queues")])
+        assert reference_index not in indexes(SimulatedTask)
+        assert routine_indexes <= indexes(SimulatedTask).keys()
         MigrationExecutor(connection).migrate([("tasks_demo", "0004_backend_activity_index")])
         constraints = indexes(DBTaskResult)
         assert backend_index not in constraints

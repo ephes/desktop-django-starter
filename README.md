@@ -36,7 +36,9 @@ Runnable starter slices:
 - Unexpected routine failures display a fixed safe category; stored tracebacks
   stay out of page and JSON output. Shell activity reads both counters together.
 - Routine pages and polls show every queued/running routine plus the 100 most
-  recently completed routines. Older history stays in SQLite until Clear Finished
+  recently completed routines. Polling rechecks active rows after reading the
+  queue so a concurrent claim is visible and cleared rows are omitted.
+  Older history stays in SQLite until Clear Finished
   Routines removes it; the demo has no history pagination. SQLite indexes bound
   routine polling work to active rows and the history window. Shell activity
   counts queued and running tasks on queues served by the shell worker.

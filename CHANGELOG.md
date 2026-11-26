@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Refresh active routines after observing queue results so polling shows new
+  claims and omits routines that have since finished and been cleared. A
+  routine that finishes during the poll stays visible in history.
+
+- Index normalized backend result IDs so Clear Finished Routines can check
+  for shared results across legacy UUID spellings with indexed batch lookups.
+
 - Keep reconciling healthy routines when a stored queue result has a malformed
   status or argument container. Preserve running claims, including claims made
   while a poll is in progress.

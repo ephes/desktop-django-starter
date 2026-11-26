@@ -7,15 +7,15 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID
 
-from django.db import transaction
-from django.db.models import Count, F, Func, Q, Value
-from django.db.models.functions import Lower, Replace, Right
+from django.db import router, transaction
+from django.db.models import Count, F, Q
+from django.db.models.functions import Right
 from django.tasks import TaskResult, TaskResultStatus, task
 from django.tasks.exceptions import TaskResultDoesNotExist, TaskResultMismatch
 from django.utils import timezone
 from django_tasks_db.models import DBTaskResult
 
-from .models import SimulatedTask
+from .models import SimulatedTask, normalized_backend_task_id
 
 DURATION_RANGE: tuple[int, int] = (3, 10)
 FAILURE_RATE: float = 0.2
@@ -141,19 +141,27 @@ def visible_tasks() -> list[SimulatedTask]:
         backend_row.traceback = backend_row.traceback_preview
         return backend_row.task_result
 
-    reconciled = (reconcile_task_with_backend(row, result_loader=load_result) for row in active)
-    active = [row for row in reconciled if row is not None]
+    for row in active:
+        reconcile_task_with_backend(row, result_loader=load_result)
+
+    writer_rows = SimulatedTask.objects.using(router.db_for_write(SimulatedTask))
+    # Queue observations can outlive a routine's claim, completion, or clear.
+    # Re-read only the initially observed IDs, in parameter-safe batches.
+    # Read them before history: a routine that finishes between the two reads
+    # then appears in history instead of vanishing from both lists. A clear
+    # removes only terminal rows, so it cannot drop a row still active here.
+    current_rows = writer_rows.order_by().in_bulk([row.pk for row in active])
     # Query history after reconciliation so fresh completions are visible in
     # this response, even when the task was queued long ago.
     history = list(
-        SimulatedTask.objects.filter(
+        writer_rows.filter(
             Q(status=SimulatedTask.Status.DONE) | Q(status=SimulatedTask.Status.FAILED)
         ).order_by("-completed_at", "-created_at", "-pk")[:TERMINAL_HISTORY_LIMIT]
     )
     history_ids = {row.pk for row in history}
     active = [
         row
-        for row in active
+        for row in current_rows.values()
         if row.status in {SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING}
         and row.pk not in history_ids
     ]
@@ -223,11 +231,8 @@ def _shared_backend_ids(result_ids: set[UUID]) -> set[UUID]:
     if not result_ids:
         return set()
     # Account for UUID spellings that could resolve to the same backend row.
-    normalized: Func = Lower("backend_task_id")
-    for token in ("urn:", "uuid:", "{", "}", "-"):
-        normalized = Replace(normalized, Value(token), Value(""))
     shared = (
-        SimulatedTask.objects.annotate(result_hex=normalized)
+        SimulatedTask.objects.annotate(result_hex=normalized_backend_task_id())
         .filter(result_hex__in=[result_id.hex for result_id in result_ids])
         .order_by()
         .values("result_hex")
