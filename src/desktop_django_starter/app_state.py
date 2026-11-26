@@ -169,16 +169,17 @@ def _prepare_state(
     staging_identity = identity(admit(staging, directory=True))
     published = False
     try:
-        (staging / OWNER_FILENAME).write_text(
-            json.dumps(
-                {
-                    "schema": 1,
-                    "stage": staging.name,
-                    "kind": "dds-state-initialization",
-                }
-            )
+        owner_marker = staging / OWNER_FILENAME
+        owner_record = json.dumps(
+            {
+                "schema": 1,
+                "stage": staging.name,
+                "kind": "dds-state-initialization",
+            }
         )
-        sync_file(staging / OWNER_FILENAME)
+        if owner_marker.write_text(owner_record) != len(owner_record):
+            raise state_error("short write of stage-owner marker")
+        sync_file(owner_marker)
         sync_directory(staging)
         sync_directory(state_root)
         if source is not None:
