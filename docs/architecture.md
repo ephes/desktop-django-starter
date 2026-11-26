@@ -578,12 +578,17 @@ initializers hold the same lock. Inspect retained ambiguous stages and leftover
 retirement directories with the app closed. Old-style hidden stages without
 ownership evidence are never automatically removed.
 
-Owner metadata is flushed before copying. After SQLite closes its backup target,
-all payload files are flushed, child directories then parent directories are
-synced, the completion marker is written/flushed, and the stage directory is
-synced. The initializer validates the staged marker and layout against the
-intended version before rename and validates the published paths again after
-rename and sync. POSIX syncs the state root after rename. macOS additionally
+Startup writes and flushes the owner metadata, then reads it back and requires
+it to match the intended record exactly (the same check recovery applies)
+before copying. A truncated or otherwise mismatched marker stops initialization
+before any predecessor data is copied.
+
+After SQLite closes its backup target, all payload files are flushed, child
+directories then parent directories are synced, the completion marker is
+written and flushed, and the stage directory is synced. The initializer
+validates the staged marker and layout against the intended version before
+rename and validates the published paths again after rename and sync. POSIX
+syncs the state root after rename. macOS additionally
 uses `F_FULLFSYNC` for files. A prepublication error retains the predecessor;
 post-rename sync failure retains the visible complete generation and explicitly
 reports uncertain durability. No cleanup restores old bytes over it.

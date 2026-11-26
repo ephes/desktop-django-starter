@@ -13,6 +13,7 @@ import os
 import secrets
 import stat
 import sys
+from contextlib import suppress
 from pathlib import Path
 
 from django.core.exceptions import ImproperlyConfigured
@@ -68,7 +69,9 @@ def load_or_create_secret_key(app_data_dir: Path) -> str:
     try:
         temp_path.unlink(missing_ok=True)
     except OSError:
-        logger.warning("Could not remove temporary secret key at %s", temp_path, exc_info=True)
+        # The durable key is already installed. Reporting cleanup is best effort.
+        with suppress(Exception):
+            logger.warning("Could not remove temporary secret key at %s", temp_path, exc_info=True)
 
     created_key = _read_secret_key(key_path)
     if created_key is None:

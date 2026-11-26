@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Use the published packaged secret key on first launch even if temporary-file
+  cleanup and its warning both fail.
+
+- Stop packaged state initialization before copying database or media when the
+  stage ownership marker does not read back exactly as intended.
+
 - Refresh active routines after observing queue results so polling shows new
   claims and omits routines that have since finished and been cleared. A
   routine that finishes during the poll stays visible in history.

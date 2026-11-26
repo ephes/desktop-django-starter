@@ -757,9 +757,10 @@ Release artifacts do not contain a Django `SECRET_KEY`, and none of the shells i
   in place. The next launch retries the sync and reuses the same key.
 - On first start, startup reports a key write or publication failure as the
   primary error and attaches any temporary-file cleanup failure as a note.
-  After publication and any required sync succeed, a cleanup failure logs a
-  warning and startup reads the published key. With the app closed, remove the reported
-  `.secret_key.<id>.tmp` entry while keeping `secret_key` for future launches.
+  After publication and any required sync succeed, startup attempts to warn
+  if cleanup fails and reads the published key even if the warning fails.
+  With the app closed, remove any leftover `.secret_key.<id>.tmp` entry while
+  keeping `secret_key` for future launches.
 - Startup refuses a short read or a change in the open key's identity, size
   or timestamps during the read, while allowing the first-start creator to
   remove its temporary hard link. Before accepting the key, startup checks
