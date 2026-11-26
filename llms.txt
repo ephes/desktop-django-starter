@@ -115,6 +115,8 @@ this ownership. Native Windows process-tree acceptance remains required.
   and previous-worker retirement. A database failure stops startup with a
   recovery diagnostic. Django app initialization is read-only for routine rows.
 - Task polling uses partial active/history indexes and matching OR predicates.
+  Clear Finished Routines checks for shared backend results using a SQLite
+  expression index on normalized UUID references.
   Shell counts filter READY/RUNNING and match the worker's
   `DESKTOP_DJANGO_WORKER_QUEUES` setting before one aggregate. The app owns
   the index on backend status, backend name and queue name. Apply migrations

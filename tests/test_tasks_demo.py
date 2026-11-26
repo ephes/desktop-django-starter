@@ -12,7 +12,13 @@ from uuid import UUID
 
 import pytest
 from django.core.management import CommandError, call_command
-from django.db import OperationalError, ProgrammingError, close_old_connections, transaction
+from django.db import (
+    OperationalError,
+    ProgrammingError,
+    close_old_connections,
+    connection,
+    transaction,
+)
 from django.db.models import QuerySet
 from django.tasks import TaskResultStatus
 from django.urls import reverse
@@ -21,6 +27,7 @@ from django_tasks_db.models import DBTaskResult
 
 from tasks_demo.models import SimulatedTask
 from tasks_demo.tasks import (
+    CLEAR_BATCH_SIZE,
     SimulatedTaskFailure,
     reconcile_task_with_backend,
     run_simulated_task,
@@ -455,6 +462,41 @@ class TestTaskViews:
 
 
 class TestTaskClear:
+    def test_clear_uses_normalized_reference_index_across_batches(self, client):
+        earlier = SimulatedTask.objects.create(label="Earlier legacy reference", status="FAILED")
+        SimulatedTask.objects.bulk_create(
+            SimulatedTask(label="History", status="DONE", backend_task_id=UUID(int=i).hex)
+            for i in range(1, 3 * CLEAR_BATCH_SIZE + 1)
+        )
+        owner = SimulatedTask.objects.create(label="Shared result owner", status="DONE")
+        shared = enqueue_demo_task(owner)
+        shared.set_successful("Synthetic result")
+        earlier.backend_task_id = f"urn:uuid:{{{str(shared.pk).upper()}}}"
+        earlier.save(update_fields=["backend_task_id"])
+        exclusive = SimulatedTask.objects.create(label="Exclusive result owner", status="DONE")
+        retired = enqueue_demo_task(exclusive)
+        retired.set_successful("Synthetic result")
+        lookups = []
+
+        def record_reference_lookup(execute, sql, params, many, context):
+            if 'AS "result_hex"' in sql:
+                lookups.append((sql, params))
+            return execute(sql, params, many, context)
+
+        with connection.execute_wrapper(record_reference_lookup):
+            assert client.post(reverse("tasks_demo:task-clear")).status_code == 200
+
+        assert not SimulatedTask.objects.exists()
+        assert list(DBTaskResult.objects.values_list("pk", flat=True)) == [shared.pk]
+        assert len(lookups) == 4
+        with connection.cursor() as cursor:
+            for sql, params in lookups:
+                cursor.execute("EXPLAIN QUERY PLAN " + sql, params)
+                assert any(
+                    "SEARCH" in detail and "routine_backend_ref_hex_idx" in detail
+                    for _, _, _, detail in cursor.fetchall()
+                )
+
     def test_clear_preserves_active_rows_and_queue(self, client):
         queued = SimulatedTask.objects.create(label="Queued")
         queued_backend = enqueue_demo_task(queued)

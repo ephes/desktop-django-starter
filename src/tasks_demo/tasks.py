@@ -8,14 +8,14 @@ from datetime import UTC, datetime
 from uuid import UUID
 
 from django.db import transaction
-from django.db.models import Count, F, Func, Q, Value
-from django.db.models.functions import Lower, Replace, Right
+from django.db.models import Count, F, Q
+from django.db.models.functions import Right
 from django.tasks import TaskResult, TaskResultStatus, task
 from django.tasks.exceptions import TaskResultDoesNotExist, TaskResultMismatch
 from django.utils import timezone
 from django_tasks_db.models import DBTaskResult
 
-from .models import SimulatedTask
+from .models import SimulatedTask, normalized_backend_task_id
 
 DURATION_RANGE: tuple[int, int] = (3, 10)
 FAILURE_RATE: float = 0.2
@@ -223,11 +223,8 @@ def _shared_backend_ids(result_ids: set[UUID]) -> set[UUID]:
     if not result_ids:
         return set()
     # Account for UUID spellings that could resolve to the same backend row.
-    normalized: Func = Lower("backend_task_id")
-    for token in ("urn:", "uuid:", "{", "}", "-"):
-        normalized = Replace(normalized, Value(token), Value(""))
     shared = (
-        SimulatedTask.objects.annotate(result_hex=normalized)
+        SimulatedTask.objects.annotate(result_hex=normalized_backend_task_id())
         .filter(result_hex__in=[result_id.hex for result_id in result_ids])
         .order_by()
         .values("result_hex")
