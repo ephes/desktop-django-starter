@@ -1,9 +1,12 @@
 const fs = require("node:fs");
 const path = require("node:path");
+const { TextDecoder } = require("node:util");
 
 const DEFAULT_BUNDLED_PYTHON_VERSION = "3.14";
 const MAX_MANIFEST_BYTES = 64 * 1024;
 const RUNTIME_MANIFEST_FILENAME = "runtime-manifest.json";
+// Keep a leading BOM in the decoded text so JSON.parse rejects it.
+const manifestDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
 function toManifestPath(backendRoot, targetPath) {
   return path.relative(backendRoot, targetPath).split(path.sep).join("/");
@@ -137,7 +140,7 @@ function loadRuntimeManifest(backendRoot) {
       length += count;
     }
     if (length > MAX_MANIFEST_BYTES) throw new Error("Manifest exceeds 65536 bytes.");
-    return validateRuntimeManifest(parseManifest(buffer.subarray(0, length).toString("utf8")), backendRoot);
+    return validateRuntimeManifest(parseManifest(manifestDecoder.decode(buffer.subarray(0, length))), backendRoot);
   } catch (error) {
     throw new Error(`Invalid runtime manifest ${manifestPath}: ${error.message}`, { cause: error });
   } finally {

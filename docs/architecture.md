@@ -220,7 +220,8 @@ Current staged backend contract:
 - `backend/staticfiles/` contains collected assets for `DEBUG=False`
 - `backend/runtime-manifest.json` records the interpreter path and launcher metadata
 - Electron/shared Node helpers and Tauri accept only a regular, non-symlink
-  manifest of at most 64 KiB with `schemaVersion: 1`, string Python version,
+  manifest of at most 64 KiB encoded as UTF-8 without a byte-order mark, with
+  `schemaVersion: 1`, string Python version,
   `python.root: "python"`, executable/purelib/scripts paths inside that runtime,
   and the generated launcher field types. Paths use portable relative components
   (no absolute/drive paths, backslashes, empty components, `.` or `..`).

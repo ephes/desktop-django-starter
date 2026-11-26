@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reject malformed UTF-8 in Electron and shared Node runtime manifests.
+  Both desktop shells require UTF-8 without a byte-order mark.
+
 - Stop desktop startup with a clear recovery error when the routine database
   cannot be updated.
 

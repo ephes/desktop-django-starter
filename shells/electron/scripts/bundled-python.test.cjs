@@ -132,6 +132,29 @@ function validManifest(root) {
   });
 }
 
+test("runtime manifest requires UTF-8 without a BOM", () => withTempBackend(root => {
+  const executable = path.join(root, "python/bin/python3");
+  const legacy = getBundledPythonCandidates(root)[0];
+  fs.mkdirSync(path.dirname(executable), { recursive: true });
+  fs.writeFileSync(executable, "", { mode: 0o755 });
+  fs.writeFileSync(legacy, "", { mode: 0o755 });
+  assert.equal(resolveBundledPythonExecutable(root), legacy);
+
+  const manifestPath = path.join(root, "runtime-manifest.json");
+  const valid = fs.readFileSync(path.join(__dirname, "runtime-manifest-unicode.json"));
+  fs.writeFileSync(manifestPath, valid);
+  assert.deepEqual(loadRuntimeManifest(root).launcher.environment, ["café"]);
+  assert.equal(resolveBundledPythonExecutable(root), executable);
+
+  const malformed = Buffer.from(valid);
+  malformed[malformed.indexOf(0xc3)] = 0xff;
+  const withBom = Buffer.concat([Buffer.from([0xef, 0xbb, 0xbf]), valid]);
+  for (const bytes of [malformed, withBom]) {
+    fs.writeFileSync(manifestPath, bytes);
+    assert.throws(() => resolveBundledPythonExecutable(root), /Invalid runtime manifest/);
+  }
+}));
+
 for (const value of ["../outside", "/usr/bin/python3", "C:/python.exe", "python/../outside", "python\\bin\\python", "python//bin/python", "python/bin/python:stream"]) {
   test(`manifest refuses nonportable executable ${value}`, () => withTempBackend(root => {
     const manifest = validManifest(root);

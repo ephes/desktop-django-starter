@@ -40,6 +40,7 @@ cp "$starter_root/shells/electron/assets/icons/app-icon.icns" "$target_electron/
 cp "$starter_root/shells/electron/assets/icons/app-icon.png" "$target_electron/assets/icons/app-icon.png"
 cp "$starter_root/shells/electron/signing/"* "$target_electron/signing/"
 cp "$starter_root/shells/electron/scripts/"*.cjs "$target_electron/scripts/"
+cp "$starter_root/shells/electron/scripts/runtime-manifest-unicode.json" "$target_electron/scripts/"
 
 # Wrapped targets should use the full helper implementations, not the starter's
 # repo-relative proxy wrappers.
