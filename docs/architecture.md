@@ -220,7 +220,8 @@ Current staged backend contract:
 - `backend/staticfiles/` contains collected assets for `DEBUG=False`
 - `backend/runtime-manifest.json` records the interpreter path and launcher metadata
 - Electron/shared Node helpers and Tauri accept only a regular, non-symlink
-  manifest of at most 64 KiB with `schemaVersion: 1`, string Python version,
+  manifest of at most 64 KiB encoded as UTF-8 without a byte-order mark, with
+  `schemaVersion: 1`, string Python version,
   `python.root: "python"`, executable/purelib/scripts paths inside that runtime,
   and the generated launcher field types. Paths use portable relative components
   (no absolute/drive paths, backslashes, empty components, `.` or `..`).
@@ -229,9 +230,10 @@ Current staged backend contract:
   interpreter symlinks remain valid. Present invalid/future manifests refuse
   launch with an `Invalid runtime manifest` diagnostic; only absence enables
   legacy discovery, subject to the same interpreter checks.
-  Tauri reads through one open file handle and verifies the exact byte count
-  and that the file and its path still match the admitted generation before
-  parsing. Changes detected during the read stop startup with the same diagnostic.
+  Both readers use one open file handle and verify the exact byte count and
+  that the file and its path still match the admitted generation before parsing.
+  If the manifest changes while staging overlaps startup, wait for staging to
+  finish and retry the launch.
 - Runtime materialization and the initial downloaded-runtime copy first walk
   the expanded source graph by real directory identities. Cycles, directory
   targets outside the runtime and special files refuse before copying. File

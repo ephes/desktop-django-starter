@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "python": {
+    "version": "3.14",
+    "root": "python",
+    "executable": "python/bin/python3",
+    "purelib": "python/lib/site-packages",
+    "scripts": "python/bin"
+  },
+  "launcher": {
+    "cwd": ".",
+    "managePy": "manage.py",
+    "sourceRoot": "src",
+    "settingsModule": "desktop_django_starter.settings.packaged",
+    "environment": ["café"]
+  }
+}

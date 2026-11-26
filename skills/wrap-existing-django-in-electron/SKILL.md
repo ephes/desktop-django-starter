@@ -438,7 +438,8 @@ The full redirect chain must terminate at a 200, not a 404 at any step.
 Verify by following the full redirect chain: the final response must be 200.
 
 **Node test harness.** Copy and adapt the starter's `shells/electron/scripts/*.test.cjs`
-files. The `electron/package.json` must include a `test` script (`node --test ./scripts/*.test.cjs`).
+files. Keep `runtime-manifest-unicode.json` next to `bundled-python.test.cjs`.
+The `electron/package.json` must include a `test` script (`node --test ./scripts/*.test.cjs`).
 These tests validate the bundled-python manifest logic and builder config, catching
 adaptation errors before runtime. When adapting tests, update assertions to match the
 target project's values — especially `settingsModule` (e.g., `example.packaged_settings`),

@@ -272,6 +272,45 @@ mod tests {
                 "settingsModule":"desktop_django_starter.settings.packaged", "environment":[]}})
     }
 
+    #[test]
+    fn runtime_manifest_requires_utf8_without_a_bom() {
+        let root = std::env::temp_dir().join(format!("dds-manifest-utf8-{}", std::process::id()));
+        fs::create_dir_all(root.join("python/bin")).unwrap();
+        let executable = root.join("python/bin/python3");
+        let legacy = if cfg!(windows) {
+            root.join("python/python.exe")
+        } else {
+            executable.clone()
+        };
+        fs::write(&executable, b"synthetic interpreter").unwrap();
+        #[cfg(windows)]
+        fs::write(&legacy, b"synthetic interpreter").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        assert_eq!(resolve_bundled_python_executable(&root).unwrap(), legacy);
+
+        let path = root.join("runtime-manifest.json");
+        let valid = include_bytes!("../../../electron/scripts/runtime-manifest-unicode.json");
+        fs::write(&path, valid).unwrap();
+        assert_eq!(resolve_bundled_python_executable(&root).unwrap(), executable);
+
+        let mut malformed = valid.to_vec();
+        let lead = malformed.iter().position(|&byte| byte == 0xc3).unwrap();
+        malformed[lead] = 0xff;
+        let mut with_bom = vec![0xef, 0xbb, 0xbf];
+        with_bom.extend_from_slice(valid);
+        for bytes in [malformed, with_bom] {
+            fs::write(&path, bytes).unwrap();
+            assert!(resolve_bundled_python_executable(&root)
+                .unwrap_err()
+                .contains("Invalid runtime manifest"));
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[cfg(unix)]
     #[test]
     fn replaced_manifest_symlink_is_refused_at_open() {

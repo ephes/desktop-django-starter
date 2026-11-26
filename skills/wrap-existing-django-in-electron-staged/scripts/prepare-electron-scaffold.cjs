@@ -21,7 +21,7 @@ const STARTER_TEMPLATE_CHECKSUMS = {
   "scripts/electron-builder-config.cjs": "d273efe85f67cdffe611fd35b78cadd42457c665ebd8aec297d293b5fdb5680b",
   "scripts/launch-electron.cjs": "c383e90dc8ab279dcff53f4ba67375e17917bc7878df13a0a12e1b5244b9b0da",
   "scripts/stage-backend.cjs": "3a75fe18c59ced767bbfd7d00c664cd977e96a1bcaf352761289a678c9450999",
-  "scripts/bundled-python.cjs": "3164fdd746547a404e5f68de20df4a4294a13b95a7ad4d3c85d5b46780a79bd1"
+  "scripts/bundled-python.cjs": "bec1618edaa0288e5f55318e193d0418ade06f48fcde0d13fcb08098577540fc"
 };
 
 function fail(message) {

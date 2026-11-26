@@ -15,6 +15,7 @@ shells/electron/scripts/managed-process.cjs
 shells/electron/scripts/managed-process.test.cjs
 shells/electron/scripts/quit-guard.cjs
 shells/electron/scripts/bundled-python.test.cjs
+shells/electron/scripts/runtime-manifest-unicode.json
 shells/electron/scripts/electron-builder-config.test.cjs
 shells/electron/scripts/auth-token.test.cjs
 shells/electron/scripts/materialize-symlinks.test.cjs
