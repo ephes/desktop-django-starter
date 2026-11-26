@@ -92,6 +92,110 @@ def test_bulk_lookup_preserves_missing_and_mismatched_result_rules(client):
         assert row.status == expected
 
 
+@pytest.fixture
+def completed_backend():
+    def create(label, **overrides):
+        row = SimulatedTask.objects.create(label=label)
+        backend = run_simulated_task.enqueue(row.pk)
+        row.backend_task_id = backend.id
+        row.save(update_fields=["backend_task_id"])
+        fields = {
+            "status": TaskResultStatus.SUCCESSFUL,
+            "return_value": {
+                "status": "DONE",
+                "result": f"{label} completed",
+                "duration": 1,
+                "completed_at": timezone.now().isoformat(),
+            },
+        }
+        DBTaskResult.objects.filter(pk=backend.id).update(**(fields | overrides))
+        return row
+
+    return create
+
+
+@pytest.mark.parametrize(
+    "identity",
+    [
+        {"task_path": "tasks_demo.retired.retired_routine"},
+        {"backend_name": "retired-backend"},
+        {"queue_name": "retired-queue"},
+    ],
+    ids=["retired-task", "different-backend", "different-queue"],
+)
+def test_poll_rejects_unrelated_result_identity(client, completed_backend, identity, settings):
+    default = settings.TASKS["default"]
+    settings.TASKS = {
+        **settings.TASKS,
+        "default": default | {"QUEUES": ["default", "retired-queue"]},
+        "retired-backend": default,
+    }
+    unrelated = completed_backend("Unrelated routine", **identity)
+    healthy = completed_backend("Healthy routine")
+
+    response = client.get(reverse("tasks_demo:task-status"))
+
+    assert response.status_code == 200
+    by_id = {row["id"]: row for row in response.json()["tasks"]}
+    assert by_id[unrelated.pk]["status"] == "FAILED"
+    assert by_id[unrelated.pk]["result"] == task_module.MISSING_BACKEND_RESULT
+    assert by_id[healthy.pk]["status"] == "DONE"
+    assert by_id[healthy.pk]["result"] == "Healthy routine completed"
+
+
+@pytest.mark.parametrize(
+    "envelope",
+    [
+        {"args_kwargs": []},
+        {"args_kwargs": {"kwargs": {}}},
+        {"args_kwargs": {"args": []}},
+        {"status": "UNKNOWN"},
+    ],
+    ids=["not-an-object", "missing-args", "missing-kwargs", "unknown-status"],
+)
+def test_poll_isolates_malformed_result_envelopes(client, completed_backend, envelope):
+    # Polling visits newest routines first, so the healthy row is reconciled last.
+    healthy = completed_backend("Healthy routine")
+    malformed = completed_backend("Malformed pending routine", **envelope)
+    running = completed_backend("Malformed running routine", **envelope)
+    SimulatedTask.objects.filter(pk=running.pk).update(status=SimulatedTask.Status.RUNNING)
+
+    response = client.get(reverse("tasks_demo:task-status"))
+
+    assert response.status_code == 200
+    by_id = {row["id"]: row for row in response.json()["tasks"]}
+    assert by_id[malformed.pk]["status"] == "FAILED"
+    assert by_id[malformed.pk]["result"] == task_module.MISSING_BACKEND_RESULT
+    assert by_id[running.pk]["status"] == "RUNNING"
+    running.refresh_from_db()
+    assert running.result is None
+    assert running.completed_at is None
+    assert by_id[healthy.pk]["status"] == "DONE"
+    assert by_id[healthy.pk]["result"] == "Healthy routine completed"
+
+
+def test_malformed_result_does_not_retire_routine_claimed_during_poll(
+    client, completed_backend, monkeypatch
+):
+    row = completed_backend("Claimed during poll", args_kwargs={"kwargs": {}})
+    reconcile = task_module.reconcile_task_with_backend
+
+    def claim_before_reconciliation(task_row, **kwargs):
+        assert task_row.pk == row.pk and task_row.status == SimulatedTask.Status.PENDING
+        SimulatedTask.objects.filter(pk=row.pk).update(status=SimulatedTask.Status.RUNNING)
+        return reconcile(task_row, **kwargs)
+
+    monkeypatch.setattr(task_module, "reconcile_task_with_backend", claim_before_reconciliation)
+    response = client.get(reverse("tasks_demo:task-status"))
+
+    assert response.status_code == 200
+    assert response.json()["tasks"][0]["status"] == "RUNNING"
+    row.refresh_from_db()
+    assert row.status == SimulatedTask.Status.RUNNING
+    assert row.result is None
+    assert row.completed_at is None
+
+
 def test_worker_completion_between_active_and_history_queries_is_not_duplicated(
     client, monkeypatch
 ):

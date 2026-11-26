@@ -124,11 +124,22 @@ def visible_tasks() -> list[SimulatedTask]:
             backend_row = backend_rows[UUID(result_id)]
         except (KeyError, ValueError) as exc:
             raise TaskResultDoesNotExist(result_id) from exc
-        backend_row.traceback = backend_row.traceback_preview
-        result = backend_row.task_result
-        if result.task.func != run_simulated_task.func:
+        if (
+            backend_row.task_path != run_simulated_task.module_path
+            or backend_row.backend_name != run_simulated_task.backend
+            or backend_row.queue_name != run_simulated_task.queue_name
+        ):
             raise TaskResultMismatch("Task does not match")
-        return result
+        arguments = backend_row.args_kwargs
+        if (
+            backend_row.status not in TaskResultStatus.__members__
+            or not isinstance(arguments, dict)
+            or not isinstance(arguments.get("args"), list)
+            or not isinstance(arguments.get("kwargs"), dict)
+        ):
+            raise TaskResultDoesNotExist(result_id)
+        backend_row.traceback = backend_row.traceback_preview
+        return backend_row.task_result
 
     reconciled = (reconcile_task_with_backend(row, result_loader=load_result) for row in active)
     active = [row for row in reconciled if row is not None]
@@ -245,7 +256,9 @@ def reconcile_task_with_backend(
         # Missing queue metadata cannot prove that a claimed worker has stopped.
         # Startup reconciliation retires abandoned claims after a restart.
         if task_row.status == SimulatedTask.Status.PENDING:
-            return _mark_task_failed(task_row, backend_task_id, MISSING_BACKEND_RESULT)
+            return _mark_task_failed(
+                task_row, backend_task_id, MISSING_BACKEND_RESULT, pending_only=True
+            )
         return _refresh_reconciled_task(task_row)
 
     if backend_result.status in {TaskResultStatus.READY, TaskResultStatus.RUNNING}:
@@ -339,21 +352,30 @@ def _serialized_terminal_payload(task_row: SimulatedTask) -> dict[str, object]:
 
 
 def _mark_task_failed(
-    task_row: SimulatedTask, backend_task_id: str, result: str
+    task_row: SimulatedTask, backend_task_id: str, result: str, *, pending_only: bool = False
 ) -> SimulatedTask | None:
     task_row.status = SimulatedTask.Status.FAILED
     task_row.result = result
     task_row.completed_at = task_row.completed_at or timezone.now()
-    return _save_reconciled_task(task_row, backend_task_id, ["status", "result", "completed_at"])
+    return _save_reconciled_task(
+        task_row, backend_task_id, ["status", "result", "completed_at"], pending_only=pending_only
+    )
 
 
 def _save_reconciled_task(
-    task_row: SimulatedTask, backend_task_id: str, fields: list[str]
+    task_row: SimulatedTask,
+    backend_task_id: str,
+    fields: list[str],
+    *,
+    pending_only: bool = False,
 ) -> SimulatedTask | None:
+    eligible_statuses = [SimulatedTask.Status.PENDING]
+    if not pending_only:
+        eligible_statuses.append(SimulatedTask.Status.RUNNING)
     updated = SimulatedTask.objects.filter(
         pk=task_row.pk,
         backend_task_id=backend_task_id,
-        status__in=[SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING],
+        status__in=eligible_statuses,
     ).update(**{field: getattr(task_row, field) for field in fields})
     if updated:
         return task_row
