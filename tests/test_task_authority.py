@@ -11,7 +11,12 @@ from django.utils import timezone
 from django_tasks_db.models import DBTaskResult
 
 from tasks_demo.models import SimulatedTask
-from tasks_demo.tasks import SimulatedTaskFailure, reconcile_task_with_backend, run_simulated_task
+from tasks_demo.tasks import (
+    SimulatedTaskFailure,
+    clear_finished_routines,
+    reconcile_task_with_backend,
+    run_simulated_task,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -180,6 +185,48 @@ def test_old_backend_completion_cannot_finalize_rebound_routine():
         assert current.result is None
         assert current.duration is None
         assert current.completed_at is None
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("backend_status", [TaskResultStatus.READY, TaskResultStatus.RUNNING])
+def test_poll_refreshes_active_rows_after_backend_observation(client, backend_status):
+    cleared, cleared_backend = queued_task()
+    claimed, _ = queued_task()
+    unchanged, _ = queued_task()
+    cleared_backend.status = backend_status
+    cleared_backend.save(update_fields=["status"])
+    load_result = DBTaskResult.task_result.fget
+
+    def finish_clear_and_claim():
+        try:
+            SimulatedTask.objects.filter(pk=cleared.pk).update(
+                status="DONE", completed_at=timezone.now()
+            )
+            cleared_backend.set_successful("Synthetic result")
+            clear_finished_routines()
+            SimulatedTask.objects.filter(pk=claimed.pk).update(status="RUNNING")
+        finally:
+            close_old_connections()
+
+    def read_result(backend):
+        result = load_result(backend)
+        if backend.pk == cleared_backend.pk:
+            assert result.status == backend_status
+            executor.submit(finish_clear_and_claim).result(timeout=10)
+        return result
+
+    with (
+        ThreadPoolExecutor(max_workers=1) as executor,
+        mock.patch.object(DBTaskResult, "task_result", property(read_result)),
+    ):
+        response = client.get(reverse("tasks_demo:task-status"))
+
+    assert response.status_code == 200
+    assert not SimulatedTask.objects.filter(pk=cleared.pk).exists()
+    assert {row["id"]: row["status"] for row in response.json()["tasks"]} == {
+        claimed.pk: "RUNNING",
+        unchanged.pk: "PENDING",
+    }
 
 
 @pytest.mark.django_db(transaction=True)

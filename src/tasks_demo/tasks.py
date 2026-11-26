@@ -7,7 +7,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from uuid import UUID
 
-from django.db import transaction
+from django.db import router, transaction
 from django.db.models import Count, F, Q
 from django.db.models.functions import Right
 from django.tasks import TaskResult, TaskResultStatus, task
@@ -141,19 +141,24 @@ def visible_tasks() -> list[SimulatedTask]:
         backend_row.traceback = backend_row.traceback_preview
         return backend_row.task_result
 
-    reconciled = (reconcile_task_with_backend(row, result_loader=load_result) for row in active)
-    active = [row for row in reconciled if row is not None]
+    for row in active:
+        reconcile_task_with_backend(row, result_loader=load_result)
+
+    writer_rows = SimulatedTask.objects.using(router.db_for_write(SimulatedTask))
     # Query history after reconciliation so fresh completions are visible in
     # this response, even when the task was queued long ago.
     history = list(
-        SimulatedTask.objects.filter(
+        writer_rows.filter(
             Q(status=SimulatedTask.Status.DONE) | Q(status=SimulatedTask.Status.FAILED)
         ).order_by("-completed_at", "-created_at", "-pk")[:TERMINAL_HISTORY_LIMIT]
     )
+    # Queue observations can outlive a routine's claim, completion, or clear.
+    # Re-read only the initially observed IDs, in parameter-safe batches.
+    current_rows = writer_rows.order_by().in_bulk([row.pk for row in active])
     history_ids = {row.pk for row in history}
     active = [
         row
-        for row in active
+        for row in current_rows.values()
         if row.status in {SimulatedTask.Status.PENDING, SimulatedTask.Status.RUNNING}
         and row.pk not in history_ids
     ]

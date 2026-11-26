@@ -319,10 +319,11 @@ Current launcher contract:
   that result unavailable. Missing results and identity or argument mismatches
   can fail a routine only while it is still pending. A worker claim made
   during the poll is preserved. Database errors still surface to the caller.
-  Fresh completions enter history in the same response. If reconciliation
-  reloads a routine that was completed and cleared in the meantime, the
-  response omits it; a routine whose backend result still reports it queued or
-  running keeps its polled snapshot until the next poll.
+  Fresh reconciled completions enter history in the same response. After
+  reconciliation, polling reads history and rechecks the initially observed
+  active IDs on the database alias Django routes routine writes to. The
+  active list uses current pending or running rows and omits cleared IDs,
+  even when an earlier queue observation still reported an active result.
   Older terminal rows remain until Clear Finished Routines deletes them.
   Clearing uses batches of up to 100 routine rows in primary-key order.
   The clear first snapshots the IDs of routines that are terminal under the

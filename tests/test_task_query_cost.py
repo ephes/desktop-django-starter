@@ -69,19 +69,22 @@ def test_routine_poll_uses_bounded_index_work_with_large_history():
     )
     with capture_selects() as statements:
         rows = visible_tasks()
-    assert len(statements) == 2
+    assert len(statements) == 3
     expected_history = sorted([row.pk for i, row in enumerate(history) if i % 3], reverse=True)[
         :TERMINAL_HISTORY_LIMIT
     ]
     assert {row.pk for row in rows} == {row.pk for row in active} | set(expected_history)
     assert [row.pk for row in rows if row.pk in expected_history] == expected_history
-    for statement, index in zip(
-        statements, ["routine_active_created_idx", "routine_history_order_idx"], strict=True
+    for statement, lookup in zip(
+        statements,
+        ["routine_active_created_idx", "routine_history_order_idx", "SEARCH"],
+        strict=True,
     ):
         plan, work = plan_and_work(statement)
-        assert index in plan, plan
+        assert lookup in plan, plan
         assert "TEMP B-TREE" not in plan, plan
         assert work < 5_000, (plan, work)
+    assert set(statements[-1][1]) == {row.pk for row in active}
 
 
 @pytest.mark.django_db
