@@ -170,16 +170,21 @@ def _prepare_state(
     published = False
     try:
         owner_marker = staging / OWNER_FILENAME
-        owner_record = json.dumps(
-            {
-                "schema": 1,
-                "stage": staging.name,
-                "kind": "dds-state-initialization",
-            }
-        )
-        if owner_marker.write_text(owner_record) != len(owner_record):
-            raise state_error("short write of stage-owner marker")
+        owner_record = {
+            "schema": 1,
+            "stage": staging.name,
+            "kind": "dds-state-initialization",
+        }
+        owner_marker.write_text(json.dumps(owner_record))
         sync_file(owner_marker)
+        # Recovery only retires stages whose marker matches exactly; verify that
+        # before any predecessor data lands in the stage.
+        try:
+            written_owner = read_state_marker(owner_marker, max_bytes=4096)
+        except (OSError, ValueError) as error:
+            raise state_error("incomplete stage-owner marker") from error
+        if written_owner != owner_record:
+            raise state_error("incomplete stage-owner marker")
         sync_directory(staging)
         sync_directory(state_root)
         if source is not None:

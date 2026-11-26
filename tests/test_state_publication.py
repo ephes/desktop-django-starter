@@ -61,9 +61,12 @@ def test_short_stage_owner_write_aborts_before_copying_state(monkeypatch, tmp_pa
     real_write_text = Path.write_text
 
     def short_owner_write(path, text, *args, **kwargs):
+        written = real_write_text(path, text, *args, **kwargs)
         if path.name == app_state.OWNER_FILENAME:
-            text = text[:-1]
-        return real_write_text(path, text, *args, **kwargs)
+            # The write reports success, but the bytes on disk are cut short.
+            with path.open("r+b") as stream:
+                stream.truncate(path.stat().st_size - 1)
+        return written
 
     def unexpected_copy(source, staging):
         pytest.fail("state copy began after a short stage-owner marker write")
@@ -71,7 +74,7 @@ def test_short_stage_owner_write_aborts_before_copying_state(monkeypatch, tmp_pa
     try:
         monkeypatch.setattr(Path, "write_text", short_owner_write)
         monkeypatch.setattr(app_state, "_copy_state", unexpected_copy)
-        with pytest.raises(ImproperlyConfigured, match="short write.*stage-owner marker"):
+        with pytest.raises(ImproperlyConfigured, match="incomplete stage-owner marker"):
             app_state.prepare_versioned_state(tmp_path, "2.0.0")
 
         assert not (old.parent / "2.0.0").exists()

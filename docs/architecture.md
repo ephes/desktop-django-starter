@@ -578,8 +578,10 @@ initializers hold the same lock. Inspect retained ambiguous stages and leftover
 retirement directories with the app closed. Old-style hidden stages without
 ownership evidence are never automatically removed.
 
-Startup requires a complete write of the owner metadata and flushes it before
-copying. A short write stops initialization before copying any predecessor data.
+Startup writes and flushes the owner metadata, then reads it back and requires
+it to match the intended record exactly (the same check recovery applies)
+before copying. A truncated or otherwise mismatched marker stops initialization
+before any predecessor data is copied.
 
 After SQLite closes its backup target, all payload files are flushed, child
 directories then parent directories are synced, the completion marker is
