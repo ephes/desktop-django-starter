@@ -94,8 +94,13 @@ Options:
 - `--run` — invoke the agent after preflight passes
 - `--agent NAME`, `--harness NAME` — agent harness to use: `claude`, `pi`, `codex`; overrides saved config or auto-detect
 - `--model NAME` — model to pass to the selected agent; overrides the saved default model
-- `--force` — permit known dirty worktrees and existing electron/ directories; failed Git inspection still blocks
+- `--force` — permit known dirty worktrees and existing `electron/` directories
 - `--emit-prompt` — print the resolved wrapping prompt to stdout
+
+Preflight reports which Git probe failed to start. Git inspection failures
+block wrapping even with `--force`.
+If `electron` is a file or a dangling symlink, move or remove the entry before
+wrapping. `--force` permits re-wrapping into an existing directory.
 
 Prompt emission is offline and read-only, even when combined with `--run`.
 It bypasses tool checks, project discovery, saved config and harness setup.

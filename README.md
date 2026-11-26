@@ -146,9 +146,11 @@ Unreadable UTF-8 templates fail with a CLI diagnostic. Project discovery lists
 nested/multiple roots while excluding hidden, environment and dependency trees
 and directory symlinks; failed discovery prevents harness launch.
 
-Preflight requires a successful `git status`. A failed inspection blocks wrapping
-even with `--force`; that flag permits known uncommitted changes and an existing
-`electron/` directory. Command failure diagnostics are truncated to 800 UTF-8 bytes.
+Preflight reports when `git rev-parse` or `git status` cannot start. A failed
+Git inspection blocks wrapping even with `--force`. That flag permits known
+uncommitted changes and an existing `electron/` directory. Command failure
+diagnostics are truncated to 800 UTF-8 bytes.
+Move or remove a file or dangling symlink at `electron` before wrapping.
 
 Claude completion requires exactly one terminal `result` with `is_error: false`
 (and `subtype: success` if present), plus exit code zero. Missing, malformed,
