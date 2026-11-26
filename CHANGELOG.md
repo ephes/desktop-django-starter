@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Reject Node runtime manifests that change between admission and reading.
+  The startup error asks users to retry after staging completes.
+
 - Reject malformed UTF-8 in Electron and shared Node runtime manifests.
   Both desktop shells require UTF-8 without a byte-order mark.
 

@@ -5,6 +5,7 @@ const { TextDecoder } = require("node:util");
 const DEFAULT_BUNDLED_PYTHON_VERSION = "3.14";
 const MAX_MANIFEST_BYTES = 64 * 1024;
 const RUNTIME_MANIFEST_FILENAME = "runtime-manifest.json";
+const MANIFEST_CHANGED = "Runtime manifest changed during reading. Retry after staging completes.";
 // Keep a leading BOM in the decoded text so JSON.parse rejects it.
 const manifestDecoder = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true });
 
@@ -121,30 +122,52 @@ function parseManifest(text) {
   return value;
 }
 
+function sameManifestGeneration(before, after) {
+  return after.isFile() && before.size === after.size
+    && before.dev === after.dev && before.ino === after.ino
+    && before.mtimeNs === after.mtimeNs && before.ctimeNs === after.ctimeNs
+    && before.birthtimeNs === after.birthtimeNs;
+}
+
 function loadRuntimeManifest(backendRoot) {
   const manifestPath = getRuntimeManifestPath(backendRoot);
   let descriptor;
+  let admitted = false;
+  let failed = false;
   try {
-    let stats;
-    try { stats = fs.lstatSync(manifestPath); }
+    let named;
+    try { named = fs.lstatSync(manifestPath, { bigint: true }); }
     catch (error) { if (error.code === "ENOENT") return null; throw error; }
-    if (!stats.isFile() || stats.size > MAX_MANIFEST_BYTES) throw new Error("Expected a regular file of at most 65536 bytes.");
+    if (!named.isFile() || named.size > MAX_MANIFEST_BYTES) throw new Error("Expected a regular file of at most 65536 bytes.");
+    admitted = true;
     descriptor = fs.openSync(manifestPath, fs.constants.O_RDONLY | fs.constants.O_NONBLOCK | (fs.constants.O_NOFOLLOW || 0));
-    stats = fs.fstatSync(descriptor);
-    if (!stats.isFile() || stats.size > MAX_MANIFEST_BYTES) throw new Error("Expected a bounded regular file.");
-    const buffer = Buffer.alloc(MAX_MANIFEST_BYTES + 1);
+    const opened = fs.fstatSync(descriptor, { bigint: true });
+    if (!sameManifestGeneration(named, opened)) throw new Error(MANIFEST_CHANGED);
+    const size = Number(opened.size);
+    const buffer = Buffer.alloc(size + 1);
     let length = 0;
     while (length < buffer.length) {
       const count = fs.readSync(descriptor, buffer, length, buffer.length - length, null);
       if (!count) break;
       length += count;
     }
-    if (length > MAX_MANIFEST_BYTES) throw new Error("Manifest exceeds 65536 bytes.");
+    const finished = fs.fstatSync(descriptor, { bigint: true });
+    const current = fs.lstatSync(manifestPath, { bigint: true });
+    if (length !== size || !sameManifestGeneration(opened, finished)
+        || !sameManifestGeneration(opened, current)) throw new Error(MANIFEST_CHANGED);
     return validateRuntimeManifest(parseManifest(manifestDecoder.decode(buffer.subarray(0, length))), backendRoot);
   } catch (error) {
-    throw new Error(`Invalid runtime manifest ${manifestPath}: ${error.message}`, { cause: error });
+    failed = true;
+    const nameChanged = admitted && (error.code === "ENOENT" || error.code === "ELOOP");
+    const message = nameChanged ? MANIFEST_CHANGED : error.message;
+    throw new Error(`Invalid runtime manifest ${manifestPath}: ${message}`, { cause: error });
   } finally {
-    if (descriptor !== undefined) fs.closeSync(descriptor);
+    if (descriptor !== undefined) {
+      try { fs.closeSync(descriptor); }
+      catch (error) {
+        if (!failed) throw new Error(`Invalid runtime manifest ${manifestPath}: ${error.message}`, { cause: error });
+      }
+    }
   }
 }
 

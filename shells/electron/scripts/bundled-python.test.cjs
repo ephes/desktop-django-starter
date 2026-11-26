@@ -155,6 +155,67 @@ test("runtime manifest requires UTF-8 without a BOM", () => withTempBackend(root
   }
 }));
 
+for (const change of ["replace before open", "replace during read", "truncate during read", "remove during read"]) {
+  test(`manifest detects ${change} and asks for a retry`, t => withTempBackend(root => {
+    const manifestPath = path.join(root, "runtime-manifest.json");
+    const replacement = path.join(root, "replacement.json");
+    const original = validManifest(root);
+    fs.writeFileSync(manifestPath, JSON.stringify(original) + "\n");
+    original.python.version = "3.15.3";
+    fs.writeFileSync(replacement, JSON.stringify(original) + "\n");
+
+    if (change === "replace before open") {
+      const openSync = fs.openSync;
+      t.mock.method(fs, "openSync", (file, ...args) => {
+        if (file === manifestPath) fs.renameSync(replacement, manifestPath);
+        return openSync(file, ...args);
+      });
+    } else {
+      const readSync = fs.readSync;
+      let changed = false;
+      t.mock.method(fs, "readSync", (...args) => {
+        const count = readSync(...args);
+        if (!changed && count > 0) {
+          changed = true;
+          if (change === "replace during read") {
+            // Windows rename cannot overwrite a destination with an open handle.
+            if (process.platform === "win32") fs.unlinkSync(manifestPath);
+            fs.renameSync(replacement, manifestPath);
+          }
+          if (change === "truncate during read") fs.truncateSync(manifestPath, fs.statSync(manifestPath).size - 1);
+          if (change === "remove during read") fs.unlinkSync(manifestPath);
+        }
+        return count;
+      });
+    }
+
+    assert.throws(() => loadRuntimeManifest(root), /Invalid runtime manifest .*changed.*Retry/);
+  }));
+}
+
+test("manifest refuses fewer bytes than admitted", t => withTempBackend(root => {
+  const manifest = JSON.stringify(validManifest(root));
+  fs.writeFileSync(path.join(root, "runtime-manifest.json"), manifest + "\n");
+  const readSync = fs.readSync;
+  t.mock.method(fs, "readSync", (descriptor, buffer, offset, length, position) => {
+    if (offset === manifest.length) return 0;
+    return readSync(descriptor, buffer, offset, Math.min(length, manifest.length - offset), position);
+  });
+  assert.throws(() => loadRuntimeManifest(root), /Invalid runtime manifest .*changed.*Retry/);
+}));
+
+test("manifest preserves read errors when closing also fails", t => withTempBackend(root => {
+  fs.writeFileSync(path.join(root, "runtime-manifest.json"), "invalid JSON");
+  const closeSync = fs.closeSync;
+  const close = t.mock.method(fs, "closeSync", descriptor => {
+    closeSync(descriptor);
+    throw new Error("synthetic close failure");
+  });
+  assert.throws(() => loadRuntimeManifest(root), error =>
+    /Invalid runtime manifest/.test(error.message) && error.cause instanceof SyntaxError);
+  assert.equal(close.mock.callCount(), 1);
+}));
+
 for (const value of ["../outside", "/usr/bin/python3", "C:/python.exe", "python/../outside", "python\\bin\\python", "python//bin/python", "python/bin/python:stream"]) {
   test(`manifest refuses nonportable executable ${value}`, () => withTempBackend(root => {
     const manifest = validManifest(root);
