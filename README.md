@@ -464,8 +464,9 @@ See [state recovery and limits](docs/release.md#upgrades-and-rollbacks).
 
 State initialization holds a persistent OS lock across recovery and publication.
 Next startup reclaims bounded, provably owned abandoned stages, preserving
-ambiguous directories. Payload files and directories are flushed before the
-completion marker and final rename. POSIX adds parent-directory sync; Windows
+ambiguous directories even when the retention warning cannot be logged.
+Payload files and directories are flushed before the completion marker and
+final rename. POSIX adds parent-directory sync; Windows
 has file flushes and process-crash atomicity, with no portable power-loss
 namespace guarantee. See the release guide before manually cleaning stages.
 

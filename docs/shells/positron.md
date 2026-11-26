@@ -108,7 +108,9 @@ are accepted for state selection and mapped to SemVer `alpha.N`, `beta.N`,
 `rc.N` precedence. Directory names keep their original spelling. Python dev,
 post, epoch and other version forms without a direct supported SemVer peer are
 refused with a configuration error; use stable or a/b/rc release versions for
-Positron builds. Equivalent spellings compare equally and are not predecessors.
+Positron builds. Equivalent spellings compare equally and are not
+predecessors; if several of them are the newest older state, startup lists
+them and stops so you can reconcile them.
 
 Icon regeneration preflights `rsvg-convert` and, on macOS, `iconutil` before
 rendering. It stages a nonempty PNG and, on macOS, a complete nonempty ICNS

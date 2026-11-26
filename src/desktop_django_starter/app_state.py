@@ -259,7 +259,18 @@ def _find_previous_state(
             older.append(entry)
 
     if older:
-        newest = max(older, key=lambda entry: (version_sort_key(entry.name), entry.name))
+        highest = max(version_sort_key(entry.name) for entry in older)
+        competing = sorted(entry.name for entry in older if version_sort_key(entry.name) == highest)
+        if len(competing) > 1:
+            # Equivalent spellings (0.2.0rc1 and 0.2.0-rc.1) may hold different
+            # restored data; never pick one silently.
+            raise ImproperlyConfigured(
+                "Several older app state directories share the same version precedence "
+                f"({', '.join(competing)}); refusing to guess which to copy. "
+                "While the app is closed, back up these directories, reconcile them and "
+                "keep only one before retrying startup."
+            )
+        newest = next(entry for entry in older if entry.name == competing[0])
         # Only the selected predecessor must be a complete generation; older
         # damaged or empty leftovers are retained and ignored as before.
         _validate_state(newest, newest.name)

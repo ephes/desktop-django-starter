@@ -275,9 +275,16 @@ def _recover_stages(root: Path, parent_fd: int | None) -> None:
             _retire_stage(stage, parent_fd, parent_identity, stage_identity)
         except (OSError, ValueError, TypeError, RecursionError, ImproperlyConfigured) as error:
             # Refuse to guess ownership; keep ambiguous bytes for manual inspection.
-            logger.warning("Retained ambiguous abandoned state stage (%s)", type(error).__name__)
             ambiguous += 1
+            # A failing log sink must not stop recovery of later owned stages.
+            with suppress(Exception):
+                logger.warning(
+                    "Retained ambiguous abandoned state stage (%s)", type(error).__name__
+                )
     if ambiguous:
-        logger.warning("Retained %d ambiguous stages; inspect while the app is closed", ambiguous)
+        with suppress(Exception):
+            logger.warning(
+                "Retained %d ambiguous stages; inspect while the app is closed", ambiguous
+            )
     if candidates:
         sync_directory(root)

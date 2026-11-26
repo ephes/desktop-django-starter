@@ -272,11 +272,31 @@ def test_unsupported_python_version_forms_are_refused(tmp_path: Path, version: s
 
 
 @pytest.mark.parametrize("names", [("0.2.0rc1", "0.2.0-rc.1"), ("0.2.0-rc.1", "0.2.0rc1")])
-def test_equivalent_predecessors_have_deterministic_tie_break(tmp_path: Path, names) -> None:
+def test_equivalent_predecessors_are_refused_before_copy(
+    monkeypatch, tmp_path: Path, names
+) -> None:
+    from desktop_django_starter import app_state
+
     for name in names:
         make_database(tmp_path / "state" / name / "app.sqlite3", name)
+    make_database(tmp_path / "state" / "0.1.0" / "app.sqlite3", "older")
+    copy = Mock(side_effect=AssertionError("copied an ambiguous predecessor"))
+    monkeypatch.setattr(app_state, "_copy_state", copy)
+    with pytest.raises(ImproperlyConfigured, match=r"0\.2\.0-rc\.1, 0\.2\.0rc1.*reconcile"):
+        prepare_versioned_state(tmp_path, "0.2.0")
+    copy.assert_not_called()
+    assert sorted(
+        p.name for p in (tmp_path / "state").iterdir() if p.name != ".initialize.lock"
+    ) == ["0.1.0", "0.2.0-rc.1", "0.2.0rc1"]
+    for name in names:
+        assert read_markers(tmp_path / "state" / name / "app.sqlite3") == [name]
+
+
+def test_equivalent_spellings_below_a_unique_predecessor_are_ignored(tmp_path: Path) -> None:
+    for name in ("0.2.0rc1", "0.2.0-rc.1", "0.2.0rc2"):
+        make_database(tmp_path / "state" / name / "app.sqlite3", name)
     stable = prepare_versioned_state(tmp_path, "0.2.0")
-    assert read_markers(stable / "app.sqlite3") == ["0.2.0rc1"]
+    assert read_markers(stable / "app.sqlite3") == ["0.2.0rc2"]
 
 
 def test_disappeared_source_is_not_recreated(monkeypatch, tmp_path: Path) -> None:

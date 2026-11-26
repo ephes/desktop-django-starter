@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Stop packaged state startup before copying when equivalent prerelease
+  spellings such as `0.2.0rc1` and `0.2.0-rc.1` are both the newest older
+  state; the error lists both so they can be reconciled.
+
+- Keep reclaiming owned abandoned state stages and syncing the state directory
+  when logging the warning for a retained ambiguous stage fails.
+
 - Use the published packaged secret key on first launch even if temporary-file
   cleanup and its warning both fail.
 

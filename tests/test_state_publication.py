@@ -339,6 +339,46 @@ def test_ambiguous_stage_is_retained_with_bounded_diagnostic(monkeypatch, tmp_pa
     assert len(caplog.text) < 1000
 
 
+def test_failing_warning_sink_does_not_stop_stage_recovery(monkeypatch, tmp_path):
+    import contextlib
+    import logging
+
+    from desktop_django_starter import state_staging
+
+    class BrokenSink(logging.Handler):
+        def emit(self, record):
+            raise RuntimeError("log sink unavailable")
+
+    root = tmp_path / "app"
+    app_state.prepare_versioned_state(root, "1.0.0")
+    owner = {"schema": 1, "kind": "dds-state-initialization"}
+    ambiguous = root / "state" / (".dds-stage-" + "0" * 32)
+    ambiguous.mkdir()
+    (ambiguous / "unrelated").write_text("keep")
+    owned = root / "state" / (".dds-stage-" + "f" * 32)
+    owned.mkdir()
+    (owned / ".stage-owner.json").write_text(json.dumps({**owner, "stage": owned.name}))
+    (owned / "media").mkdir()
+    real_scandir = os.scandir
+
+    @contextlib.contextmanager
+    def ambiguous_first(path):
+        # Make the refused stage precede the owned one regardless of fs order.
+        with real_scandir(path) as entries:
+            yield iter(sorted(entries, key=lambda entry: entry.name))
+
+    monkeypatch.setattr(state_staging.os, "scandir", ambiguous_first)
+    handler = BrokenSink()
+    state_staging.logger.addHandler(handler)
+    try:
+        app_state.prepare_versioned_state(root, "2.0.0")
+    finally:
+        state_staging.logger.removeHandler(handler)
+    assert (ambiguous / "unrelated").read_text() == "keep"
+    assert not owned.exists()
+    assert (root / "state" / "2.0.0").is_dir()
+
+
 def test_recovery_discovery_is_bounded(monkeypatch, tmp_path):
     from desktop_django_starter import state_staging
 
