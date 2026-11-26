@@ -691,12 +691,15 @@ def run_wrap(
         for f in manage_files:
             print(f"       {f}")
 
-    # 5. electron/ doesn't exist (--force downgrades to warning)
-    if Path("electron").is_dir():
+    # 5. Output path (--force only permits reusing a directory)
+    electron_path = Path("electron")
+    if electron_path.is_dir():
         if force:
             pf.warn("electron/ already exists (--force, continuing)")
         else:
             pf.error("electron/ already exists (use --force to re-wrap)")
+    elif electron_path.exists() or electron_path.is_symlink():
+        pf.error("electron is not a directory. Move or remove the conflicting entry.")
     else:
         pf.ok("No existing electron/ directory")
 

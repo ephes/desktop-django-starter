@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Stop `dds wrap` before launch when a file or dangling symlink occupies
+  the `electron` output path, even with `--force`.
+
 - Report Git probe launch failures in `dds wrap` preflight, even with `--force`.
 
 - Reject Node runtime manifests that change between admission and reading.

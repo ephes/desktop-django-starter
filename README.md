@@ -150,6 +150,7 @@ Preflight reports when `git rev-parse` or `git status` cannot start. A failed
 Git inspection blocks wrapping even with `--force`. That flag permits known
 uncommitted changes and an existing `electron/` directory. Command failure
 diagnostics are truncated to 800 UTF-8 bytes.
+Move or remove a file or dangling symlink at `electron` before wrapping.
 
 Claude completion requires exactly one terminal `result` with `is_error: false`
 (and `subtype: success` if present), plus exit code zero. Missing, malformed,

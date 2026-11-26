@@ -99,6 +99,8 @@ Options:
 
 Preflight reports which Git probe failed to start. Git inspection failures
 block wrapping even with `--force`.
+If `electron` is a file or a dangling symlink, move or remove the entry before
+wrapping. `--force` permits re-wrapping into an existing directory.
 
 Prompt emission is offline and read-only, even when combined with `--run`.
 It bypasses tool checks, project discovery, saved config and harness setup.

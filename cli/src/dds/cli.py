@@ -55,8 +55,9 @@ def main(argv: list[str] | None = None) -> None:
         "--force",
         action="store_true",
         help=(
-            "Permit known dirty worktrees and existing electron/ directories; "
-            "failed Git inspection still blocks"
+            "Permit known dirty worktrees and existing electron/ directories. "
+            "A failed Git inspection still blocks wrapping, as does a file or "
+            "dangling symlink at electron."
         ),
     )
     wrap_parser.add_argument(

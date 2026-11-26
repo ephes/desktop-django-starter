@@ -87,6 +87,43 @@ def test_git_probe_launch_failure_blocks_wrapper(preflight, monkeypatch, capsys,
     assert not launches
 
 
+@pytest.mark.parametrize("entry", ["absent", "directory", "file", "dangling-link"])
+@pytest.mark.parametrize("force", [False, True])
+def test_electron_output_path_controls_wrapper_launch(preflight, capsys, entry, force):
+    root, _, launches = preflight
+    plant(root, ["manage.py"])
+    electron = root / "electron"
+    if entry == "directory":
+        electron.mkdir()
+    elif entry == "file":
+        electron.touch()
+    elif entry == "dangling-link":
+        try:
+            electron.symlink_to(root / "missing", target_is_directory=True)
+        except OSError as exc:
+            if os.name == "nt" and exc.winerror == 1314:
+                pytest.skip("creating symlinks requires Windows privileges")
+            raise
+
+    args = ["wrap", "--run", "--harness", "pi"] + (["--force"] if force else [])
+    if entry == "absent" or (entry == "directory" and force):
+        main(args)
+        assert "Preflight passed." in capsys.readouterr().out
+        assert launches == ["pi"]
+    else:
+        with pytest.raises(SystemExit) as error:
+            main(args)
+        assert error.value.code == 1
+        output = capsys.readouterr()
+        assert "Preflight failed (1 error(s))." in output.out
+        assert "No existing electron/ directory" not in output.out
+        expected = (
+            "electron/ already exists" if entry == "directory" else "electron is not a directory"
+        )
+        assert expected in output.err
+        assert not launches
+
+
 @pytest.mark.parametrize(
     ("paths", "expected"),
     [
