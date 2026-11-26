@@ -77,14 +77,14 @@ def test_routine_poll_uses_bounded_index_work_with_large_history():
     assert [row.pk for row in rows if row.pk in expected_history] == expected_history
     for statement, lookup in zip(
         statements,
-        ["routine_active_created_idx", "routine_history_order_idx", "SEARCH"],
+        ["routine_active_created_idx", "SEARCH", "routine_history_order_idx"],
         strict=True,
     ):
         plan, work = plan_and_work(statement)
         assert lookup in plan, plan
         assert "TEMP B-TREE" not in plan, plan
         assert work < 5_000, (plan, work)
-    assert set(statements[-1][1]) == {row.pk for row in active}
+    assert set(statements[1][1]) == {row.pk for row in active}
 
 
 @pytest.mark.django_db

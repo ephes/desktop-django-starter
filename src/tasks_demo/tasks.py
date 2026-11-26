@@ -145,6 +145,12 @@ def visible_tasks() -> list[SimulatedTask]:
         reconcile_task_with_backend(row, result_loader=load_result)
 
     writer_rows = SimulatedTask.objects.using(router.db_for_write(SimulatedTask))
+    # Queue observations can outlive a routine's claim, completion, or clear.
+    # Re-read only the initially observed IDs, in parameter-safe batches.
+    # Read them before history: a routine that finishes between the two reads
+    # then appears in history instead of vanishing from both lists. A clear
+    # removes only terminal rows, so it cannot drop a row still active here.
+    current_rows = writer_rows.order_by().in_bulk([row.pk for row in active])
     # Query history after reconciliation so fresh completions are visible in
     # this response, even when the task was queued long ago.
     history = list(
@@ -152,9 +158,6 @@ def visible_tasks() -> list[SimulatedTask]:
             Q(status=SimulatedTask.Status.DONE) | Q(status=SimulatedTask.Status.FAILED)
         ).order_by("-completed_at", "-created_at", "-pk")[:TERMINAL_HISTORY_LIMIT]
     )
-    # Queue observations can outlive a routine's claim, completion, or clear.
-    # Re-read only the initially observed IDs, in parameter-safe batches.
-    current_rows = writer_rows.order_by().in_bulk([row.pk for row in active])
     history_ids = {row.pk for row in history}
     active = [
         row

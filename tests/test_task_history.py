@@ -35,8 +35,8 @@ def test_history_is_bounded_but_all_active_rows_remain(
         row.backend_task_id = result.id
         row.save(update_fields=["backend_task_id"])
         active.append(row.pk)
-    # Four SELECTs: initial active rows, bulk queue lookup, bounded history,
-    # and one bulk revalidation of the initial active IDs.
+    # Four SELECTs: initial active rows, bulk queue lookup, one bulk
+    # revalidation of the initial active IDs, and bounded history.
     with django_assert_max_num_queries(4):
         response = client.get(reverse(f"tasks_demo:{endpoint}"))
     assert response.status_code == 200

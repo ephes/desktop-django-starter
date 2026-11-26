@@ -4,7 +4,7 @@ from types import SimpleNamespace
 from unittest import mock
 
 import pytest
-from django.db import close_old_connections
+from django.db import close_old_connections, connection
 from django.tasks import TaskResultStatus
 from django.urls import reverse
 from django.utils import timezone
@@ -227,6 +227,45 @@ def test_poll_refreshes_active_rows_after_backend_observation(client, backend_st
         claimed.pk: "RUNNING",
         unchanged.pk: "PENDING",
     }
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("read", ["revalidation", "history"])
+def test_poll_keeps_routine_finished_before_a_final_read(client, read):
+    row, _ = queued_task()
+    triggered = []
+
+    def finish():
+        try:
+            SimulatedTask.objects.filter(pk=row.pk).update(
+                status="DONE", result="Synthetic result", completed_at=timezone.now()
+            )
+        finally:
+            close_old_connections()
+
+    def is_trigger(sql):
+        if not sql.startswith("SELECT") or '"tasks_demo_simulatedtask"' not in sql:
+            return False
+        if read == "history":
+            return "LIMIT" in sql
+        return '"tasks_demo_simulatedtask"."id" IN (' in sql
+
+    def finish_before_read(execute, sql, params, many, context):
+        if not triggered and is_trigger(sql):
+            triggered.append(sql)
+            executor.submit(finish).result(timeout=10)
+        return execute(sql, params, many, context)
+
+    with (
+        ThreadPoolExecutor(max_workers=1) as executor,
+        connection.execute_wrapper(finish_before_read),
+    ):
+        response = client.get(reverse("tasks_demo:task-status"))
+
+    assert response.status_code == 200
+    assert triggered
+    # Whichever final read runs second, the finished routine stays visible.
+    assert {task["id"]: task["status"] for task in response.json()["tasks"]} == {row.pk: "DONE"}
 
 
 @pytest.mark.django_db(transaction=True)

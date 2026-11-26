@@ -320,10 +320,11 @@ Current launcher contract:
   can fail a routine only while it is still pending. A worker claim made
   during the poll is preserved. Database errors still surface to the caller.
   Fresh reconciled completions enter history in the same response. After
-  reconciliation, polling reads history and rechecks the initially observed
-  active IDs on the database alias Django routes routine writes to. The
-  active list uses current pending or running rows and omits cleared IDs,
-  even when an earlier queue observation still reported an active result.
+  reconciliation, polling rechecks the initially observed active IDs and then
+  reads history, both on the database alias Django routes routine writes to.
+  The active list uses current pending or running rows and omits cleared IDs,
+  even when an earlier queue observation still reported an active result. A
+  routine that finishes between the two reads appears in history.
   Older terminal rows remain until Clear Finished Routines deletes them.
   Clearing uses batches of up to 100 routine rows in primary-key order.
   The clear first snapshots the IDs of routines that are terminal under the
