@@ -31,6 +31,12 @@ removed from both the constructed environment and the process environment
 before Django starts. Other inherited settings such as the smoke-test flag
 remain available.
 
+The quit check gives its own connection to the task writer a 250 ms SQLite
+busy timeout and interrupts long queries after a 250 ms deadline. The worker
+thread closes that connection before quit proceeds. A locked database follows
+the same exit path as any failed count. The ordinary activity endpoint uses
+the packaged connection settings.
+
 Before creating a new packaged database, Positron records a pending demo seed
 beside that version's database and flushes the empty marker file and its
 directory to disk, so a crash or power loss cannot keep the new database while

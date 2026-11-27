@@ -33,6 +33,7 @@ from .runtime import (
 )
 
 SMOKE_EXIT_DELAY_SECONDS = 0.75
+QUIT_SQLITE_TIMEOUT_SECONDS = 0.25
 AUTH_BOOTSTRAP_PATH = "/desktop-auth/bootstrap/"
 logger = logging.getLogger(__name__)
 
@@ -206,7 +207,7 @@ class DesktopDjangoStarterPositron(toga.App):
         from desktop_django_starter.activity import background_task_counts
 
         try:
-            return background_task_counts()
+            return background_task_counts(sqlite_timeout=QUIT_SQLITE_TIMEOUT_SECONDS)
         finally:
             connections.close_all()
 

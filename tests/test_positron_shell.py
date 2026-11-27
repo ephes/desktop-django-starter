@@ -2,9 +2,11 @@ import asyncio
 import importlib.util
 import os
 import socket
+import sqlite3
 import stat
 import subprocess
 import sys
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -220,6 +222,7 @@ def test_positron_instance_lock_blocks_a_second_process(tmp_path) -> None:
     lock_dir = tmp_path / "data"
     lock_code = """
 import sys
+from contextlib import closing
 from pathlib import Path
 
 sys.path.insert(0, sys.argv[1])
@@ -431,10 +434,91 @@ def test_positron_quit_owns_activity_probe_and_dialog(
     asyncio.run(exercise_exit())
 
 
+def test_positron_quit_bounds_locked_task_writer_and_still_prompts_when_busy(
+    django_db_blocker, monkeypatch, settings, tmp_path, positron_app_module
+) -> None:
+    from django.db import DEFAULT_DB_ALIAS, connections
+    from django_tasks_db.models import DBTaskResult
+
+    from tasks_demo.tasks import run_simulated_task
+
+    monkeypatch.delenv("DESKTOP_DJANGO_SMOKE_TEST", raising=False)
+    path = tmp_path / "writer.sqlite3"
+    writer = "positron_task_writer"
+    options = {"timeout": 20, "init_command": "PRAGMA journal_mode=WAL;"}
+    monkeypatch.setitem(
+        connections.databases,
+        writer,
+        {**connections.databases[DEFAULT_DB_ALIAS], "NAME": str(path), "OPTIONS": options},
+    )
+
+    class TaskRouter:
+        def db_for_write(self, model, **hints):
+            return writer if model is DBTaskResult else None
+
+    settings.DATABASE_ROUTERS = [TaskRouter()]
+    opened = []
+    connect = sqlite3.connect
+
+    app = positron_app_module.DesktopDjangoStarterPositron()
+    app._exit_in_progress = False
+    app._django_ready = lambda: True
+    app.main_window = SimpleNamespace(dialog=AsyncMock(return_value=False))
+    app.cleanup = Mock(return_value=True)
+
+    async def exercise():
+        with closing(connect(path, check_same_thread=False)) as blocker:
+            blocker.execute("PRAGMA journal_mode=DELETE")
+
+            def track_connection(*args, **kwargs):
+                raw = connect(*args, **kwargs)
+                if kwargs.get("database") == str(path):
+                    # Ensure SQLite has returned a handle before locking it out.
+                    if not opened:
+                        blocker.execute("BEGIN EXCLUSIVE")
+                    opened.append(raw)
+                return raw
+
+            monkeypatch.setattr(sqlite3.dbapi2, "connect", track_connection)
+            try:
+                assert await asyncio.wait_for(app.confirm_exit(None), timeout=2)
+                app.cleanup.assert_called_once()
+                assert blocker.in_transaction
+                app.main_window.dialog.assert_not_awaited()
+                (failed_probe,) = opened
+                with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+                    failed_probe.execute("SELECT 1")
+            finally:
+                blocker.rollback()
+
+        assert await app.confirm_exit(None) is False
+        app.main_window.dialog.assert_awaited_once()
+        app.cleanup.assert_called_once()
+        _, successful_probe = opened
+        with pytest.raises(sqlite3.ProgrammingError, match="closed"):
+            successful_probe.execute("SELECT 1")
+        assert connections.databases[writer]["OPTIONS"] == {
+            "timeout": 20,
+            "init_command": "PRAGMA journal_mode=WAL;",
+        }
+
+    with django_db_blocker.unblock():
+        try:
+            with connections[writer].schema_editor() as editor:
+                editor.create_model(DBTaskResult)
+            run_simulated_task.enqueue(1)
+            connections[writer].close()
+            asyncio.run(exercise())
+        finally:
+            connections[writer].close()
+            del connections[writer]
+
+
 @pytest.mark.parametrize("interruption", ["migrate", "seed_demo_content", "legacy"])
 def test_positron_packaged_seed_survives_interrupted_first_launch(tmp_path, interruption) -> None:
     script = """
 import sys
+from contextlib import closing
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch

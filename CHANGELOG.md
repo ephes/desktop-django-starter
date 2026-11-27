@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Bound SQLite waits in Positron's quit activity check and close the probe
+  connection before continuing when the task database is locked.
+
 - Stop packaged state startup before copying when equivalent prerelease
   spellings such as `0.2.0rc1` and `0.2.0-rc.1` are both the newest older
   state; the error lists both so they can be reconciled.
