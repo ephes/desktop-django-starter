@@ -7,6 +7,7 @@ import stat
 import subprocess
 import sys
 from contextlib import closing
+from http.client import HTTPResponse
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
@@ -223,6 +224,7 @@ def test_positron_instance_lock_blocks_a_second_process(tmp_path) -> None:
     lock_code = """
 import sys
 from contextlib import closing
+from http.client import HTTPResponse
 from pathlib import Path
 
 sys.path.insert(0, sys.argv[1])
@@ -519,6 +521,7 @@ def test_positron_packaged_seed_survives_interrupted_first_launch(tmp_path, inte
     script = """
 import sys
 from contextlib import closing
+from http.client import HTTPResponse
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -708,8 +711,8 @@ def test_positron_closes_listener_when_handler_setup_fails(
             self.close_count = 0
             servers.append(self)
 
-        def shutdown(self):
-            pytest.fail("cleanup called shutdown before the serve loop started")
+        def serve_until_stopped(self):
+            pytest.fail("the listener started after handler setup failed")
 
         def server_close(self):
             self.close_count += 1
@@ -784,6 +787,143 @@ def test_positron_worker_start_failure_keeps_cleanup_available(
     asyncio.run(exercise())
 
 
+@pytest.mark.parametrize("outcome", ["drained", "timed-out", "handler-error"])
+def test_positron_keeps_profile_during_wsgi_response(
+    monkeypatch, positron_app_module, running_positron_shell, tmp_path, outcome
+) -> None:
+    from threading import Event
+
+    from desktop_django_starter_positron import runtime
+
+    app = running_positron_shell
+    started = Event()
+    finish = Event()
+    database = tmp_path / "handler.sqlite3"
+    with closing(sqlite3.connect(database)) as connection:
+        connection.execute("CREATE TABLE writes (message TEXT)")
+
+    def application(_environ, start_response):
+        start_response("200 OK", [("Content-Length", "2")])
+
+        def body():
+            started.set()
+            assert finish.wait(timeout=8)
+            if outcome == "handler-error":
+                raise RuntimeError("synthetic response failure")
+            with closing(sqlite3.connect(database)) as connection, connection:
+                connection.execute("INSERT INTO writes VALUES ('done')")
+            yield b"ok"
+
+        return body()
+
+    monkeypatch.setattr(positron_app_module, "WSGIHandler", lambda: application)
+    if outcome == "timed-out":
+        monkeypatch.setattr(positron_app_module, "SHUTDOWN_TIMEOUT_SECONDS", 0.75, raising=False)
+
+    async def exercise():
+        app.loop = asyncio.get_running_loop()
+        app.startup()
+        cleanup = None
+        try:
+            port = await asyncio.wait_for(app.server_ready, timeout=2)
+            with socket.create_connection((positron_app_module.HOST, port), timeout=2) as client:
+                request = b"GET / HTTP/1.1\r\nHost: localhost\r\n"
+                if outcome != "drained":
+                    request += b"Connection: close\r\n"
+                client.sendall(request + b"\r\n")
+                assert await asyncio.to_thread(started.wait, 2)
+                cleanup = asyncio.create_task(asyncio.to_thread(app.cleanup))
+                if outcome == "timed-out":
+                    assert await asyncio.wait_for(cleanup, timeout=3)
+                await asyncio.to_thread(app.server_thread.join, 2)
+                assert not app.server_thread.is_alive()
+
+                contender = runtime.acquire_instance_lock(app.paths.data)
+                try:
+                    assert contender is None
+                finally:
+                    runtime.release_instance_lock(contender)
+
+                with pytest.raises(OSError), socket.create_connection(
+                    (positron_app_module.HOST, port), timeout=1
+                ):
+                    pass
+
+                finish.set()
+                with HTTPResponse(client) as response:
+                    await asyncio.to_thread(response.begin)
+                    if outcome == "handler-error":
+                        assert response.status == 500
+                    else:
+                        assert response.status == 200
+                        assert await asyncio.to_thread(response.read) == b"ok"
+                assert await asyncio.wait_for(cleanup, timeout=3)
+                if outcome == "timed-out":
+                    assert await asyncio.to_thread(app.cleanup)
+                assert app._instance_lock is None
+                if outcome == "drained":
+                    # The idle keep-alive socket did not hold up shutdown, and
+                    # subsequent requests on it cannot reach the application.
+                    client.sendall(request + b"\r\n")
+                    assert await asyncio.to_thread(client.recv, 1024) == b""
+
+            contender = runtime.acquire_instance_lock(app.paths.data)
+            try:
+                assert contender is not None
+            finally:
+                runtime.release_instance_lock(contender)
+            with closing(sqlite3.connect(database)) as connection:
+                expected = [] if outcome == "handler-error" else [("done",)]
+                assert connection.execute("SELECT message FROM writes").fetchall() == expected
+        finally:
+            finish.set()
+            if cleanup is not None:
+                await cleanup
+            await asyncio.to_thread(app.cleanup)
+
+    asyncio.run(exercise())
+
+
+def test_positron_cleanup_bounds_a_stalled_listener(
+    monkeypatch, positron_app_module, running_positron_shell
+) -> None:
+    from threading import Event
+
+    app_module = positron_app_module
+    app = running_positron_shell
+    serving = Event()
+    finish = Event()
+
+    class StalledServer(app_module.ThreadedWSGIServer):
+        def serve_until_stopped(self):
+            serving.set()
+            assert finish.wait(timeout=5)
+
+    monkeypatch.setattr(app_module, "ThreadedWSGIServer", StalledServer)
+    monkeypatch.setattr(app_module, "WSGIHandler", Mock())
+    monkeypatch.setattr(app_module, "SHUTDOWN_TIMEOUT_SECONDS", 0.05)
+
+    async def exercise():
+        app.loop = asyncio.get_running_loop()
+        app.startup()
+        try:
+            port = await asyncio.wait_for(app.server_ready, timeout=2)
+            assert await asyncio.to_thread(serving.wait, 2)
+            assert await asyncio.wait_for(asyncio.to_thread(app.cleanup), timeout=1)
+            assert app.server_thread.is_alive()
+            assert app._instance_lock is not None
+        finally:
+            finish.set()
+            await asyncio.to_thread(app.server_thread.join, 2)
+            app.cleanup()
+
+        assert app._instance_lock is None
+        with socket.socket() as listener:
+            listener.bind((app_module.HOST, port))
+
+    asyncio.run(exercise())
+
+
 @pytest.mark.parametrize("outcome", ["raises", "returns", "before_ready", "shutdown"])
 def test_positron_reports_unexpected_server_exit_on_ui_thread(
     monkeypatch, positron_app_module, running_positron_shell, outcome
@@ -805,9 +945,9 @@ def test_positron_reports_unexpected_server_exit_on_ui_thread(
             self.close_count = 0
             servers.append(self)
 
-        def serve_forever(self):
+        def serve_until_stopped(self):
             if outcome == "shutdown":
-                super().serve_forever(poll_interval=0.01)
+                super().serve_until_stopped()
                 return
             if outcome == "before_ready":
                 return
@@ -815,10 +955,6 @@ def test_positron_reports_unexpected_server_exit_on_ui_thread(
                 raise AssertionError("test did not trigger the serve loop exit")
             if outcome == "raises":
                 raise RuntimeError("synthetic serve loop failure")
-
-        def shutdown(self):
-            assert outcome == "shutdown", "cleanup tried to shut down a finished serve loop"
-            super().shutdown()
 
         def server_close(self):
             self.close_count += 1

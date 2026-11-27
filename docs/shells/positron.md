@@ -56,6 +56,13 @@ restart message. If the WSGI server stops after readiness, the server thread
 closes its listener and the UI shows a terminal error. Dismissing the dialog
 exits the app so it can be relaunched. A normal quit shows no service error.
 
+Quit stops the listener and refuses new requests on existing keep-alive
+connections. The profile lock stays held through admitted WSGI requests,
+including streamed responses and thread-owned database cleanup. The shell
+waits up to five seconds for the listener and gives active requests up to
+five seconds to finish. If startup, a worker or a request is still active
+when cleanup returns, the process keeps the profile lock through exit.
+
 Positron requires a direct regular profile lock file. After taking the lock,
 it verifies that the lock path still names the opened file before writing the
 PID or starting Django. An unsafe or replaced lock stops startup with a

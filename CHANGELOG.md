@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Stop admitting Positron requests during shutdown and hold the profile lock
+  through active WSGI responses and database cleanup.
+
 - Bound SQLite waits in Positron's quit activity check and close the probe
   connection before continuing when the task database is locked.
 
