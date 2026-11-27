@@ -7,7 +7,7 @@ import secrets
 import socketserver
 import stat
 from pathlib import Path
-from threading import Lock, Thread
+from threading import Condition, Lock, Thread
 from typing import BinaryIO
 from urllib.parse import urlencode
 from wsgiref.simple_server import WSGIServer
@@ -18,6 +18,7 @@ from django.conf import settings
 from django.core import management as django_manage
 from django.core.handlers.wsgi import WSGIHandler
 from django.core.servers.basehttp import WSGIRequestHandler
+from django.db import connections
 
 from .runtime import (
     HOST,
@@ -33,6 +34,8 @@ from .runtime import (
 )
 
 SMOKE_EXIT_DELAY_SECONDS = 0.75
+QUIT_SQLITE_TIMEOUT_SECONDS = 0.25
+SHUTDOWN_TIMEOUT_SECONDS = 5
 AUTH_BOOTSTRAP_PATH = "/desktop-auth/bootstrap/"
 logger = logging.getLogger(__name__)
 
@@ -75,7 +78,73 @@ def claim_pending_demo_seed(database_path: Path) -> Path | None:
 
 
 class ThreadedWSGIServer(socketserver.ThreadingMixIn, WSGIServer):
-    """WSGI server with one thread per request, matching the Positron shell model."""
+    """Track admitted WSGI requests through response and database cleanup."""
+
+    daemon_threads = True
+    timeout = 0.1
+
+    def __init__(self, server_address, request_handler):
+        super().__init__(server_address, request_handler)
+        self._requests = Condition()
+        self._active_requests = 0
+        self._stopping = False
+
+    @property
+    def stopping(self) -> bool:
+        with self._requests:
+            return self._stopping
+
+    def serve_until_stopped(self) -> None:
+        # A finite accept poll lets cleanup signal the listener without waiting
+        # inside BaseServer.shutdown() for the serve loop to respond.
+        while not self.stopping:
+            self.handle_request()
+
+    def stop(self) -> None:
+        with self._requests:
+            self._stopping = True
+
+    def wait_for_requests(self, timeout: float) -> bool:
+        with self._requests:
+            return self._requests.wait_for(lambda: self._active_requests == 0, timeout)
+
+    def verify_request(self, request, client_address) -> bool:
+        return not self.stopping
+
+    def admit_request(self) -> bool:
+        with self._requests:
+            if self._stopping:
+                return False
+            self._active_requests += 1
+            return True
+
+    def finish_request_activity(self) -> None:
+        with self._requests:
+            self._active_requests -= 1
+            if self._active_requests == 0:
+                self._requests.notify_all()
+
+
+class PositronRequestHandler(WSGIRequestHandler):
+    def handle_one_request(self) -> None:
+        self._admitted = False
+        try:
+            super().handle_one_request()
+        finally:
+            if self._admitted:
+                try:
+                    connections.close_all()
+                finally:
+                    self.server.finish_request_activity()
+
+    def parse_request(self) -> bool:
+        if not super().parse_request():
+            return False
+        # Check each request, including those on an existing keep-alive socket.
+        self._admitted = self.server.admit_request()
+        if not self._admitted:
+            self.close_connection = True
+        return self._admitted
 
 
 class DesktopDjangoStarterPositron(toga.App):
@@ -194,6 +263,7 @@ class DesktopDjangoStarterPositron(toga.App):
     def _django_ready(self) -> bool:
         return (
             self._httpd is not None
+            and not self._httpd.stopping
             and self.server_ready.done()
             and not self.server_ready.cancelled()
             and self.server_ready.exception() is None
@@ -201,35 +271,32 @@ class DesktopDjangoStarterPositron(toga.App):
 
     @staticmethod
     def _background_task_counts() -> dict[str, int]:
-        from django.db import connections
-
         from desktop_django_starter.activity import background_task_counts
 
         try:
-            return background_task_counts()
+            return background_task_counts(sqlite_timeout=QUIT_SQLITE_TIMEOUT_SECONDS)
         finally:
             connections.close_all()
 
     def cleanup(self, *_args, **_kwargs) -> bool:
         with self._server_lock:
             self._server_stopping = True
+            httpd = self._httpd
+            if httpd is not None:
+                httpd.stop()
 
         self.stop_task_worker()
 
-        with self._server_lock:
-            httpd = self._httpd
-        if httpd is not None:
-            httpd.shutdown()
-
         server_thread = getattr(self, "server_thread", None)
         if server_thread is not None and server_thread.is_alive():
-            server_thread.join(timeout=5)
+            server_thread.join(timeout=SHUTDOWN_TIMEOUT_SECONDS)
 
-        # Keep the profile lock while startup or a routine can still use it.
+        # If a thread outlives its shutdown budget, process exit releases the
+        # lock. A second launch must not overlap its use of the profile.
         if not (
             (server_thread is not None and server_thread.is_alive())
             or (self._task_worker_thread is not None and self._task_worker_thread.is_alive())
-        ):
+        ) and (httpd is None or httpd.wait_for_requests(SHUTDOWN_TIMEOUT_SECONDS)):
             release_instance_lock(self._instance_lock)
             self._instance_lock = None
 
@@ -280,8 +347,7 @@ class DesktopDjangoStarterPositron(toga.App):
             self.configure_django()
             self.prepare_runtime()
 
-            with ThreadedWSGIServer((HOST, 0), WSGIRequestHandler) as httpd:
-                httpd.daemon_threads = True
+            with ThreadedWSGIServer((HOST, 0), PositronRequestHandler) as httpd:
                 httpd.set_app(WSGIHandler())
                 _host, port = httpd.socket.getsockname()
 
@@ -292,10 +358,9 @@ class DesktopDjangoStarterPositron(toga.App):
                     self._httpd = httpd
 
                 try:
-                    httpd.serve_forever()
+                    httpd.serve_until_stopped()
                 finally:
-                    with self._server_lock:
-                        self._httpd = None
+                    httpd.stop()
         except Exception as error:
             failure = error
         else:
@@ -310,6 +375,7 @@ class DesktopDjangoStarterPositron(toga.App):
             if (
                 not self._server_stopping
                 and self._httpd is not None
+                and not self._httpd.stopping
                 and not self.server_ready.done()
             ):
                 self.server_ready.set_result(port)
@@ -356,7 +422,7 @@ class DesktopDjangoStarterPositron(toga.App):
 
         self._task_worker.running = False
         if self._task_worker_thread is not None:
-            self._task_worker_thread.join(timeout=5)
+            self._task_worker_thread.join(timeout=SHUTDOWN_TIMEOUT_SECONDS)
         self._task_worker = None
 
 

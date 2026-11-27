@@ -31,6 +31,12 @@ removed from both the constructed environment and the process environment
 before Django starts. Other inherited settings such as the smoke-test flag
 remain available.
 
+The quit check gives its own connection to the task writer a 250 ms SQLite
+busy timeout and interrupts long queries after a 250 ms deadline. The worker
+thread closes that connection before quit proceeds. A locked database follows
+the same exit path as any failed count. The ordinary activity endpoint uses
+the packaged connection settings.
+
 Before creating a new packaged database, Positron records a pending demo seed
 beside that version's database and flushes the empty marker file and its
 directory to disk, so a crash or power loss cannot keep the new database while
@@ -49,6 +55,13 @@ worker fails to start, Positron cleans up the startup resources and shows a
 restart message. If the WSGI server stops after readiness, the server thread
 closes its listener and the UI shows a terminal error. Dismissing the dialog
 exits the app so it can be relaunched. A normal quit shows no service error.
+
+Quit stops the listener and refuses new requests on existing keep-alive
+connections. The profile lock stays held through admitted WSGI requests,
+including streamed responses and thread-owned database cleanup. The shell
+waits up to five seconds for the listener and gives active requests up to
+five seconds to finish. If startup, a worker or a request is still active
+when cleanup returns, the process keeps the profile lock through exit.
 
 Positron requires a direct regular profile lock file. After taking the lock,
 it verifies that the lock path still names the opened file before writing the
